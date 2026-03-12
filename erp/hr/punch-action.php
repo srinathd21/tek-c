@@ -1070,22 +1070,32 @@ document.addEventListener('DOMContentLoaded', function() {
   const officeSelect = document.getElementById('officeSelect');
 
   if (punchTypeSite && siteSelectDiv) {
-    punchTypeSite.addEventListener('change', function() {
-      siteSelectDiv.style.display = 'block';
-      if (officeSelectDiv) officeSelectDiv.style.display = 'none';
-      if (punchTypeHidden) punchTypeHidden.value = 'site';
-      if (currentLat && currentLng) validateCurrentLocationForPunchIn();
-    });
-  }
+  punchTypeSite.addEventListener('change', function() {
+    siteSelectDiv.style.display = 'block';
+    if (officeSelectDiv) officeSelectDiv.style.display = 'none';
+    if (punchTypeHidden) punchTypeHidden.value = 'site';
+    
+    // Manage required attributes
+    if (siteSelect) siteSelect.required = true;
+    if (officeSelect) officeSelect.required = false;
+    
+    if (currentLat && currentLng) validateCurrentLocationForPunchIn();
+  });
+}
 
-  if (punchTypeOffice && officeSelectDiv) {
-    punchTypeOffice.addEventListener('change', function() {
-      if (siteSelectDiv) siteSelectDiv.style.display = 'none';
-      officeSelectDiv.style.display = 'block';
-      if (punchTypeHidden) punchTypeHidden.value = 'office';
-      if (currentLat && currentLng) validateCurrentLocationForPunchIn();
-    });
-  }
+if (punchTypeOffice && officeSelectDiv) {
+  punchTypeOffice.addEventListener('change', function() {
+    if (siteSelectDiv) siteSelectDiv.style.display = 'none';
+    officeSelectDiv.style.display = 'block';
+    if (punchTypeHidden) punchTypeHidden.value = 'office';
+    
+    // Manage required attributes
+    if (siteSelect) siteSelect.required = false;
+    if (officeSelect) officeSelect.required = true;
+    
+    if (currentLat && currentLng) validateCurrentLocationForPunchIn();
+  });
+}
 
   if (siteSelect) {
     siteSelect.addEventListener('change', function() {
@@ -1126,69 +1136,129 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   if (form) {
-    form.addEventListener('submit', async function(e) {
-      e.preventDefault();
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const originalBtnText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Validating...';
+
+    try {
+      // First, handle the required field validation manually
+      const punchType = document.querySelector('input[name="punch_type_radio_display"]:checked')?.value || 'site';
+      const punchTypeHidden = document.getElementById('punchType');
       
-      const originalBtnText = submitBtn.innerHTML;
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Validating...';
-
-      try {
-        // Re-fetch latest GPS just before submit
-        await fetchAndStoreLocation({ timeout: 30000, maximumAge: 0 });
-
-        // Validate based on action type
-        <?php if ($action === 'in'): ?>
-          await validateCurrentLocationForPunchIn();
-          if (submitBtn.disabled) {
-            // Validation failed, show error and re-enable button
-            setStatus('danger', '❌ Validation Failed', 'Please check your location and try again');
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalBtnText;
-            return false;
-          }
-        <?php else: ?>
-          await validateCurrentLocationForPunchOut();
-          if (submitBtn.disabled) {
-            // Validation failed, show error and re-enable button
-            setStatus('danger', '❌ Validation Failed', 'You are outside the required radius');
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalBtnText;
-            return false;
-          }
-        <?php endif; ?>
-
-        // All validations passed, submit the form
-        // Use a small timeout to ensure UI updates before submission
-        setTimeout(() => {
-          form.submit();
-        }, 100);
-        
-      } catch (err) {
-        console.error('Form submission error:', err);
-        let msg = 'Unable to get your location. ';
-        if (err.code === 1) msg += 'Please allow location access in browser settings.';
-        else if (err.code === 2) msg += 'Location unavailable. Check GPS.';
-        else if (err.code === 3) msg += 'Location request timed out.';
-        else msg += err.message || 'Please try again.';
-        
-        alert(msg);
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalBtnText;
+      // Set the hidden punch type value
+      if (punchTypeHidden) {
+        punchTypeHidden.value = punchType;
       }
-    });
-  }
+
+      // Temporarily remove required attributes from hidden fields
+      const siteSelect = document.getElementById('siteSelect');
+      const officeSelect = document.getElementById('officeSelect');
+      
+      if (siteSelect) siteSelect.required = false;
+      if (officeSelect) officeSelect.required = false;
+
+      // Now validate based on selected type
+      if (punchType === 'site') {
+        if (!siteSelect || !siteSelect.value) {
+          alert('Please select a site');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalBtnText;
+          if (siteSelect) siteSelect.required = true; // Restore for next validation
+          return false;
+        }
+        // Temporarily set required for validation
+        siteSelect.required = true;
+      } else if (punchType === 'office') {
+        if (!officeSelect || !officeSelect.value) {
+          alert('Please select an office location');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalBtnText;
+          if (officeSelect) officeSelect.required = true; // Restore for next validation
+          return false;
+        }
+        // Temporarily set required for validation
+        officeSelect.required = true;
+      }
+
+      // Re-fetch latest GPS just before submit
+      await fetchAndStoreLocation({ timeout: 30000, maximumAge: 0 });
+
+      // Validate based on action type
+      <?php if ($action === 'in'): ?>
+        await validateCurrentLocationForPunchIn();
+        if (submitBtn.disabled) {
+          // Validation failed, show error and re-enable button
+          setStatus('danger', '❌ Validation Failed', 'Please check your location and try again');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalBtnText;
+          
+          // Restore required attributes
+          if (siteSelect) siteSelect.required = (punchType === 'site');
+          if (officeSelect) officeSelect.required = (punchType === 'office');
+          return false;
+        }
+      <?php else: ?>
+        await validateCurrentLocationForPunchOut();
+        if (submitBtn.disabled) {
+          // Validation failed, show error and re-enable button
+          setStatus('danger', '❌ Validation Failed', 'You are outside the required radius');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalBtnText;
+          
+          // Restore required attributes
+          if (siteSelect) siteSelect.required = (punchType === 'site');
+          if (officeSelect) officeSelect.required = (punchType === 'office');
+          return false;
+        }
+      <?php endif; ?>
+
+      // All validations passed, submit the form
+      // Use a small timeout to ensure UI updates before submission
+      setTimeout(() => {
+        form.submit();
+      }, 100);
+      
+    } catch (err) {
+      console.error('Form submission error:', err);
+      let msg = 'Unable to get your location. ';
+      if (err.code === 1) msg += 'Please allow location access in browser settings.';
+      else if (err.code === 2) msg += 'Location unavailable. Check GPS.';
+      else if (err.code === 3) msg += 'Location request timed out.';
+      else msg += err.message || 'Please try again.';
+      
+      alert(msg);
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnText;
+      
+      // Restore required attributes
+      const siteSelect = document.getElementById('siteSelect');
+      const officeSelect = document.getElementById('officeSelect');
+      const punchType = document.querySelector('input[name="punch_type_radio_display"]:checked')?.value || 'site';
+      
+      if (siteSelect) siteSelect.required = (punchType === 'site');
+      if (officeSelect) officeSelect.required = (punchType === 'office');
+    }
+  });
+}
 
   // Initial setup
   updateCurrentLocationUI();
   initializeLocation();
 
   // Set initial radio button state
-  if (punchTypeSite && punchTypeSite.checked) {
-    if (punchTypeHidden) punchTypeHidden.value = 'site';
-  } else if (punchTypeOffice && punchTypeOffice.checked) {
-    if (punchTypeHidden) punchTypeHidden.value = 'office';
-  }
+// Set initial radio button state and required attributes
+if (punchTypeSite && punchTypeSite.checked) {
+  if (punchTypeHidden) punchTypeHidden.value = 'site';
+  if (siteSelect) siteSelect.required = true;
+  if (officeSelect) officeSelect.required = false;
+} else if (punchTypeOffice && punchTypeOffice.checked) {
+  if (punchTypeHidden) punchTypeHidden.value = 'office';
+  if (siteSelect) siteSelect.required = false;
+  if (officeSelect) officeSelect.required = true;
+}
 });
 </script>
 </body>
