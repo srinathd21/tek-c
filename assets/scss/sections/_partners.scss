@@ -1,0 +1,9 @@
+.ul-partners-area {
+    &-title {
+        display: block;
+        text-align: center;
+        font-weight: 600;
+        font-size: clamp(10px, 0.79vw, 15px);
+        margin-bottom: clamp(25px, 3.15vw, 60px);
+    }
+}

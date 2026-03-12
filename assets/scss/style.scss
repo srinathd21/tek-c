@@ -1,0 +1,76 @@
+/*!--------------------
+Template Name: Realestics - Real Estate HTML Template
+Author: tempticspro
+Version: 1.0
+
+CSS INDEX
+=================== 
+01. CUSTOM PROPERTIES
+02. GLOBAL
+03. Components
+04. Sidebar
+05. Header
+06. Hero
+07. Cities
+08. Filter Search
+09. Featured Properties
+10. Facilities
+11. Properties
+12. Stats
+13. Blog
+14. Partners
+15. Ad
+16. Testimonial
+17. Footer
+
+--- INNER PAGES
+16. About Page
+17. Projects Page
+18. Project Details Page
+19. How it works Page
+20. Services Page
+21. Service Details Page
+22. Team Details Page
+23. Blog Page
+24. Blog Details Page
+25. Pricing Page
+26. Contact Page
+
+*/
+
+@import "main/breakpoints";
+@import "main/variables";
+@import "main/global";
+@import "main/components";
+
+// sections
+@import "sections/sidebar";
+@import "sections/header";
+@import "sections/hero";
+@import "sections/cities";
+@import "sections/filter-search";
+@import "sections/featured-properties";
+@import "sections/facilities";
+@import "sections/properties";
+@import "sections/stats";
+@import "sections/blog";
+@import "sections/partners";
+@import "sections/ad";
+@import "sections/testimonial";
+@import "sections/footer";
+
+// index 2 sections
+@import "sections/about";
+
+// inner pages
+@import "pages/p-about";
+@import "pages/p-projects";
+@import "pages/project-details";
+@import "pages/how-it-works";
+@import "pages/p-services";
+@import "pages/service-details";
+@import "pages/team-details";
+@import "pages/p-blog";
+@import "pages/blog-details";
+@import "pages/pricing";
+@import "pages/contact";

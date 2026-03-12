@@ -1,0 +1,201 @@
+.ul-blogs {}
+
+
+.ul-blog {
+    &-wrapper {
+        border: 1px solid #D9D9D9;
+        border-radius: 20px;
+        padding: clamp(20px, 1.58vw, 30px);
+    }
+
+    &-img {
+        border-radius: 15px;
+        overflow: hidden;
+        margin-bottom: clamp(20px, 1.58vw, 30px);
+        position: relative;
+
+        img {
+            width: 100%;
+            aspect-ratio: 515/302;
+        }
+    }
+
+    .date {
+        position: absolute;
+        top: clamp(15px, 1.05vw, 20px);
+        left: clamp(15px, 1.05vw, 20px);
+        background-color: var(--ul-primary);
+        border-radius: 6px;
+        display: inline-block;
+        overflow: hidden;
+        text-align: center;
+        color: var(--white);
+        padding: clamp(8px, 0.63vw, 12px) clamp(12px, 0.84vw, 16px);
+
+        .number {
+            display: block;
+            font-weight: 700;
+            font-size: clamp(20px, 1.26vw, 24px);
+            line-height: 0.8;
+            margin-bottom: clamp(3px, 0.32vw, 6px);
+        }
+
+        .txt {
+            line-height: 0.8;
+            display: block;
+            font-weight: 400;
+            font-size: clamp(11px, 0.74vw, 14px);
+        }
+    }
+
+    &-infos {
+        display: flex;
+        align-items: center;
+        gap: clamp(15px, 1.05vw, 20px);
+        font-size: clamp(12px, 0.729vw, 14px);
+        font-weight: 500;
+        margin-bottom: 0.625vw;
+    }
+
+    &-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        line-height: 1;
+
+        i {
+            font-size: clamp(13px, 0.84vw, 16px);
+            color: var(--ul-primary);
+        }
+    }
+
+    &-title {
+        font-weight: 700;
+        font-size: clamp(21px, 1.26vw, 24px);
+        margin-bottom: clamp(10px, 0.79vw, 15px);
+        line-height: 1.4;
+
+        @include xl {
+            margin-bottom: 18px;
+        }
+
+        a {
+            color: var(--black);
+            display: inline-block;
+
+            &:hover {
+                color: var(--ul-primary);
+            }
+        }
+    }
+
+    &-excerpt {
+        font-size: clamp(13px, 0.84vw, 16px);
+        font-weight: 300;
+    }
+
+    &-btn {
+        font-size: clamp(13px, 0.84vw, 16px);
+        font-weight: 500;
+        color: var(--ul-primary);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+
+        .icon {
+            display: inline-flex;
+        }
+
+        i {
+            color: var(--black);
+        }
+
+        &:hover {
+            color: var(--ul-secondary);
+        }
+    }
+
+    &-horizontal {
+        display: flex;
+        align-items: center;
+        gap: clamp(15px, 1.58vw, 30px);
+
+        @include xxs {
+            flex-direction: column;
+        }
+
+        &:not(:last-child) {
+            margin-bottom: clamp(15px, 1.31vw, 25px);
+            padding-bottom: clamp(15px, 1.31vw, 25px);
+            border-bottom: 1px solid #D9D9D9;
+        }
+
+        .ul-blog-img {
+            flex-shrink: 0;
+            max-width: clamp(184px, 11.77vw, 224px);
+            margin-bottom: 0;
+
+            @include xxs {
+                max-width: 100%;
+            }
+
+            img {
+                aspect-ratio: 224/240;
+                object-fit: cover;
+                width: 100%;
+
+                @include xxs {
+                    width: 100%;
+                    aspect-ratio: 515/302;
+                }
+            }
+        }
+    }
+}
+
+
+// INDEX-2 BLOG
+
+.ul-2-blog {
+    &-img {
+        margin-bottom: clamp(16px, 1.21vw, 23px);
+
+        img {
+            width: 100%;
+            aspect-ratio: 374/265;
+            border-radius: 15px 15px 0 0;
+            object-fit: cover;
+        }
+    }
+
+    &-meta {
+        display: flex;
+        gap: clamp(10px, 0.84vw, 16px);
+        color: var(--ul-primary);
+        font-weight: 500;
+        font-size: clamp(12px, 0.74vw, 14px);
+        margin-bottom: clamp(5px, 0.42vw, 8px);
+
+        >* {
+            display: flex;
+            align-items: center;
+            gap: clamp(4px, 0.37vw, 7px);
+        }
+    }
+
+    &-title {
+        font-weight: 700;
+        font-size: clamp(20px, 1.26vw, 24px);
+        border-bottom: 1px solid rgba(0, 9, 41, 0.15);
+        padding-bottom: clamp(12px, 1.05vw, 20px);
+    }
+
+    &-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: clamp(5px, 0.42vw, 8px);
+        font-family: 'exo';
+        font-weight: 500;
+        font-size: clamp(13px, 0.84vw, 16px);
+    }
+}

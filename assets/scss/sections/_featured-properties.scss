@@ -1,0 +1,209 @@
+.ul-featured-properties {
+    background-color: var(--ul-secondary);
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: url(../img/featured-properties-bg.jpg) no-repeat center center;
+        background-size: cover;
+        background-attachment: fixed;
+        opacity: 10%;
+        z-index: -1;
+    }
+
+
+    &-title-txt {
+        color: var(--white);
+        font-size: clamp(40px, 6.31vw, 120px);
+        font-weight: 700;
+        margin-bottom: 0;
+
+        i {
+            color: var(--ul-primary);
+            font-size: clamp(20px, 2.10vw, 40px);
+        }
+    }
+
+    &-slider {
+        @include sm {
+            max-width: calc(100% - 15px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        &-wrapper {
+            margin-top: clamp(17px, 1.94vw, 37px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-width: 1px 0;
+            display: flex;
+            align-items: center;
+
+            @include sm {
+                flex-direction: column;
+                border-bottom: none;
+            }
+        }
+
+        &-nav {
+            max-width: clamp(80px, 11.35vw, 216px);
+            position: static;
+            transform: translateY(0);
+            flex-direction: column;
+            gap: clamp(12px, 0.79vw, 15px);
+
+            @include xxl {
+                max-width: clamp(80px, 6.35vw, 216px);
+            }
+
+            @include sm {
+                flex-direction: row;
+                max-width: 100%;
+                width: auto;
+                margin-top: 40px;
+            }
+
+            button {
+                background-color: var(--ul-primary);
+                border: 1px solid var(--ul-primary);
+                transform: rotate(90deg);
+
+                @include sm {
+                    transform: rotate(0deg);
+                }
+
+                &:hover {
+                    background-color: var(--ul-secondary);
+                }
+            }
+        }
+    }
+}
+
+.ul-project.ul-featured-property {
+    padding: clamp(15px, 3.15vw, 60px);
+    background: transparent;
+    border: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0;
+    color: var(--white);
+    transition: 0.4s ease;
+
+    @include xxl {
+        padding: clamp(15px, 2.63vw, 60px);
+    }
+
+    &:hover {
+        background-color: var(--white);
+
+        .header .index,
+        .ul-project-title {
+            color: var(--ul-secondary);
+        }
+
+        .ul-project-location,
+        .ul-project-price,
+        .ul-project-info {
+            color: var(--ul-gray2);
+        }
+    }
+
+    .header {
+        margin-bottom: clamp(20px, 2.63vw, 50px);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        @include xxl {
+            margin-bottom: clamp(12px, 1.73vw, 50px);
+        }
+
+        .index {
+            font-size: clamp(30px, 3.15vw, 60px);
+            font-weight: 800;
+            line-height: 0.7;
+            color: transparent;
+            -webkit-text-stroke: 1px rgba(255, 255, 255, 0.2);
+        }
+    }
+
+    .ul-project {
+        &-add-to-favorites-btn {
+            width: clamp(45px, 2.63vw, 50px);
+            background-color: var(--white);
+            color: var(--ul-primary);
+
+            &:hover {
+                background-color: var(--ul-primary);
+                color: var(--white);
+            }
+        }
+
+        &-title {
+            color: var(--white);
+            font-size: clamp(21px, 1.58vw, 30px);
+            margin-bottom: 3px;
+
+            &:hover {
+                color: var(--ul-primary);
+            }
+        }
+
+        &-location {
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 300;
+            margin-bottom: clamp(11px, 1.10vw, 21px);
+        }
+
+        &-img {
+            position: relative;
+            overflow: visible;
+            margin-bottom: clamp(20px, 1.58vw, 30px);
+
+            img {
+                border-radius: 10px;
+                aspect-ratio: 306/237;
+            }
+        }
+
+        &-tag {
+            top: auto;
+            bottom: clamp(15px, 1.05vw, 20px);
+        }
+
+        &-txt {
+            padding: 0;
+        }
+
+        &-price {
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: clamp(15px, 1.05vw, 20px);
+            font-weight: 400;
+        }
+
+        &-info {
+            color: rgba(255, 255, 255, 0.7);
+            flex-wrap: wrap;
+        }
+    }
+}
+
+.ul-featured-property {
+    &-infos.ul-project-infos {
+        // flex-wrap: nowrap;
+        border: none;
+        padding-top: 0;
+    }
+
+    &-info.ul-project-info {
+        font-size: clamp(12px, 0.74vw, 14px);
+        gap: clamp(5px, 0.37vw, 7px);
+        // flex-wrap: wrap;
+
+        .icon {
+            font-size: clamp(15px, 0.95vw, 18px);
+        }
+    }
+}

@@ -1,0 +1,178 @@
+.ul-team-details {
+    display: flex;
+    align-items: center;
+    gap: clamp(15px, 1.58vw, 30px);
+    border: 1px solid #E5E5E5;
+    border-radius: 12px;
+    padding: clamp(15px, 1.58vw, 30px);
+    overflow: hidden;
+
+    @include sm {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    &-img {
+        flex-shrink: 0;
+        max-width: clamp(287px, 19.44vw, 370px);
+        border-radius: 12px;
+        overflow: hidden;
+
+        @include sm {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        img {
+            width: 100%;
+            aspect-ratio: 370/466;
+            object-fit: cover;
+        }
+    }
+
+    &-name {
+        // font-size: clamp(28px, 1.89vw, 36px);
+        font-size: clamp(20px, 1.26vw, 24px);
+        font-weight: 700;
+        color: var(--ul-secondary);
+        margin-bottom: clamp(5px, 0.42vw, 8px);
+    }
+
+    &-role {
+        font-weight: 400;
+        font-size: clamp(13px, 0.84vw, 16px);
+        color: var(--ul-gray2);
+        margin-bottom: clamp(10px, 1.05vw, 20px);
+    }
+
+    &-descr {
+        font-size: clamp(13px, 0.84vw, 16px);
+        line-height: 1.5;
+        color: #4F536C;
+    }
+
+    &-infos {
+        display: flex;
+        flex-direction: column;
+        gap: clamp(12px, 0.79vw, 15px);
+        margin: clamp(18px, 1.73vw, 33px) 0 clamp(15px, 1.58vw, 30px);
+    }
+
+    &-info {
+
+        &,
+        a {
+            font-size: clamp(13px, 0.84vw, 16px);
+            font-weight: 400;
+            color: var(--ul-gray2);
+        }
+
+        a:hover {
+            color: var(--ul-primary);
+        }
+
+        .key {
+            font-weight: 600;
+            color: var(--ul-secondary);
+            min-width: 200px;
+            font-size: clamp(15px, 0.95vw, 18px);
+            display: inline-block;
+        }
+    }
+
+    &-socials {
+        display: flex;
+        gap: clamp(12px, 1.05vw, 20px);
+        font-weight: 500;
+
+        a {
+            color: var(--ul-primary);
+            font-size: clamp(13px, 0.84vw, 16px);
+            background-color: rgb(112, 101, 240, 0.15);
+            width: clamp(33px, 1.89vw, 36px);
+            aspect-ratio: 1/1;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            &:hover {
+                color: var(--white);
+                background-color: var(--ul-primary);
+            }
+        }
+    }
+
+    &-courses {
+        background-color: rgb(82, 95, 225, 0.05);
+
+        .ul-section-title {
+            text-align: center;
+            margin-bottom: clamp(16px, 2.15vw, 41px);
+        }
+    }
+
+    &-contact {
+        .ul-contact-infos {
+            border-radius: 20px;
+
+            img {
+                aspect-ratio: 540/615;
+                object-fit: cover;
+            }
+        }
+    }
+}
+
+.ul-team-more-details {
+    background-color: #F2F7FD;
+    margin-top: clamp(25px, 2.36vw, 45px);
+
+    &-title {
+        font-weight: 600;
+        font-size: clamp(21px, 1.26vw, 24px);
+        margin-bottom: clamp(7px, 0.89vw, 17px);
+    }
+
+    &-descr,
+    p {
+        font-size: clamp(13px, 0.84vw, 16px);
+        line-height: 1.6;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+}
+
+
+.ul-team-details-skills-details {
+    background-color: var(--white);
+    padding: clamp(15px, 1.58vw, 30px) clamp(20px, 2.10vw, 40px);
+    margin-top: clamp(25px, 2.63vw, 50px);
+
+    &-title {
+        font-weight: 600;
+        font-size: clamp(17px, 1.05vw, 20px);
+        margin-bottom: 0;
+    }
+}
+
+.skills-wrapper {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: clamp(15px, 1.58vw, 30px);
+    margin: clamp(20px, 2.10vw, 40px) 0;
+
+    @include xxs {
+        grid-template-columns: repeat(1, 1fr);
+    }
+}
+
+.ul-team-details-skill {
+    .skill-title {
+        font-weight: 700;
+        font-size: clamp(13px, 0.84vw, 16px);
+        margin-bottom: clamp(4px, 0.37vw, 7px);
+    }
+}

@@ -1,0 +1,155 @@
+.ul-contact {
+    background-color: #F2F7FD;
+    padding: clamp(7px, 0.53vw, 10px);
+    border-radius: 10px;
+
+
+    &-infos {
+        &-wrapper {
+            background-color: var(--ul-primary);
+            padding: clamp(20px, 2.10vw, 40px);
+            border-radius: 10px;
+            display: flex;
+            gap: 50px;
+            height: 100%;
+            flex-direction: column;
+            justify-content: space-between;
+            color: var(--white);
+        }
+
+        &-title {
+            font-weight: 600;
+            font-size: clamp(22px, 1.47vw, 28px);
+            margin-bottom: clamp(8px, 0.58vw, 11px);
+        }
+
+        &-sub-title {
+            font-weight: 400;
+            font-size: clamp(15px, 0.95vw, 18px);
+            color: #C9C9C9;
+        }
+
+        display: flex;
+        flex-direction: column;
+        gap: clamp(25px, 2.63vw, 50px);
+
+        >* {
+            color: var(--white);
+            font-size: clamp(13px, 0.84vw, 16px);
+            display: inline-flex;
+            align-items: center;
+            gap: clamp(22px, 1.31vw, 25px);
+
+            i {
+                font-size: clamp(21px, 1.26vw, 24px);
+            }
+        }
+
+        a:hover {
+            color: var(--ul-secondary);
+        }
+    }
+
+    &-socials {
+        gap: clamp(14px, 1.26vw, 24px);
+        display: flex;
+        align-items: center;
+
+
+        a {
+            background-color: var(--black);
+            border: 1px solid var(--black);
+            color: var(--white);
+            width: 30px;
+            aspect-ratio: 1/1;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(11px, 0.74vw, 14px);
+
+            &:hover {
+                background-color: var(--ul-primary);
+                border-color: var(--white);
+            }
+        }
+    }
+
+    &-form-wrapper {
+        padding: clamp(30px, 3.15vw, 60px) clamp(20px, 2.10vw, 40px);
+
+        form {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px clamp(20px, 2.10vw, 40px);
+
+            @include xxs {
+                grid-template-columns: repeat(1, 1fr);
+            }
+
+            >* {
+
+                &:nth-last-child(3),
+                &:nth-last-child(2) {
+                    grid-column: span 2;
+
+                    @include xxs {
+                        grid-column: span 1;
+                    }
+                }
+            }
+
+            label,
+            .contact-inner-title {
+                color: var(--black);
+                font-weight: 500;
+                font-size: clamp(13px, 0.84vw, 16px);
+                display: inline-block;
+            }
+
+            .contact-inner-title {
+                margin-bottom: clamp(12px, 0.79vw, 15px);
+            }
+
+            input,
+            textarea {
+                border: none;
+                border-bottom: 1px solid #8D8D8D;
+                display: block;
+                width: 100%;
+                background-color: transparent;
+                padding: 7px 0;
+                font-size: clamp(12px, 0.74vw, 14px);
+
+                &:focus,
+                &:focus-visible,
+                &:focus-within {
+                    outline: none;
+                    border-color: var(--black);
+
+                    &::placeholder {
+                        opacity: 0;
+                    }
+                }
+            }
+        }
+    }
+
+    &-form-subjects {
+        display: flex;
+        flex-wrap: wrap;
+        gap: clamp(15px, 1.31vw, 25px);
+    }
+
+    &-map {
+        width: 100%;
+        height: clamp(300px, 31.53vw, 600px);
+        vertical-align: top;
+        margin-top: clamp(60px, 6.31vw, 120px);
+        filter: grayscale(1);
+    }
+}
+
+.ul-app-ad--contact {
+    margin-top: clamp(-301px, -15.82vw, -60px);
+}

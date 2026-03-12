@@ -1,0 +1,108 @@
+.ul-stats {
+    max-width: 1920px;
+    margin: auto;
+
+    &-wrapper {
+        padding: 0 clamp(15px, 15.40vw, 293px);
+        display: flex;
+
+        @include md {
+            padding: 0 15px;
+        }
+
+        @include sm {
+            flex-wrap: wrap;
+        }
+    }
+
+    &-item {
+        border: 1px solid rgba(0, 9, 41, 0.1);
+        padding: clamp(20px, 4.73vw, 90px) 15px;
+        aspect-ratio: 1/1;
+        border-radius: 999px;
+        text-align: center;
+        flex-grow: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        margin-left: clamp(-58px, -3.05vw, -28px);
+        background: no-repeat center center;
+        background-size: cover;
+        transition: 0.4s ease;
+        flex-shrink: 0;
+        width: calc(100% / 4);
+        position: relative;
+        z-index: 1;
+
+        @include xxl {
+            padding: clamp(30px, 3.73vw, 90px) 15px;
+        }
+
+        @include sm {
+            width: calc(100% / 2);
+            margin-left: 0;
+        }
+
+        @include xxs {
+            padding: clamp(15px, 2.73vw, 90px) 15px;
+        }
+
+        &:first-child {
+            margin-left: 0;
+        }
+
+        &::before {
+            position: absolute;
+            content: "";
+            inset: 0;
+            background-image: url(../img/stat-bg-hover.png);
+            background-size: cover;
+            mix-blend-mode: multiply;
+            opacity: 0;
+            transition: 0.3s ease;
+            z-index: -1;
+            border-radius: 50%;
+        }
+
+        &:hover {
+            background-color: var(--ul-primary);
+
+            &::before {
+                opacity: 1;
+            }
+
+            i,
+            .number,
+            .txt {
+                color: var(--white);
+
+            }
+        }
+
+        i {
+            color: var(--ul-primary);
+            font-size: clamp(40px, 4.20vw, 80px);
+
+        }
+
+        .number {
+            font-weight: 700;
+            font-size: clamp(20px, 2.10vw, 40px);
+            line-height: 0.7;
+            padding: clamp(20px, 1.58vw, 30px) 0;
+
+            @include xxs {
+                padding: clamp(14px, 1.58vw, 30px) 0;
+            }
+        }
+
+        .txt {
+            font-size: clamp(13px, 0.84vw, 16px);
+        }
+    }
+}
+
+.ul-2-stats {
+    background-color: rgba(111, 99, 237, 0.05);
+}

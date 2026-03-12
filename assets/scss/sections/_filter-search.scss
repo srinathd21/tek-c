@@ -1,0 +1,125 @@
+.ul-property-filter-search {
+    max-width: 1920px;
+    margin: auto;
+
+    &-container {
+        background-color: var(--ul-primary);
+        color: var(--white);
+        border-radius: 20px;
+        padding: clamp(40px, 3.15vw, 60px) clamp(15px, 4.31vw, 82px);
+        margin: 0 clamp(15px, 14.19vw, 270px);
+        position: relative;
+        overflow: hidden;
+        z-index: 1;
+
+        @include xl {
+            margin: 0 clamp(15px, 9.19vw, 270px);
+        }
+
+        @include md {
+            margin: 0 clamp(15px, 6.19vw, 270px);
+        }
+
+        &::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: url(../img/search-filter-img.jpg) no-repeat center center;
+            background-size: cover;
+            mix-blend-mode: multiply;
+            z-index: -1;
+            opacity: 50%;
+        }
+    }
+
+    &-title {
+        font-weight: 700;
+        font-size: clamp(20px, 1.26vw, 24px);
+        margin-bottom: clamp(20px, 1.84vw, 35px);
+    }
+
+    &-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: clamp(10px, 0.79vw, 15px);
+        background-color: rgb(219, 219, 219, 0.7);
+        border-radius: 8px;
+        padding: clamp(15px, 2.63vw, 50px);
+        justify-content: center;
+
+        >* {
+            flex: auto;
+
+            @include xxs {
+                flex: unset;
+                width: 100%;
+            }
+        }
+
+        @include xxs {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        label {
+            display: block;
+            color: var(--black);
+            font-weight: 600;
+            font-size: clamp(11px, 0.74vw, 14px);
+            margin-bottom: clamp(7px, 0.53vw, 10px);
+        }
+
+        select {
+            width: 100%;
+        }
+
+        .ss-main {
+            height: clamp(35px, 2.10vw, 40px);
+            padding: 0 clamp(9px, 0.63vw, 12px);
+            border-radius: 8px;
+            font-size: clamp(11px, 0.74vw, 14px);
+        }
+
+        button {
+            border-radius: 8px;
+            flex-grow: 0;
+            background-color: var(--ul-secondary);
+            color: var(--white);
+            height: clamp(35px, 2.10vw, 40px);
+            display: flex;
+            align-items: center;
+            gap: clamp(7px, 0.79vw, 15px);
+            padding: 0 clamp(9px, 0.63vw, 12px);
+
+            @include xxs {
+                width: auto;
+                margin-top: 10px;
+            }
+
+            .icon {
+                display: inline-flex;
+            }
+
+            &:hover {
+                background-color: var(--ul-primary);
+                color: var(--white);
+            }
+        }
+    }
+}
+
+.ul-option {
+    padding: 5px 10px;
+    font-size: clamp(11px, 0.74vw, 14px);
+    cursor: pointer;
+
+    &:hover {
+        color: var(--ul-primary);
+    }
+
+    &.ss-selected {
+        background-color: var(--ul-primary);
+        color: var(--white);
+    }
+}

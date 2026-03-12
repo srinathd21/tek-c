@@ -1,0 +1,66 @@
+.ul-cities {
+    background-color: #F2F7FD;
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+
+    &-vectors {
+        >* {
+            position: absolute;
+            z-index: -1;
+        }
+
+        .vector-1 {
+            left: 0;
+            bottom: 123px;
+        }
+
+        .vector-2 {
+            right: 0;
+            bottom: 0;
+        }
+    }
+
+    .row-cols-xxs-1 {
+        @include xxs {
+            width: 85%;
+        }
+    }
+}
+
+.ul-city {
+    border-radius: 10px;
+    background-color: var(--white);
+    display: flex;
+    gap: clamp(15px, 1.05vw, 20px);
+    padding: clamp(12px, 0.95vw, 18px);
+    padding-left: 0;
+    --img-space: 30px;
+    margin-left: var(--img-space);
+
+    .img {
+        margin-left: calc(0% - var(--img-space));
+        border-radius: 6px;
+        overflow: hidden;
+
+        img {
+            width: clamp(58px, 3.57vw, 68px);
+            aspect-ratio: 1/1;
+        }
+    }
+
+    &-title {
+        font-weight: 600;
+        font-size: clamp(15px, 0.95vw, 18px);
+    }
+
+    &-count {
+        background-color: rgb(112, 101, 240, 0.1);
+        padding: 4.5px clamp(7px, 0.53vw, 10px);
+        color: var(--ul-primary);
+        font-weight: 600;
+        font-size: clamp(11px, 0.74vw, 14px);
+        display: block;
+        border-radius: 999px;
+    }
+}

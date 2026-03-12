@@ -1,0 +1,241 @@
+// blog page 2 styles
+.ul-blog {
+    &--inner {
+        .ul-blog {
+            &-img {
+                margin-bottom: clamp(14px, 1.26vw, 24px);
+
+                img {
+                    aspect-ratio: 416/292;
+                    width: 100%;
+                    object-fit: cover;
+                }
+            }
+
+            &-txt {
+                padding: 0 clamp(9px, 0.63vw, 12px);
+            }
+
+            &-title {
+                font-size: clamp(17px, 1.05vw, 20px);
+                margin-bottom: clamp(5px, 0.53vw, 10px);
+            }
+
+            &-descr {
+                font-weight: 300;
+                font-size: clamp(15px, 0.95vw, 18px);
+                margin-bottom: clamp(14px, 1.26vw, 24px);
+            }
+
+            &-btn {
+                font-size: clamp(17px, 1.05vw, 20px);
+                color: var(--black);
+                justify-content: space-between;
+                width: 100%;
+                visibility: hidden;
+
+                >* {
+                    visibility: visible;
+                }
+
+                i {
+                    font-size: clamp(22px, 1.31vw, 25px);
+                }
+
+                &:hover {
+                    color: var(--ul-primary);
+
+                    i {
+                        color: var(--ul-primary);
+                    }
+                }
+            }
+        }
+    }
+
+    &--inner-2 {
+        &:not(:last-child) {
+            margin-bottom: clamp(15px, 1.58vw, 30px);
+        }
+
+        .ul-blog {
+            &-img {
+                img {
+                    aspect-ratio: 710/430;
+                }
+            }
+
+            &-infos {
+                color: var(--ul-gray2);
+
+                i {
+                    color: var(--ul-primary);
+                    font-size: clamp(13px, 0.84vw, 16px);
+                }
+            }
+
+            &-btn {
+                color: var(--white);
+                border-radius: 5px;
+
+                i {
+                    color: var(--white);
+                }
+            }
+        }
+    }
+
+    &-sidebar {
+        &-widget {
+            padding: clamp(25px, 2.1vw, 40px) clamp(15px, 1.58vw, 30px);
+            background-color: #F2F7FD;
+            border-radius: 10px;
+            margin-bottom: clamp(15px, 1.26vw, 24px);
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+
+            &-title {
+
+                &::before,
+                &::after {
+                    height: 2px;
+                }
+            }
+        }
+
+        &-search form {
+            background-color: var(--white);
+            height: clamp(45px, 3.15vw, 60px);
+            border-radius: 5px;
+            overflow: hidden;
+            display: flex;
+
+            input {
+                padding: 0 clamp(12px, 1.05vw, 20px);
+                height: 100%;
+                width: 100%;
+                border: none;
+            }
+
+            button {
+                background-color: var(--ul-primary);
+                flex-shrink: 0;
+                aspect-ratio: 1/1;
+                color: var(--white);
+
+                &:hover {
+                    background-color: var(--ul-secondary);
+
+                }
+            }
+        }
+
+        &-categories {
+            a {
+                border-radius: 8px;
+                padding: clamp(11px, 0.74vw, 14px) clamp(16px, 1.26vw, 24px);
+                background-color: var(--white);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-size: clamp(13px, 0.84vw, 16px);
+                color: var(--black);
+                margin-bottom: clamp(9px, 0.63vw, 12px);
+
+                &:hover {
+                    background-color: var(--ul-primary);
+                    color: var(--white);
+                }
+
+                &:last-child {
+                    margin-bottom: 0;
+                }
+            }
+        }
+
+        &-post {
+            display: flex;
+            border-bottom: 1px solid #E6E5E5;
+            align-items: center;
+            gap: clamp(12px, 0.79vw, 15px);
+            padding: clamp(12px, 1.05vw, 20px) 0;
+
+            &:first-child {
+                padding-top: 0;
+            }
+
+            &:last-child {
+                padding-bottom: 0;
+                border-bottom: none;
+            }
+
+            .img {
+                flex-shrink: 0;
+                overflow: hidden;
+                border-radius: 10px;
+
+                img {
+                    width: clamp(85px, 5.25vw, 100px);
+                    aspect-ratio: 1/1;
+                    object-fit: cover;
+                }
+            }
+
+            .date {
+                font-size: clamp(12px, 0.74vw, 14px);
+                color: var(--ul-primary);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: clamp(5px, 0.42vw, 8px);
+
+                .icon {
+                    display: inline-flex;
+                    font-size: 16px;
+                }
+            }
+
+            .title {
+                font-weight: 700;
+                font-size: clamp(13px, 0.84vw, 16px);
+                font-size: clamp(15px, 0.95vw, 18px);
+                line-height: 1.4;
+                margin-bottom: 0;
+
+                a {
+                    font-weight: 600;
+                    color: var(--black);
+
+                    &:hover {
+                        color: var(--ul-primary);
+                    }
+                }
+            }
+        }
+
+        &-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: clamp(4px, 0.37vw, 7px);
+
+            a {
+                height: clamp(28px, 1.79vw, 34px);
+                padding: 0 clamp(9px, 0.63vw, 12px);
+                background-color: var(--white);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 5px;
+                color: var(--black);
+                font-size: clamp(11px, 0.74vw, 14px);
+
+                &:hover {
+                    background-color: var(--ul-primary);
+                    color: var(--white);
+                }
+            }
+        }
+    }
+}
