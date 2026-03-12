@@ -1,0 +1,1179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Realtime Photography CRM Dashboard</title>
+
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+  <!-- Chart -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{
+      --bg0:#f7cfe6;
+      --bg1:#f4bfe0;
+      --bg2:#f7d9ee;
+
+      --glass: rgba(255,255,255,.55);
+      --stroke: rgba(255,255,255,.55);
+
+      --text:#3b2940;
+      --muted:#7a5a76;
+
+      --shadow: 0 18px 50px rgba(44, 9, 40, .18);
+      --shadow2: 0 10px 28px rgba(44, 9, 40, .14);
+
+      --r: 18px;
+      --r2: 22px;
+
+      --sidebarW: 280px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:Poppins, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 700px at 15% 15%, #ffd7ee 0%, rgba(255,215,238,0) 55%),
+        radial-gradient(1100px 700px at 85% 25%, #ffd0ea 0%, rgba(255,208,234,0) 58%),
+        linear-gradient(135deg, var(--bg0), var(--bg1) 40%, var(--bg2));
+      overflow:hidden;
+    }
+
+    /* FULL SCREEN SHELL */
+    .app{
+      width:100vw;
+      height:100vh;
+      padding: 22px;
+    }
+
+    .frame{
+      width:100%;
+      height:100%;
+      display:grid;
+      grid-template-columns: var(--sidebarW) 1fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    /* ====== Sidebar ====== */
+    .sidebar{
+      border-radius: 26px;
+      padding: 22px 18px;
+      color:#f6e8f4;
+      background:
+        radial-gradient(650px 650px at 30% 15%, rgba(255,94,162,.35), rgba(255,94,162,0) 55%),
+        radial-gradient(500px 500px at 80% 70%, rgba(164,120,255,.25), rgba(164,120,255,0) 60%),
+        linear-gradient(180deg, #2a162f, #3a1740 35%, #3a1740 70%, #2a162f);
+      box-shadow: var(--shadow);
+      position:relative;
+      overflow:hidden;
+      height:100%;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      margin-bottom: 18px;
+      padding: 6px 6px 10px 6px;
+    }
+    .brand .logo{
+      width:42px;height:42px;border-radius:14px;
+      display:grid;place-items:center;
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.18);
+      box-shadow: 0 8px 18px rgba(0,0,0,.18);
+    }
+    .brand .t1{font-weight:700; line-height:1.05;}
+    .brand .t2{font-size:12px; opacity:.85; margin-top:2px}
+
+    .nav{
+      display:flex;
+      flex-direction:column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .nav a{
+      text-decoration:none;
+      color:#f6e8f4;
+      padding: 12px 12px;
+      border-radius: 14px;
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      opacity:.88;
+      transition: .15s ease;
+    }
+    .nav a i{width:18px;text-align:center}
+    .nav a:hover{opacity:1; background: rgba(255,255,255,.06)}
+    .nav a.active{
+      opacity:1;
+      background: linear-gradient(135deg, rgba(255,105,168,.55), rgba(255,105,168,.25));
+      border: 1px solid rgba(255,255,255,.16);
+      box-shadow: 0 14px 30px rgba(255,105,168,.18);
+    }
+
+    .sidebar-footer{
+      position:absolute;
+      left: 18px; right: 18px; bottom: 18px;
+      display:grid;
+      gap: 12px;
+    }
+
+    .profile{
+      display:flex; align-items:center; gap: 12px;
+      padding: 12px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+    }
+    .avatar{
+      width:44px;height:44px;border-radius: 16px;
+      background: linear-gradient(135deg, rgba(255,255,255,.26), rgba(255,255,255,.08));
+      border: 1px solid rgba(255,255,255,.18);
+      display:grid;place-items:center;
+      font-weight:700;
+      letter-spacing:.2px;
+    }
+    .profile .name{font-weight:700; font-size:14px; line-height:1.1}
+    .profile .role{font-size:12px; opacity:.75}
+
+    .upgrade{
+      border-radius: 18px;
+      padding: 14px 14px;
+      background: linear-gradient(135deg, rgba(255,105,168,.72), rgba(255,105,168,.22));
+      border: 1px solid rgba(255,255,255,.18);
+      box-shadow: 0 18px 34px rgba(255,105,168,.20);
+      display:flex; justify-content:center; align-items:center; gap:10px;
+      color: #fff;
+      font-weight: 700;
+      cursor:pointer;
+      user-select:none;
+    }
+
+    .logout{
+      display:flex; justify-content:space-between; align-items:center;
+      font-size:12px; opacity:.78;
+      padding: 0 6px;
+    }
+
+    /* ====== Main (FULL HEIGHT) ====== */
+    .main{
+      border-radius: 28px;
+      padding: 18px 18px 14px;
+      background: rgba(255,255,255,.25);
+      border: 1px solid rgba(255,255,255,.35);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      height:100%;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      gap: 12px;
+      position:relative;
+    }
+
+    /* Top bar */
+    .topbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap: 12px;
+      flex: 0 0 auto;
+    }
+    .hello{
+      display:flex; align-items:center; gap: 14px;
+      min-width: 340px;
+    }
+    .hello .face{
+      width:52px;height:52px;border-radius: 18px;
+      background:
+        radial-gradient(12px 12px at 30% 35%, rgba(255,255,255,.55), rgba(255,255,255,0) 60%),
+        linear-gradient(135deg, rgba(255,255,255,.55), rgba(255,255,255,.18));
+      border: 1px solid rgba(255,255,255,.6);
+      box-shadow: var(--shadow2);
+      position:relative;
+      overflow:hidden;
+      flex: 0 0 auto;
+    }
+    .hello .face:before{
+      content:"";
+      position:absolute; inset:-12px;
+      background:
+        radial-gradient(80px 80px at 40% 40%, rgba(255,106,166,.25), rgba(255,106,166,0) 60%),
+        radial-gradient(90px 90px at 70% 70%, rgba(164,120,255,.20), rgba(164,120,255,0) 60%);
+      filter: blur(2px);
+    }
+    .hello small{display:block; color: var(--muted); font-weight:600; margin-bottom:2px}
+    .hello h1{margin:0; font-size:30px; line-height:1.05}
+    .hello p{margin:4px 0 0; color: var(--muted); font-size:13px}
+
+    .topnav{
+      display:flex; align-items:center; gap: 12px;
+      flex: 0 0 auto;
+    }
+    .tabs{
+      display:flex; gap: 10px;
+      padding: 8px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.28);
+      border: 1px solid rgba(255,255,255,.45);
+      box-shadow: 0 10px 22px rgba(50, 18, 40, .10);
+    }
+    .tab{
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-weight:700;
+      font-size:13px;
+      color: #5a3b5b;
+      opacity:.85;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .tab.active{
+      background: rgba(255,255,255,.55);
+      opacity:1;
+      box-shadow: 0 12px 24px rgba(50, 18, 40, .10);
+      border: 1px solid rgba(255,255,255,.6);
+    }
+
+    .actions{
+      display:flex; align-items:center; gap: 10px;
+      padding: 8px 10px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.28);
+      border: 1px solid rgba(255,255,255,.45);
+      box-shadow: 0 10px 22px rgba(50, 18, 40, .10);
+    }
+    .iconbtn{
+      width:38px;height:38px;border-radius:14px;
+      display:grid;place-items:center;
+      background: rgba(255,255,255,.55);
+      border: 1px solid rgba(255,255,255,.7);
+      cursor:pointer;
+    }
+    .userchip{
+      display:flex; align-items:center; gap:10px;
+      padding: 6px 10px 6px 8px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.55);
+      border: 1px solid rgba(255,255,255,.7);
+      font-weight:800;
+      font-size:13px;
+      color:#5a3b5b;
+      white-space:nowrap;
+    }
+    .userchip .mini{
+      width:32px;height:32px;border-radius:12px;
+      background: linear-gradient(135deg, rgba(255,106,166,.35), rgba(164,120,255,.25));
+      border: 1px solid rgba(255,255,255,.8);
+    }
+
+    /* Content area takes remaining height and scrolls if needed */
+    .content{
+      flex: 1 1 auto;
+      min-height: 0; /* important for overflow */
+      overflow:auto;
+      padding-right: 6px;
+    }
+
+    /* nice scrollbar */
+    .content::-webkit-scrollbar{width:10px}
+    .content::-webkit-scrollbar-thumb{
+      background: rgba(120, 70, 120, .20);
+      border-radius: 20px;
+      border: 2px solid rgba(255,255,255,.25);
+    }
+
+    /* Stats row */
+    .stats{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin: 12px 0 14px;
+    }
+
+    .card{
+      border-radius: var(--r2);
+      padding: 14px 14px;
+      background: var(--glass);
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow2);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      position:relative;
+      overflow:hidden;
+    }
+
+    .stat{
+      display:flex; align-items:center; justify-content:space-between; gap: 12px;
+      min-height: 74px;
+    }
+    .stat .meta small{
+      display:block;
+      color: var(--muted);
+      font-weight:700;
+      font-size:12px;
+      margin-bottom:4px;
+    }
+    .stat .meta .big{
+      font-size:30px;
+      font-weight:900;
+      color:#3f2a43;
+      letter-spacing:-.5px;
+      display:flex;
+      align-items:baseline;
+      gap:6px;
+    }
+    .stat .meta .tiny{
+      font-size:12px;
+      font-weight:800;
+      color:#7a5a76;
+    }
+
+    .pill{
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:22px; height:22px;
+      padding: 0 7px;
+      border-radius: 8px;
+      font-size:11px;
+      font-weight:900;
+      color:#8b3a6f;
+      background: rgba(255,105,168,.20);
+      border: 1px solid rgba(255,105,168,.25);
+      transform: translateY(-2px);
+    }
+
+    .stat .iconbox{
+      width:52px;height:52px;border-radius: 18px;
+      display:grid;place-items:center;
+      background: rgba(255,255,255,.6);
+      border: 1px solid rgba(255,255,255,.75);
+      box-shadow: 0 10px 20px rgba(50, 18, 40, .10);
+      position:relative;
+      overflow:hidden;
+    }
+    .iconbox.grad-a:before,
+    .iconbox.grad-b:before,
+    .iconbox.grad-c:before,
+    .iconbox.grad-d:before{
+      content:"";
+      position:absolute; inset:-18px;
+      opacity:.95;
+    }
+    .iconbox.grad-a:before{background: linear-gradient(135deg, rgba(164,120,255,.55), rgba(255,255,255,0) 60%)}
+    .iconbox.grad-b:before{background: linear-gradient(135deg, rgba(255,164,112,.55), rgba(255,255,255,0) 60%)}
+    .iconbox.grad-c:before{background: linear-gradient(135deg, rgba(132,255,196,.38), rgba(255,255,255,0) 60%)}
+    .iconbox.grad-d:before{background: linear-gradient(135deg, rgba(255,105,168,.55), rgba(255,255,255,0) 60%)}
+    .iconbox i{position:relative; z-index:1; color:#6a3a62}
+
+    /* Middle row */
+    .mid{
+      display:grid;
+      grid-template-columns: 2.2fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .chartCard{
+      padding: 16px 16px 12px;
+      background:
+        radial-gradient(900px 360px at 45% 45%, rgba(255,131,188,.24), rgba(255,131,188,0) 70%),
+        radial-gradient(800px 320px at 80% 60%, rgba(164,120,255,.22), rgba(164,120,255,0) 68%),
+        linear-gradient(135deg, rgba(64, 20, 64, .88), rgba(110, 40, 100, .70));
+      color:#fff;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    .chartHead{
+      display:flex; align-items:flex-start; justify-content:space-between; gap: 10px;
+      margin-bottom: 6px;
+    }
+    .chartHead h2{
+      margin:0;
+      font-size:22px;
+      letter-spacing:.2px;
+    }
+    .chartHead p{
+      margin:4px 0 0;
+      opacity:.75;
+      font-size:12px;
+      max-width: 340px;
+    }
+    .badge{
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(22, 12, 22, .50);
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 16px 28px rgba(0,0,0,.20);
+      min-width: 140px;
+      text-align:left;
+      align-self:center;
+      margin-top: 14px;
+    }
+    .badge small{display:block; opacity:.78; font-weight:700; font-size:11px}
+    .badge .money{font-size:20px; font-weight:900; margin-top:2px}
+    .chartWrap{height: 240px; margin-top: 10px;}
+
+    .rightCol{display:grid; gap: 14px;}
+
+    .revenue{
+      padding: 16px;
+      color:#fff;
+      background:
+        radial-gradient(600px 250px at 30% 10%, rgba(255,105,168,.30), rgba(255,105,168,0) 65%),
+        radial-gradient(520px 260px at 80% 70%, rgba(164,120,255,.30), rgba(164,120,255,0) 65%),
+        linear-gradient(135deg, rgba(105, 30, 120, .90), rgba(200, 86, 136, .62));
+      border: 1px solid rgba(255,255,255,.14);
+      overflow:hidden;
+    }
+    .revenue .amt{
+      font-weight:900;
+      font-size:26px;
+      letter-spacing:-.4px;
+      margin: 0;
+    }
+    .revenue .sub{
+      margin: 2px 0 12px;
+      opacity:.75;
+      font-weight:700;
+      font-size:12px;
+    }
+    .btn{
+      display:inline-flex; align-items:center; gap:10px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.20);
+      color:#fff;
+      font-weight:800;
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+      box-shadow: 0 16px 28px rgba(0,0,0,.18);
+    }
+
+    .task h3{margin: 0 0 10px; font-size:16px; letter-spacing:.2px;}
+    .cardHead{display:flex; align-items:center; justify-content:space-between; margin-bottom: 10px;}
+    .dots{
+      width:34px;height:34px;border-radius: 14px;
+      display:grid;place-items:center;
+      background: rgba(255,255,255,.55);
+      border: 1px solid rgba(255,255,255,.7);
+      color:#7a5a76;
+      cursor:pointer;
+    }
+    .task .row{
+      display:flex; justify-content:space-between; align-items:center;
+      padding: 10px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.38);
+      border: 1px solid rgba(255,255,255,.55);
+      margin-bottom: 10px;
+    }
+    .task .left{display:flex; align-items:center; gap: 10px; font-weight:800; color:#4b2f51; font-size:13px;}
+    .dot{
+      width:30px;height:30px;border-radius: 12px;
+      display:grid;place-items:center;
+      border: 1px solid rgba(255,255,255,.8);
+      background: rgba(255,255,255,.55);
+      box-shadow: 0 10px 18px rgba(50, 18, 40, .10);
+      flex: 0 0 auto;
+    }
+    .dot.p{background: linear-gradient(135deg, rgba(164,120,255,.35), rgba(255,255,255,.55))}
+    .dot.o{background: linear-gradient(135deg, rgba(255,179,118,.35), rgba(255,255,255,.55))}
+    .dot.m{background: linear-gradient(135deg, rgba(255,105,168,.35), rgba(255,255,255,.55))}
+    .check{
+      width:18px;height:18px;border-radius: 6px;
+      border: 2px solid rgba(110, 70, 110, .35);
+      display:inline-block;
+      position:relative;
+      background: rgba(255,255,255,.45);
+    }
+    .check.on{border-color: rgba(255,105,168,.35); background: rgba(255,105,168,.18);}
+    .check.on:after{
+      content:"";
+      position:absolute;
+      width:8px;height:4px;
+      border-left: 2px solid rgba(110, 40, 110, .75);
+      border-bottom: 2px solid rgba(110, 40, 110, .75);
+      transform: rotate(-45deg);
+      left:4px; top:5px;
+    }
+
+    /* Bottom row */
+    .bottom{
+      display:grid;
+      grid-template-columns: 1.25fr 1fr 1fr;
+      gap: 14px;
+      margin-top: 2px;
+      padding-bottom: 6px;
+    }
+
+    .cardTitle{margin:0; font-size:16px; letter-spacing:.2px;}
+    .list{display:grid; gap: 10px;}
+    .item{
+      display:flex; align-items:center; justify-content:space-between; gap: 10px;
+      padding: 10px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.36);
+      border: 1px solid rgba(255,255,255,.55);
+    }
+    .item .l{display:flex; align-items:center; gap: 10px; min-width: 0;}
+    .thumb{
+      width:44px;height:44px;border-radius: 16px;
+      background: linear-gradient(135deg, rgba(255,106,166,.28), rgba(164,120,255,.22));
+      border: 1px solid rgba(255,255,255,.75);
+      box-shadow: 0 10px 18px rgba(50, 18, 40, .10);
+      flex: 0 0 auto;
+    }
+    .item .txt{min-width:0}
+    .item .title{
+      font-weight:900;
+      font-size:13px;
+      color:#4b2f51;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .item .sub{
+      font-size:11px;
+      font-weight:700;
+      color: var(--muted);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      margin-top:2px;
+    }
+    .pillCount{display:flex; align-items:center; gap: 10px; color:#6f4a6d; font-weight:900;}
+    .miniCount{
+      width:28px;height:28px;border-radius: 12px;
+      display:grid;place-items:center;
+      background: rgba(255,105,168,.18);
+      border: 1px solid rgba(255,105,168,.22);
+      font-size:12px;
+    }
+    .arrow{
+      width:30px;height:30px;border-radius: 12px;
+      display:grid;place-items:center;
+      background: rgba(255,255,255,.55);
+      border: 1px solid rgba(255,255,255,.7);
+      cursor:pointer;
+    }
+
+    .clients .item .thumb{border-radius: 50%;}
+    .clients .righttag{
+      font-size:11px;
+      font-weight:800;
+      color:#8a5c87;
+      background: rgba(255,255,255,.40);
+      border: 1px solid rgba(255,255,255,.55);
+      padding: 8px 10px;
+      border-radius: 14px;
+      white-space:nowrap;
+    }
+    .timeTag{
+      font-size:11px;
+      font-weight:900;
+      color:#7a5a76;
+      padding: 6px 10px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.42);
+      border: 1px solid rgba(255,255,255,.58);
+      white-space:nowrap;
+    }
+
+    /* Responsive */
+    @media (max-width: 1180px){
+      :root{--sidebarW: 250px;}
+      .stats{grid-template-columns: repeat(2, 1fr);}
+      .mid{grid-template-columns: 1fr;}
+      .bottom{grid-template-columns: 1fr;}
+    }
+    @media (max-width: 860px){
+      .frame{grid-template-columns: 1fr;}
+      .sidebar{display:none;} /* hide sidebar on small screens */
+      .topbar{flex-direction:column; align-items:flex-start}
+      .topnav{width:100%; justify-content:space-between}
+      .tabs{flex-wrap:wrap}
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="frame">
+
+      <!-- ===== Sidebar ===== -->
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo"><i class="fa-solid fa-camera-retro"></i></div>
+          <div>
+            <div class="t1">Photography</div>
+            <div class="t2">CRM</div>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <a class="active" href="#"><i class="fa-solid fa-house"></i>Dashboard</a>
+          <a href="#"><i class="fa-regular fa-calendar"></i>Calendar</a>
+          <a href="#"><i class="fa-solid fa-users"></i>Clients</a>
+          <a href="#"><i class="fa-regular fa-folder-open"></i>Projects</a>
+          <a href="#"><i class="fa-solid fa-gear"></i>Settings</a>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="profile">
+            <div class="avatar">SJ</div>
+            <div>
+              <div class="name">Sarah Jones</div>
+              <div class="role">Photographer</div>
+            </div>
+          </div>
+
+          <div class="upgrade"><i class="fa-solid fa-bolt"></i> Upgrade</div>
+
+          <div class="logout">
+            <span><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</span>
+            <span style="opacity:.7"><i class="fa-solid fa-camera"></i></span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ===== Main ===== -->
+      <main class="main">
+
+        <!-- Top bar -->
+        <div class="topbar">
+          <div class="hello">
+            <div class="face" aria-hidden="true"></div>
+            <div>
+              <small id="welcomeLine">Welcome back, Sarah!</small>
+              <h1>Sarah!</h1>
+              <p>Here's a quick overvew of your business activities</p>
+            </div>
+          </div>
+
+          <div class="topnav">
+            <div class="tabs">
+              <div class="tab active">Dashboard</div>
+              <div class="tab">Calendar</div>
+              <div class="tab">Clients</div>
+              <div class="tab">Projects</div>
+            </div>
+
+            <div class="actions">
+              <div class="iconbtn" title="Search"><i class="fa-solid fa-magnifying-glass"></i></div>
+              <div class="iconbtn" title="Notifications"><i class="fa-regular fa-bell"></i></div>
+              <div class="userchip">
+                Sarah Jones
+                <div class="mini" aria-hidden="true"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scrollable content -->
+        <div class="content">
+
+          <!-- Stats row -->
+          <section class="stats">
+            <div class="card stat">
+              <div class="meta">
+                <small>Upcoming Sessions</small>
+                <div class="big"><span id="statSessions">12</span> <span class="tiny">Summary</span></div>
+              </div>
+              <div class="iconbox grad-a"><i class="fa-regular fa-clipboard"></i></div>
+            </div>
+
+            <div class="card stat">
+              <div class="meta">
+                <small>Pending Edits</small>
+                <div class="big"><span id="statEdits">15</span> <span class="pill" id="pillEdits">16</span></div>
+              </div>
+              <div class="iconbox grad-b"><i class="fa-regular fa-image"></i></div>
+            </div>
+
+            <div class="card stat">
+              <div class="meta">
+                <small>Pending Payments</small>
+                <div class="big">$<span id="statPayments">1,350</span></div>
+                <div style="margin-top:2px;font-size:11px;color:#a06a90;font-weight:800;">
+                  <span id="statPayers">2</span> an ners
+                </div>
+              </div>
+              <div class="iconbox grad-c"><i class="fa-regular fa-credit-card"></i></div>
+            </div>
+
+            <div class="card stat">
+              <div class="meta">
+                <small>New Inquiries</small>
+                <div class="big"><span id="statInquiries">8</span> <span class="pill" id="pillInq">18</span></div>
+              </div>
+              <div class="iconbox grad-d"><i class="fa-regular fa-envelope"></i></div>
+            </div>
+          </section>
+
+          <!-- Middle row -->
+          <section class="mid">
+            <!-- Sales overview -->
+            <div class="card chartCard">
+              <div class="chartHead">
+                <div>
+                  <h2>Sales Overview</h2>
+                  <p>The seinnositr seatings to renting of your ecjitements.</p>
+                </div>
+                <div class="badge">
+                  <small>Aue sarnings</small>
+                  <div class="money">$<span id="avgEarnings">4,350</span></div>
+                </div>
+              </div>
+              <div class="chartWrap">
+                <canvas id="salesChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Right column -->
+            <div class="rightCol">
+              <div class="card revenue">
+                <p class="amt">$<span id="monthRevenue">28,400</span></p>
+                <div class="sub">THIS MONTH</div>
+                <div class="btn">VIEW REPORT <i class="fa-solid fa-angle-down"></i></div>
+              </div>
+
+              <div class="card task">
+                <div class="cardHead">
+                  <h3>Task List</h3>
+                  <div class="dots"><i class="fa-solid fa-bars"></i></div>
+                </div>
+
+                <div class="row">
+                  <div class="left">
+                    <div class="dot p"><i class="fa-solid fa-check" style="color:#5d3e79"></i></div>
+                    Edit wedding photos
+                  </div>
+                  <div class="right"><span class="check on"></span></div>
+                </div>
+
+                <div class="row">
+                  <div class="left">
+                    <div class="dot o"><i class="fa-solid fa-check" style="color:#7a4a3d"></i></div>
+                    Send invoice to Lisa Summers
+                  </div>
+                  <div class="right"><span class="check" id="taskInvoice"></span></div>
+                </div>
+
+                <div class="row" style="margin-bottom:0">
+                  <div class="left">
+                    <div class="dot m"><i class="fa-solid fa-envelope" style="color:#7a2a62"></i></div>
+                    Follow up with new inquiries
+                  </div>
+                  <div class="right"><span class="check on"></span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Bottom row -->
+          <section class="bottom">
+            <!-- Today's Sessions -->
+            <div class="card">
+              <div class="cardHead">
+                <h3 class="cardTitle">Today's Sessions</h3>
+                <div class="dots"><i class="fa-solid fa-ellipsis"></i></div>
+              </div>
+
+              <div class="list">
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb"></div>
+                    <div class="txt">
+                      <div class="title">Wedding - Martin &amp; Emma</div>
+                      <div class="sub">10:30 AM</div>
+                    </div>
+                  </div>
+                  <div class="pillCount">
+                    <div class="miniCount" id="sess1">10</div>
+                    <div class="arrow"><i class="fa-solid fa-angle-right"></i></div>
+                  </div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb" style="background:linear-gradient(135deg, rgba(255,179,118,.35), rgba(164,120,255,.18))"></div>
+                    <div class="txt">
+                      <div class="title">Portrait - Alex Thompson</div>
+                      <div class="sub">1:00 PM</div>
+                    </div>
+                  </div>
+                  <div class="pillCount">
+                    <div class="miniCount" id="sess2" style="background:rgba(255,179,118,.20);border-color:rgba(255,179,118,.25)">19</div>
+                    <div class="arrow"><i class="fa-solid fa-angle-right"></i></div>
+                  </div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb" style="background:linear-gradient(135deg, rgba(132,255,196,.25), rgba(255,106,166,.18))"></div>
+                    <div class="txt">
+                      <div class="title">Family - The Williams</div>
+                      <div class="sub">3:30 PM</div>
+                    </div>
+                  </div>
+                  <div class="pillCount">
+                    <div class="miniCount" id="sess3">10</div>
+                    <div class="arrow"><i class="fa-solid fa-angle-right"></i></div>
+                  </div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb" style="background:linear-gradient(135deg, rgba(164,120,255,.28), rgba(255,106,166,.20))"></div>
+                    <div class="txt">
+                      <div class="title">Engagement - David &amp; Emily</div>
+                      <div class="sub">6:00 PM</div>
+                    </div>
+                  </div>
+                  <div class="pillCount">
+                    <div class="miniCount" id="sess4" style="background:rgba(164,120,255,.20);border-color:rgba(164,120,255,.22)">60</div>
+                    <div class="arrow"><i class="fa-solid fa-angle-right"></i></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent Clients -->
+            <div class="card clients">
+              <div class="cardHead">
+                <h3 class="cardTitle">Recent Clients</h3>
+                <div class="dots"><i class="fa-solid fa-ellipsis"></i></div>
+              </div>
+
+              <div class="list">
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb"></div>
+                    <div class="txt">
+                      <div class="title">Julia Reynolds</div>
+                      <div class="sub">Wedding Photography</div>
+                    </div>
+                  </div>
+                  <div class="righttag">Wedding Photography</div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb" style="background:linear-gradient(135deg, rgba(255,179,118,.30), rgba(255,255,255,.35))"></div>
+                    <div class="txt">
+                      <div class="title">Mark Peterson</div>
+                      <div class="sub">Portrait Photography</div>
+                    </div>
+                  </div>
+                  <div class="righttag">Portrait Photography</div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb" style="background:linear-gradient(135deg, rgba(132,255,196,.22), rgba(255,106,166,.18))"></div>
+                    <div class="txt">
+                      <div class="title">Lisa Summers</div>
+                      <div class="sub">Family Photography</div>
+                    </div>
+                  </div>
+                  <div class="righttag">Family Photography</div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb" style="background:linear-gradient(135deg, rgba(164,120,255,.25), rgba(255,179,118,.14))"></div>
+                    <div class="txt">
+                      <div class="title">Jessica Nolan</div>
+                      <div class="sub">Event Photography</div>
+                    </div>
+                  </div>
+                  <div class="righttag">Event Photography</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- New Inquiries -->
+            <div class="card inquiries">
+              <div class="cardHead">
+                <h3 class="cardTitle">New Inquiries</h3>
+                <div class="dots"><i class="fa-solid fa-ellipsis"></i></div>
+              </div>
+
+              <div class="list">
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb"></div>
+                    <div class="txt">
+                      <div class="title">Mia Taylor</div>
+                      <div class="sub">Lifestyle shoot</div>
+                    </div>
+                  </div>
+                  <div class="timeTag" id="t1">10:23 AM</div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb" style="background:linear-gradient(135deg, rgba(255,179,118,.30), rgba(164,120,255,.18))"></div>
+                    <div class="txt">
+                      <div class="title">David Harris</div>
+                      <div class="sub">Corporate headshots</div>
+                    </div>
+                  </div>
+                  <div class="timeTag" id="t2">9:40 AM</div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="thumb" style="background:linear-gradient(135deg, rgba(132,255,196,.22), rgba(255,106,166,.18))"></div>
+                    <div class="txt">
+                      <div class="title">Anna Wilson</div>
+                      <div class="sub">Newborn session</div>
+                    </div>
+                  </div>
+                  <div class="timeTag" id="t3">8:15 AM</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    // ===== Helpers =====
+    const fmtInt = (n) => n.toLocaleString('en-US');
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    const rand = (a,b) => Math.random()*(b-a)+a;
+
+    // Random-walk step
+    function walk(v, step, min, max){
+      const nv = v + rand(-step, step);
+      return clamp(nv, min, max);
+    }
+
+    // ===== Real-time state =====
+    let state = {
+      sessions: 12,
+      edits: 15,
+      editsBadge: 16,
+      payments: 1350,
+      payers: 2,
+      inquiries: 8,
+      inquiriesBadge: 18,
+      monthRevenue: 28400,
+      avgEarnings: 4350,
+
+      sess1: 10, sess2: 19, sess3: 10, sess4: 60,
+
+      taskInvoiceDone: false
+    };
+
+    // ===== DOM refs =====
+    const $ = (id) => document.getElementById(id);
+
+    const refs = {
+      sessions: $('statSessions'),
+      edits: $('statEdits'),
+      editsBadge: $('pillEdits'),
+      payments: $('statPayments'),
+      payers: $('statPayers'),
+      inquiries: $('statInquiries'),
+      inquiriesBadge: $('pillInq'),
+      monthRevenue: $('monthRevenue'),
+      avgEarnings: $('avgEarnings'),
+      sess1: $('sess1'),
+      sess2: $('sess2'),
+      sess3: $('sess3'),
+      sess4: $('sess4'),
+      taskInvoice: $('taskInvoice')
+    };
+
+    function render(){
+      refs.sessions.textContent = fmtInt(Math.round(state.sessions));
+      refs.edits.textContent = fmtInt(Math.round(state.edits));
+      refs.editsBadge.textContent = fmtInt(Math.round(state.editsBadge));
+      refs.payments.textContent = fmtInt(Math.round(state.payments));
+      refs.payers.textContent = fmtInt(Math.round(state.payers));
+      refs.inquiries.textContent = fmtInt(Math.round(state.inquiries));
+      refs.inquiriesBadge.textContent = fmtInt(Math.round(state.inquiriesBadge));
+      refs.monthRevenue.textContent = fmtInt(Math.round(state.monthRevenue));
+      refs.avgEarnings.textContent = fmtInt(Math.round(state.avgEarnings));
+
+      refs.sess1.textContent = fmtInt(Math.round(state.sess1));
+      refs.sess2.textContent = fmtInt(Math.round(state.sess2));
+      refs.sess3.textContent = fmtInt(Math.round(state.sess3));
+      refs.sess4.textContent = fmtInt(Math.round(state.sess4));
+
+      refs.taskInvoice.className = 'check' + (state.taskInvoiceDone ? ' on' : '');
+    }
+
+    // ===== Chart.js setup =====
+    const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    // initial "nice" values
+    let seriesA = [20, 42, 38, 55, 40, 62, 58, 70, 64, 82, 72, 88];
+    let seriesB = [14, 30, 28, 44, 34, 52, 46, 62, 58, 74, 66, 80];
+
+    const ctx = document.getElementById('salesChart');
+
+    const gradient1 = (chart) => {
+      const {ctx, chartArea} = chart;
+      if (!chartArea) return null;
+      const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+      g.addColorStop(0, 'rgba(255, 106, 166, .55)');
+      g.addColorStop(1, 'rgba(255, 106, 166, 0)');
+      return g;
+    };
+
+    const gradient2 = (chart) => {
+      const {ctx, chartArea} = chart;
+      if (!chartArea) return null;
+      const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+      g.addColorStop(0, 'rgba(255, 200, 120, .45)');
+      g.addColorStop(1, 'rgba(255, 200, 120, 0)');
+      return g;
+    };
+
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Line A',
+            data: seriesA,
+            tension: 0.45,
+            borderWidth: 3,
+            borderColor: 'rgba(255, 170, 120, .95)',
+            pointRadius: 0,
+            fill: true,
+            backgroundColor: (c) => gradient2(c.chart),
+          },
+          {
+            label: 'Line B',
+            data: seriesB,
+            tension: 0.45,
+            borderWidth: 3,
+            borderColor: 'rgba(255, 230, 255, .95)',
+            pointRadius: 3,
+            pointHoverRadius: 4,
+            pointBackgroundColor: 'rgba(255,255,255,.95)',
+            pointBorderWidth: 0,
+            fill: true,
+            backgroundColor: (c) => gradient1(c.chart),
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 450 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(20,10,20,.75)',
+            borderColor: 'rgba(255,255,255,.15)',
+            borderWidth: 1,
+            titleColor: 'rgba(255,255,255,.95)',
+            bodyColor: 'rgba(255,255,255,.90)',
+            padding: 10
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: 'rgba(255,255,255,.75)', font: { weight: '700' } }
+          },
+          y: {
+            grid: { color: 'rgba(255,255,255,.10)' },
+            ticks: { color: 'rgba(255,255,255,.65)', font: { weight: '700' } }
+          }
+        }
+      }
+    });
+
+    // ===== Realtime update loop =====
+    function tick(){
+      // update stat values (smooth random-walk)
+      state.sessions      = walk(state.sessions, 0.7, 6, 28);
+      state.edits         = walk(state.edits, 1.1, 5, 40);
+      state.editsBadge    = walk(state.editsBadge, 1.6, 8, 80);
+
+      state.payments      = walk(state.payments, 120, 200, 5200);
+      state.payers        = Math.round(walk(state.payers, 0.6, 1, 12));
+
+      state.inquiries     = walk(state.inquiries, 0.9, 0, 30);
+      state.inquiriesBadge= walk(state.inquiriesBadge, 1.2, 5, 90);
+
+      state.monthRevenue  = walk(state.monthRevenue, 380, 12000, 60000);
+      state.avgEarnings   = walk(state.avgEarnings, 120, 1500, 9000);
+
+      // small changes to session badge counts
+      state.sess1 = Math.round(walk(state.sess1, 1.5, 0, 60));
+      state.sess2 = Math.round(walk(state.sess2, 1.9, 0, 60));
+      state.sess3 = Math.round(walk(state.sess3, 1.4, 0, 60));
+      state.sess4 = Math.round(walk(state.sess4, 2.2, 0, 90));
+
+      // occasionally toggle invoice task
+      if (Math.random() < 0.08) state.taskInvoiceDone = !state.taskInvoiceDone;
+
+      // update chart last points (more "live" feel)
+      // bump last month points slightly
+      const lastA = chart.data.datasets[0].data.at(-1);
+      const lastB = chart.data.datasets[1].data.at(-1);
+
+      const newA = walk(lastA, 4.2, 10, 100);
+      const newB = walk(lastB, 4.2, 10, 100);
+
+      chart.data.datasets[0].data[chart.data.datasets[0].data.length - 1] = newA;
+      chart.data.datasets[1].data[chart.data.datasets[1].data.length - 1] = newB;
+
+      // also slightly nudge a few middle points for subtle animation
+      for (let i = 6; i <= 10; i++){
+        chart.data.datasets[0].data[i] = walk(chart.data.datasets[0].data[i], 1.2, 5, 100);
+        chart.data.datasets[1].data[i] = walk(chart.data.datasets[1].data[i], 1.2, 5, 100);
+      }
+
+      chart.update();
+      render();
+    }
+
+    // initial render
+    render();
+
+    // start realtime updates
+    setInterval(tick, 1500);
+
+    // update "time tags" to be more realtime-ish (optional)
+    function updateTimes(){
+      const d = new Date();
+      const pad = (n)=> String(n).padStart(2,'0');
+      const h = d.getHours() % 12 || 12;
+      const m = pad(d.getMinutes());
+      const ampm = d.getHours() >= 12 ? 'PM' : 'AM';
+      document.getElementById('t1').textContent = `${h}:${m} ${ampm}`;
+    }
+    setInterval(updateTimes, 60000);
+    updateTimes();
+  </script>
+</body>
+</html>

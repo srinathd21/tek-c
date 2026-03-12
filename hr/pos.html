@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AS Electricals - POS</title>
+  <style>
+    :root{
+      --bg:#ffffff;
+      --panel:#ffffff;
+      --soft:#f6f7fb;
+      --soft2:#f1f3f9;
+      --text:#111827;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --accent:#2563eb;
+      --accent2:#0ea5e9;
+      --danger:#ef4444;
+      --shadow: 0 10px 30px rgba(17, 24, 39, .10);
+      --radius:16px;
+      --gap:14px;
+      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family:var(--font);
+      background: var(--bg);
+      color:var(--text);
+      height:100vh;
+      overflow:hidden;
+    }
+
+    /* Topbar */
+    .topbar{
+      height:66px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 16px;
+      border-bottom:1px solid var(--border);
+      background:#fff;
+      position: sticky;
+      top:0;
+      z-index:10;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+    .logo-dot{
+      width:12px;height:12px;border-radius:50%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      box-shadow: 0 6px 18px rgba(37,99,235,.25);
+    }
+    .tag{
+      font-size:12px;
+      color:#0b1220;
+      background: linear-gradient(90deg, #dbeafe, #e0f2fe);
+      border:1px solid #bfdbfe;
+      padding:4px 10px;
+      border-radius:999px;
+      font-weight:800;
+    }
+    .clock{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size:13px;
+      color:var(--muted);
+    }
+    .pill{
+      padding:8px 10px;
+      background: var(--soft);
+      border:1px solid var(--border);
+      border-radius:999px;
+      font-weight:700;
+      color:#111827;
+      white-space:nowrap;
+    }
+
+    /* Layout */
+    .wrap{
+      height: calc(100vh - 66px);
+      display:grid;
+      grid-template-columns: 260px 1fr 360px;
+      gap: var(--gap);
+      padding: var(--gap);
+      background:#fff;
+    }
+
+    .panel{
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+
+    .panel-header{
+      padding:12px 12px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      background:#fff;
+    }
+    .panel-title{
+      font-weight:900;
+      font-size:14px;
+    }
+    .panel-sub{
+      font-size:12px;
+      color:var(--muted);
+      margin-top:2px;
+    }
+
+    .scroll{
+      overflow:auto;
+      padding:12px;
+      min-height:0;
+      background:#fff;
+    }
+
+    /* Inputs & Buttons */
+    .input, select.input{
+      width:100%;
+      background: var(--soft);
+      border:1px solid var(--border);
+      color:var(--text);
+      border-radius:12px;
+      padding:10px 12px;
+      outline:none;
+      font-size:13px;
+    }
+    .input:focus{
+      border-color: rgba(37,99,235,.35);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.10);
+      background:#fff;
+    }
+
+    .btn{
+      cursor:pointer;
+      border:none;
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:900;
+      color:#fff;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      box-shadow: 0 10px 25px rgba(37,99,235,.18);
+      transition: transform .06s ease, filter .15s ease;
+      font-size:13px;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ filter: brightness(1.02); }
+    .btn:active{ transform: scale(.98); }
+    .btn.secondary{
+      color: var(--text);
+      background: var(--soft);
+      border:1px solid var(--border);
+      box-shadow:none;
+      font-weight:900;
+    }
+    .btn.danger{
+      background: linear-gradient(90deg, #ef4444, #f97316);
+      box-shadow: 0 10px 25px rgba(239,68,68,.16);
+    }
+
+    /* Categories */
+    .cat-list{ display:flex; flex-direction:column; gap:10px; }
+    .cat{
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background: var(--soft);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      transition: background .15s ease, border-color .15s ease, transform .06s ease;
+    }
+    .cat:hover{ background: var(--soft2); }
+    .cat:active{ transform: scale(.99); }
+    .cat.active{
+      border-color: rgba(37,99,235,.35);
+      background:#eff6ff;
+    }
+    .cat small{ color:var(--muted); font-weight:700; }
+    .count{
+      font-size:12px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#fff;
+      color: var(--muted);
+      font-weight:900;
+    }
+
+    /* Products */
+    .tools{
+      display:grid;
+      grid-template-columns: 1fr auto auto;
+      gap:10px;
+      align-items:center;
+      width:100%;
+    }
+    .products{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(180px, 1fr));
+      gap:12px;
+    }
+
+    @media (max-width: 1100px){
+      .wrap{ grid-template-columns: 240px 1fr 320px; }
+      .products{ grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+    }
+    @media (max-width: 900px){
+      body{ overflow:auto; }
+      .wrap{ height:auto; grid-template-columns: 1fr; }
+      .panel{ min-height: 360px; }
+      .products{ grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+    }
+
+    .card{
+      border:1px solid var(--border);
+      border-radius:16px;
+      background:#fff;
+      padding:12px;
+      cursor:pointer;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      transition: transform .08s ease, border-color .15s ease, box-shadow .15s ease;
+      min-height: 124px;
+    }
+    .card:hover{
+      transform: translateY(-1px);
+      border-color: rgba(14,165,233,.30);
+      box-shadow: 0 10px 28px rgba(17,24,39,.10);
+    }
+    .pname{ font-weight:950; font-size:14px; }
+    .pmeta{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      color:var(--muted);
+      font-size:12px;
+      font-weight:700;
+    }
+    .price{ font-size:14px; font-weight:950; color:#0b1220; }
+    .stock{
+      font-size:12px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: var(--soft);
+      color: var(--muted);
+      font-weight:900;
+    }
+
+    /* Billing */
+    .two{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+
+    .cart{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .line{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:10px;
+      padding:10px 10px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background: var(--soft);
+    }
+    .line-title{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width:0;
+    }
+    .line-title strong{
+      font-size:13px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      font-weight:950;
+    }
+    .line-title small{ color:var(--muted); font-size:12px; font-weight:700; }
+
+    .line-actions{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      gap:8px;
+    }
+
+    .qtybox{ display:flex; align-items:center; gap:6px; }
+    .iconbtn{
+      border:1px solid var(--border);
+      background:#fff;
+      color:var(--text);
+      width:30px;height:30px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:950;
+      user-select:none;
+    }
+    .iconbtn:hover{ background:#f9fafb; }
+    .iconbtn:active{ transform: scale(.98); }
+    .qty{ min-width:34px; text-align:center; font-weight:950; }
+    .money{ font-weight:950; font-size:13px; }
+    .remove{
+      color:#fff;
+      background: linear-gradient(90deg, #ef4444, #f97316);
+      border:none;
+      border-radius:10px;
+      padding:6px 10px;
+      cursor:pointer;
+      font-weight:950;
+      font-size:12px;
+    }
+
+    .totals{
+      border-top:1px solid var(--border);
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      background:#fff;
+    }
+    .row{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      color: var(--muted);
+      font-size:13px;
+      font-weight:800;
+    }
+    .row strong{ color: var(--text); font-weight:950; }
+
+    .grand{
+      margin-top:8px;
+      padding-top:10px;
+      border-top:1px dashed #d1d5db;
+      display:flex;
+      justify-content:space-between;
+      align-items:baseline;
+    }
+    .grand .label{ color:#111827; font-weight:950; }
+    .grand .value{ font-size:20px; font-weight:950; }
+
+    .footer-actions{
+      padding:12px;
+      border-top:1px solid var(--border);
+      display:flex;
+      gap:10px;
+      background:#fff;
+    }
+    .footer-actions .btn{ width:100%; }
+
+    /* Modal */
+    .modal{
+      position:fixed;
+      inset:0;
+      background: rgba(17,24,39,.35);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+      z-index:50;
+    }
+    .modal.open{ display:flex; }
+    .modal-card{
+      width:min(520px, 100%);
+      border-radius: 18px;
+      border:1px solid var(--border);
+      background:#fff;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .modal-head{
+      padding:12px 14px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      background:#fff;
+    }
+    .modal-head strong{ font-size:14px; font-weight:950; }
+    .modal-body{
+      padding:14px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .hint{ color:var(--muted); font-size:12px; font-weight:700; }
+    .modal-actions{
+      padding:14px;
+      border-top:1px solid var(--border);
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      background:#fff;
+    }
+    .x{
+      cursor:pointer;
+      border:1px solid var(--border);
+      background: var(--soft);
+      color: var(--text);
+      border-radius:12px;
+      width:36px;
+      height:36px;
+      font-weight:950;
+    }
+    .x:hover{ background: var(--soft2); }
+
+    /* Print */
+    @media print{
+      body{ background:#fff; color:#111; height:auto; overflow:visible; }
+      .topbar, .left, .center, .footer-actions, .panel-header .btn, .tools, .modal{ display:none !important; }
+      .wrap{ grid-template-columns: 1fr; padding:0; }
+      .panel{ box-shadow:none; border:none; border-radius:0; }
+      .scroll{ padding:0; }
+      .totals{ border-top:1px solid #ddd; }
+      .line{ border:1px solid #ddd; background:#fff; }
+      .row{ color:#333; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <span class="logo-dot"></span>
+      <span>AS Electricals</span>
+      <span class="tag">POS</span>
+    </div>
+
+    <div class="clock">
+      <span class="pill">Electrical Items Billing</span>
+      <span class="pill" id="clock">--:--:--</span>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <!-- LEFT: Categories -->
+    <section class="panel left">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Categories</div>
+          <div class="panel-sub">Scroll and select</div>
+        </div>
+        <button class="btn secondary" id="resetCategoryBtn" title="Show all products">All</button>
+      </div>
+
+      <div class="scroll">
+        <input class="input" id="catSearch" placeholder="Search category..." />
+        <div style="height:10px"></div>
+        <div class="cat-list" id="catList"></div>
+      </div>
+    </section>
+
+    <!-- CENTER: Products -->
+    <section class="panel center">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Products</div>
+          <div class="panel-sub" id="activeCatLabel">All items</div>
+        </div>
+        <button class="btn secondary" id="clearSearchBtn">Clear</button>
+      </div>
+
+      <div class="scroll">
+        <div class="tools">
+          <input class="input" id="prodSearch" placeholder="Search product (name / SKU)..." />
+          <button class="btn secondary" id="quickAddFirstBtn" title="Add first visible product">Quick Add</button>
+          <button class="btn secondary" id="resetFiltersBtn" title="Reset filters">Reset</button>
+        </div>
+        <div style="height:12px"></div>
+        <div class="products" id="productGrid"></div>
+      </div>
+    </section>
+
+    <!-- RIGHT: Billing Summary -->
+    <section class="panel right">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Billing Summary</div>
+          <div class="panel-sub" id="cartCountLabel">0 items</div>
+        </div>
+        <button class="btn danger" id="clearCartBtn">Clear</button>
+      </div>
+
+      <div class="scroll">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="two">
+            <input class="input" id="customerName" placeholder="Customer name (optional)" />
+            <input class="input" id="invoiceNo" placeholder="Invoice no. (e.g. INV-001)" />
+          </div>
+
+          <div class="two">
+            <input class="input" id="taxPercent" type="number" min="0" step="0.01" placeholder="Tax % (e.g. 18)" value="18" />
+            <input class="input" id="discountAmt" type="number" min="0" step="0.01" placeholder="Discount ₹" value="0" />
+          </div>
+
+          <div class="two">
+            <select class="input" id="paymentMode">
+              <option value="Cash">Cash</option>
+              <option value="UPI">UPI</option>
+              <option value="Card">Card</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+            </select>
+            <input class="input" id="amountPaid" type="number" min="0" step="0.01" placeholder="Amount paid ₹" value="0" />
+          </div>
+        </div>
+
+        <div style="height:14px"></div>
+        <div class="cart" id="cart"></div>
+      </div>
+
+      <div class="totals">
+        <div class="row"><span>Subtotal</span><strong id="subTotal">₹0.00</strong></div>
+        <div class="row"><span>Tax</span><strong id="taxTotal">₹0.00</strong></div>
+        <div class="row"><span>Discount</span><strong id="discountTotal">₹0.00</strong></div>
+        <div class="row"><span>Paid</span><strong id="paidTotal">₹0.00</strong></div>
+        <div class="row"><span>Balance</span><strong id="balanceTotal">₹0.00</strong></div>
+
+        <div class="grand">
+          <div class="label">Grand Total</div>
+          <div class="value" id="grandTotal">₹0.00</div>
+        </div>
+      </div>
+
+      <div class="footer-actions">
+        <button class="btn secondary" id="printBtn">Print</button>
+        <button class="btn" id="checkoutBtn">Checkout</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Quantity Modal -->
+  <div class="modal" id="qtyModal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <strong id="qtyTitle">Add Item</strong>
+        <button class="x" id="qtyClose" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="hint" id="qtyHint">Enter quantity to add to cart.</div>
+        <input class="input" id="qtyInput" type="number" min="1" step="1" value="1" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" id="qtyCancel">Cancel</button>
+        <button class="btn" id="qtyAdd">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // AS Electricals - Sample Data
+    // =========================
+    const CATEGORIES = [
+      { id: "wires",       name: "Wires & Cables" },
+      { id: "switches",    name: "Switches & Sockets" },
+      { id: "lighting",    name: "Lighting" },
+      { id: "fans",        name: "Fans" },
+      { id: "mcb",         name: "MCB / DB / Protection" },
+      { id: "plumbing",    name: "Pipes & Conduit" },
+      { id: "accessories", name: "Accessories" },
+      { id: "tools",       name: "Tools" },
+      { id: "appliances",  name: "Small Appliances" },
+      { id: "smart",       name: "Smart / Automation" }
+    ];
+
+    // NOTE: Products are mapped to categories using `cat`
+    const PRODUCTS = [
+      // Wires & Cables
+      { id:"P001", name:"Copper Wire 1.5 sqmm (90m)",            cat:"wires", price:1650, stock:12,  sku:"CW-15-90" },
+      { id:"P002", name:"Copper Wire 2.5 sqmm (90m)",            cat:"wires", price:2480, stock:10,  sku:"CW-25-90" },
+      { id:"P003", name:"Flexible Cable 3 Core 1.0 sqmm (50m)",  cat:"wires", price: 980, stock:18,  sku:"FC-3C-10" },
+      { id:"P004", name:"Flexible Cable 3 Core 1.5 sqmm (50m)",  cat:"wires", price:1290, stock:14,  sku:"FC-3C-15" },
+      { id:"P005", name:"LAN Cable Cat6 (305m)",                 cat:"wires", price:3250, stock: 6,  sku:"LAN-C6-305" },
+
+      // Switches & Sockets
+      { id:"P010", name:"6A Switch (Modular)",                   cat:"switches", price: 55, stock:120, sku:"SW-6A" },
+      { id:"P011", name:"16A Switch (Modular)",                  cat:"switches", price:110, stock: 90, sku:"SW-16A" },
+      { id:"P012", name:"6A Socket (Modular)",                   cat:"switches", price: 75, stock:100, sku:"SO-6A" },
+      { id:"P013", name:"16A Socket (Modular)",                  cat:"switches", price:160, stock: 70, sku:"SO-16A" },
+      { id:"P014", name:"2 Module Plate",                        cat:"switches", price: 45, stock:140, sku:"PL-2M" },
+      { id:"P015", name:"4 Module Plate",                        cat:"switches", price: 65, stock:120, sku:"PL-4M" },
+
+      // Lighting
+      { id:"P020", name:"LED Bulb 9W",                           cat:"lighting", price:120, stock:200, sku:"LED-9W" },
+      { id:"P021", name:"LED Bulb 12W",                          cat:"lighting", price:150, stock:180, sku:"LED-12W" },
+      { id:"P022", name:"LED Tube 20W (4ft)",                    cat:"lighting", price:290, stock:110, sku:"TUBE-20W" },
+      { id:"P023", name:"Ceiling Light Panel 18W",               cat:"lighting", price:420, stock: 60, sku:"PANEL-18W" },
+      { id:"P024", name:"Flood Light 50W",                       cat:"lighting", price:990, stock: 40, sku:"FLOOD-50W" },
+
+      // Fans
+      { id:"P030", name:"Ceiling Fan 1200mm",                    cat:"fans", price:1890, stock:22, sku:"FAN-1200" },
+      { id:"P031", name:"Exhaust Fan 200mm",                     cat:"fans", price: 990, stock:35, sku:"EXF-200" },
+      { id:"P032", name:"Table Fan 400mm",                       cat:"fans", price:1550, stock:15, sku:"TF-400" },
+
+      // MCB / DB / Protection
+      { id:"P040", name:"MCB 6A (Single Pole)",                  cat:"mcb", price:210, stock:75, sku:"MCB-6A" },
+      { id:"P041", name:"MCB 16A (Single Pole)",                 cat:"mcb", price:220, stock:70, sku:"MCB-16A" },
+      { id:"P042", name:"DB Box 8 Way",                          cat:"mcb", price:780, stock:20, sku:"DB-8W" },
+      { id:"P043", name:"RCCB 40A 30mA",                         cat:"mcb", price:1650, stock:14, sku:"RCCB-40A" },
+      { id:"P044", name:"Surge Protector (Type 2)",              cat:"mcb", price:2100, stock: 9, sku:"SPD-T2" },
+
+      // Pipes & Conduit
+      { id:"P050", name:"PVC Conduit Pipe 20mm (3m)",            cat:"plumbing", price: 75, stock:200, sku:"PVC-20-3" },
+      { id:"P051", name:"PVC Conduit Pipe 25mm (3m)",            cat:"plumbing", price: 95, stock:150, sku:"PVC-25-3" },
+      { id:"P052", name:"Conduit Bend 20mm",                     cat:"plumbing", price: 12, stock:500, sku:"BEND-20" },
+      { id:"P053", name:"Conduit Coupler 20mm",                  cat:"plumbing", price:  8, stock:600, sku:"CPL-20" },
+
+      // Accessories
+      { id:"P060", name:"Junction Box (Round)",                  cat:"accessories", price:35, stock:250, sku:"JB-R" },
+      { id:"P061", name:"Junction Box (Square)",                 cat:"accessories", price:45, stock:200, sku:"JB-S" },
+      { id:"P062", name:"Cable Tie 100pcs",                      cat:"accessories", price:140, stock: 90, sku:"CT-100" },
+      { id:"P063", name:"Ceiling Rose",                          cat:"accessories", price: 55, stock:130, sku:"CR-01" },
+      { id:"P064", name:"Insulation Tape (Pack)",                cat:"accessories", price: 60, stock:180, sku:"TAPE-INS" },
+
+      // Tools
+      { id:"P070", name:"Voltage Tester",                        cat:"tools", price: 90, stock:150, sku:"TEST-01" },
+      { id:"P071", name:"Wire Stripper",                         cat:"tools", price:260, stock: 50, sku:"TOOL-WS" },
+      { id:"P072", name:"Screwdriver Set",                       cat:"tools", price:320, stock: 45, sku:"SD-SET" },
+      { id:"P073", name:"Digital Multimeter",                    cat:"tools", price:890, stock: 18, sku:"DMM-01" },
+
+      // Small Appliances
+      { id:"P080", name:"Extension Board 4 Socket",              cat:"appliances", price:490, stock:40, sku:"EXT-4S" },
+      { id:"P081", name:"Electric Iron 1000W",                   cat:"appliances", price:1290, stock:16, sku:"IRON-1K" },
+      { id:"P082", name:"LED Emergency Light",                   cat:"appliances", price: 890, stock:25, sku:"EM-LED" },
+
+      // Smart / Automation
+      { id:"P090", name:"Wi-Fi Smart Switch 1 Gang",             cat:"smart", price:699, stock:30, sku:"WIFI-1G" },
+      { id:"P091", name:"Wi-Fi Smart Plug 16A",                  cat:"smart", price:799, stock:22, sku:"WIFI-PLUG16" },
+      { id:"P092", name:"Motion Sensor (PIR)",                   cat:"smart", price:450, stock:40, sku:"PIR-01" }
+    ];
+
+    // =========================
+    // State
+    // =========================
+    let activeCat = null;
+    let catFilterText = "";
+    let prodSearchText = "";
+    let pendingProduct = null;
+    const cart = new Map(); // productId -> {product, qty}
+
+    // =========================
+    // Helpers
+    // =========================
+    const el = (id) => document.getElementById(id);
+    const ₹ = (n) => "₹" + Number(n || 0).toFixed(2);
+
+    function nowClock(){
+      const d = new Date();
+      const pad = (x) => String(x).padStart(2,"0");
+      el("clock").textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+    setInterval(nowClock, 1000); nowClock();
+
+    function categoryCounts(){
+      const counts = {};
+      for(const c of CATEGORIES) counts[c.id] = 0;
+      for(const p of PRODUCTS) counts[p.cat] = (counts[p.cat] || 0) + 1;
+      return counts;
+    }
+
+    // =========================
+    // Render: Categories
+    // =========================
+    function renderCategories(){
+      const list = el("catList");
+      list.innerHTML = "";
+      const counts = categoryCounts();
+
+      const filtered = CATEGORIES.filter(c =>
+        c.name.toLowerCase().includes(catFilterText.toLowerCase())
+      );
+
+      // If search yields nothing
+      if(filtered.length === 0){
+        const msg = document.createElement("div");
+        msg.style.padding = "12px";
+        msg.style.border = "1px dashed #d1d5db";
+        msg.style.borderRadius = "14px";
+        msg.style.color = "var(--muted)";
+        msg.textContent = "No categories found.";
+        list.appendChild(msg);
+        return;
+      }
+
+      for(const c of filtered){
+        const div = document.createElement("div");
+        div.className = "cat" + (activeCat === c.id ? " active" : "");
+        div.innerHTML = `
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <div style="font-weight:950;font-size:13px">${c.name}</div>
+            <small>${c.id.toUpperCase()}</small>
+          </div>
+          <div class="count">${counts[c.id] || 0}</div>
+        `;
+        div.onclick = () => {
+          activeCat = c.id;
+          el("activeCatLabel").textContent = c.name;
+          renderCategories();
+          renderProducts();
+        };
+        list.appendChild(div);
+      }
+    }
+
+    // =========================
+    // Render: Products
+    // =========================
+    function visibleProducts(){
+      let items = PRODUCTS.slice();
+      if(activeCat) items = items.filter(p => p.cat === activeCat);
+
+      const q = prodSearchText.trim().toLowerCase();
+      if(q){
+        items = items.filter(p =>
+          p.name.toLowerCase().includes(q) ||
+          p.sku.toLowerCase().includes(q) ||
+          p.id.toLowerCase().includes(q)
+        );
+      }
+      return items;
+    }
+
+    function renderProducts(){
+      const grid = el("productGrid");
+      grid.innerHTML = "";
+      const items = visibleProducts();
+
+      if(items.length === 0){
+        const msg = document.createElement("div");
+        msg.style.gridColumn = "1 / -1";
+        msg.style.padding = "12px";
+        msg.style.border = "1px dashed #d1d5db";
+        msg.style.borderRadius = "14px";
+        msg.style.color = "var(--muted)";
+        msg.textContent = "No products found for this category/search.";
+        grid.appendChild(msg);
+        return;
+      }
+
+      for(const p of items){
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="pname">${p.name}</div>
+          <div class="pmeta">
+            <span>SKU: ${p.sku}</span>
+            <span class="stock">Stock: ${p.stock}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:auto">
+            <div class="price">${₹(p.price)}</div>
+            <div style="color:var(--muted);font-size:12px;font-weight:800">Click to add</div>
+          </div>
+        `;
+        card.onclick = () => openQtyModal(p);
+        grid.appendChild(card);
+      }
+    }
+
+    // =========================
+    // Cart operations
+    // =========================
+    function addToCart(product, qty){
+      const existing = cart.get(product.id);
+      const newQty = (existing ? existing.qty : 0) + qty;
+      cart.set(product.id, { product, qty: newQty });
+      renderCart();
+      computeTotals();
+    }
+
+    function setQty(productId, qty){
+      if(qty <= 0){
+        cart.delete(productId);
+      } else {
+        const item = cart.get(productId);
+        cart.set(productId, { product: item.product, qty });
+      }
+      renderCart();
+      computeTotals();
+    }
+
+    function removeItem(productId){
+      cart.delete(productId);
+      renderCart();
+      computeTotals();
+    }
+
+    // =========================
+    // Render: Cart
+    // =========================
+    function renderCart(){
+      const cartEl = el("cart");
+      cartEl.innerHTML = "";
+
+      const items = Array.from(cart.values());
+      el("cartCountLabel").textContent = `${items.reduce((a,b)=>a+b.qty,0)} items`;
+
+      if(items.length === 0){
+        const empty = document.createElement("div");
+        empty.style.padding = "14px";
+        empty.style.border = "1px dashed #d1d5db";
+        empty.style.borderRadius = "14px";
+        empty.style.color = "var(--muted)";
+        empty.innerHTML = `
+          <strong style="color:#111827">Cart is empty</strong>
+          <div style="margin-top:6px">Click a product to add items.</div>
+        `;
+        cartEl.appendChild(empty);
+        return;
+      }
+
+      for(const {product, qty} of items){
+        const line = document.createElement("div");
+        line.className = "line";
+        const lineTotal = product.price * qty;
+
+        line.innerHTML = `
+          <div class="line-title">
+            <strong title="${product.name}">${product.name}</strong>
+            <small>${product.id} • ${product.sku} • ${₹(product.price)} each</small>
+          </div>
+          <div class="line-actions">
+            <div class="qtybox">
+              <button class="iconbtn" data-act="dec">−</button>
+              <div class="qty">${qty}</div>
+              <button class="iconbtn" data-act="inc">+</button>
+            </div>
+            <div class="money">${₹(lineTotal)}</div>
+            <button class="remove" data-act="rm">Remove</button>
+          </div>
+        `;
+
+        line.querySelector('[data-act="dec"]').onclick = () => setQty(product.id, qty - 1);
+        line.querySelector('[data-act="inc"]').onclick = () => setQty(product.id, qty + 1);
+        line.querySelector('[data-act="rm"]').onclick  = () => removeItem(product.id);
+
+        cartEl.appendChild(line);
+      }
+    }
+
+    // =========================
+    // Totals
+    // =========================
+    function computeTotals(){
+      const taxPercent = Number(el("taxPercent").value || 0);
+      const discountAmt = Number(el("discountAmt").value || 0);
+      const paid = Number(el("amountPaid").value || 0);
+
+      let subtotal = 0;
+      for(const {product, qty} of cart.values()){
+        subtotal += product.price * qty;
+      }
+
+      const tax = subtotal * (taxPercent / 100);
+      const discount = Math.min(discountAmt, subtotal + tax);
+      const grand = Math.max(0, subtotal + tax - discount);
+      const balance = grand - paid;
+
+      el("subTotal").textContent = ₹(subtotal);
+      el("taxTotal").textContent = ₹(tax);
+      el("discountTotal").textContent = ₹(discount);
+      el("grandTotal").textContent = ₹(grand);
+      el("paidTotal").textContent = ₹(paid);
+      el("balanceTotal").textContent = ₹(balance);
+    }
+
+    // =========================
+    // Quantity Modal
+    // =========================
+    const modal = el("qtyModal");
+    const qtyTitle = el("qtyTitle");
+    const qtyHint = el("qtyHint");
+    const qtyInput = el("qtyInput");
+
+    function openQtyModal(product){
+      pendingProduct = product;
+      qtyTitle.textContent = `Add: ${product.name}`;
+      qtyHint.textContent  = `Price: ${₹(product.price)} • Stock: ${product.stock} • SKU: ${product.sku}`;
+      qtyInput.value = 1;
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden","false");
+      setTimeout(()=> qtyInput.focus(), 50);
+    }
+
+    function closeQtyModal(){
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden","true");
+      pendingProduct = null;
+    }
+
+    el("qtyClose").onclick  = closeQtyModal;
+    el("qtyCancel").onclick = closeQtyModal;
+    modal.addEventListener("click", (e) => { if(e.target === modal) closeQtyModal(); });
+
+    el("qtyAdd").onclick = () => {
+      const qty = Math.max(1, Math.floor(Number(qtyInput.value || 1)));
+      if(!pendingProduct) return;
+      addToCart(pendingProduct, qty);
+      closeQtyModal();
+    };
+
+    qtyInput.addEventListener("keydown", (e) => {
+      if(e.key === "Enter") el("qtyAdd").click();
+      if(e.key === "Escape") closeQtyModal();
+    });
+
+    // =========================
+    // Events
+    // =========================
+    el("catSearch").addEventListener("input", (e) => {
+      catFilterText = e.target.value || "";
+      renderCategories();
+    });
+
+    el("prodSearch").addEventListener("input", (e) => {
+      prodSearchText = e.target.value || "";
+      renderProducts();
+    });
+
+    el("resetCategoryBtn").onclick = () => {
+      activeCat = null;
+      el("activeCatLabel").textContent = "All items";
+      renderCategories();
+      renderProducts();
+    };
+
+    el("clearSearchBtn").onclick = () => {
+      el("prodSearch").value = "";
+      prodSearchText = "";
+      renderProducts();
+    };
+
+    el("resetFiltersBtn").onclick = () => {
+      activeCat = null;
+      catFilterText = "";
+      prodSearchText = "";
+      el("catSearch").value = "";
+      el("prodSearch").value = "";
+      el("activeCatLabel").textContent = "All items";
+      renderCategories();
+      renderProducts();
+    };
+
+    el("quickAddFirstBtn").onclick = () => {
+      const items = visibleProducts();
+      if(items.length) openQtyModal(items[0]);
+    };
+
+    el("clearCartBtn").onclick = () => {
+      cart.clear();
+      renderCart();
+      computeTotals();
+    };
+
+    ["taxPercent","discountAmt","amountPaid"].forEach(id => {
+      el(id).addEventListener("input", computeTotals);
+    });
+
+    el("printBtn").onclick = () => window.print();
+
+    el("checkoutBtn").onclick = () => {
+      if(cart.size === 0){
+        alert("Cart is empty. Add items to checkout.");
+        return;
+      }
+      const inv  = el("invoiceNo").value.trim() || "(no invoice no.)";
+      const cust = el("customerName").value.trim() || "(walk-in)";
+      const mode = el("paymentMode").value;
+
+      alert(
+        `AS Electricals - Checkout Successful!\n\nInvoice: ${inv}\nCustomer: ${cust}\nPayment: ${mode}\nGrand Total: ${el("grandTotal").textContent}\nBalance: ${el("balanceTotal").textContent}`
+      );
+
+      // Demo behavior: clear after checkout
+      cart.clear();
+      renderCart();
+      computeTotals();
+    };
+
+    // =========================
+    // Initial render
+    // =========================
+    renderCategories();
+    renderProducts();
+    renderCart();
+    computeTotals();
+  </script>
+</body>
+</html>

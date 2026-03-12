@@ -1,0 +1,33 @@
+/* css/topbar.css */
+.topbar{
+  height: var(--topbar-h);
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 12px 18px;
+  background: #ffffffcc;
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top:0; z-index:20;
+  flex: 0 0 auto;
+}
+
+.top-left{ display:flex; align-items:center; gap:10px; }
+.hamburger{ border:0; background:transparent; font-size:22px; padding:6px 10px; border-radius:12px; }
+.hamburger:hover{ background:#f3f4f6; }
+.dots{ display:flex; gap:6px; align-items:center; padding:6px 10px; border-radius:12px; color:#4b5563; }
+.dot{ width:6px; height:6px; border-radius:50%; background:#9ca3af; }
+
+.top-right{ display:flex; align-items:center; gap:10px; }
+.pill{ border:1px solid var(--border); background:#fff; border-radius:999px; padding:6px 10px; display:flex; align-items:center; gap:10px; box-shadow:0 8px 18px rgba(31,41,55,.05); }
+.avatar{ width:34px; height:34px; border-radius:50%; background: linear-gradient(135deg, var(--yellow), #ffd66b);
+  display:grid; place-items:center; color:#1f2937; font-weight:900; flex:0 0 auto; }
+.user-meta{ line-height:1.05; }
+.user-meta .name{ font-weight:800; font-size:13px; }
+.user-meta .mail{ color: var(--muted); font-size:12px; }
+
+.icon-btn{ width:38px; height:38px; border-radius:12px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:#4b5563; box-shadow:0 8px 18px rgba(31,41,55,.05); }
+.icon-btn:hover{ background:#f9fafb; }
+
+@media (max-width: 991.98px){
+  .dots{ display:none !important; }
+  .user-meta{ display:none !important; }
+}

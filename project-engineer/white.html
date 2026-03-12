@@ -1,0 +1,1014 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ecommer.in • POS / ERP / CRM Dashboard</title>
+
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+
+  <!-- Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{
+      /* White / Grey theme */
+      --bg0:#ffffff;
+      --bg1:#f6f7f9;
+      --bg2:#eef0f3;
+      --panel:#ffffff;
+      --panel2:#f8f9fb;
+
+      --ink:#111827;      /* slate-900 */
+      --muted:#6b7280;    /* gray-500 */
+      --muted2:#9ca3af;   /* gray-400 */
+
+      --line:#e5e7eb;     /* gray-200 */
+      --line2:#d1d5db;    /* gray-300 */
+
+      --accent:#111827;   /* keep monochrome */
+      --accent2:#374151;  /* gray-700 */
+      --accent3:#4b5563;  /* gray-600 */
+
+      --green:#16a34a;
+      --orange:#f59e0b;
+
+      --shadow: 0 14px 28px rgba(17, 24, 39, .10), 0 6px 14px rgba(17, 24, 39, .06);
+      --shadow-soft: 0 10px 18px rgba(17, 24, 39, .08);
+
+      --radius: 12px;
+      --radius-lg: 14px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+
+    /* Light background that doesn't shift on scroll */
+    html{
+      background: var(--bg1);
+      overscroll-behavior: none;
+    }
+
+    body{
+      margin:0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:var(--ink);
+      background: none;
+      overflow-x:hidden;
+      position: relative;
+      min-height: 100vh;
+      overscroll-behavior: none;
+    }
+
+    /* Fixed soft grey layer */
+    body::after{
+      content:"";
+      position:fixed;
+      inset:0;
+      z-index:-2;
+      background:
+        radial-gradient(1100px 650px at 70% 20%, rgba(17,24,39,.06), transparent 55%),
+        radial-gradient(900px 600px at 20% 10%, rgba(17,24,39,.05), transparent 52%),
+        linear-gradient(180deg, #ffffff 0%, #f6f7f9 35%, #eef0f3 100%);
+      pointer-events:none;
+    }
+
+    /* Subtle grid pattern (also fixed) */
+    body::before{
+      content:"";
+      position:fixed;
+      inset:0;
+      z-index:-1;
+      background:
+        linear-gradient(90deg, rgba(17,24,39,.05) 1px, transparent 1px) 0 0/70px 70px,
+        linear-gradient(0deg, rgba(17,24,39,.04) 1px, transparent 1px) 0 0/70px 70px;
+      opacity:.22;
+      pointer-events:none;
+      mix-blend-mode:multiply;
+    }
+
+    .app{
+      display:grid;
+      grid-template-columns: 104px 1fr;
+      gap:18px;
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 18px 22px 26px;
+    }
+
+    /* Top bar */
+    .topbar{
+      grid-column: 1 / -1;
+      height:72px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.78));
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-soft);
+      display:flex;
+      align-items:center;
+      padding: 0 18px 0 18px;
+      position:relative;
+      overflow:hidden;
+      backdrop-filter: blur(6px);
+    }
+    .topbar::after{
+      content:"";
+      position:absolute;
+      inset:-2px;
+      background: radial-gradient(800px 260px at 50% 0%, rgba(17,24,39,.07), transparent 62%);
+      pointer-events:none;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width: 300px;
+      z-index:1;
+    }
+    .logo{
+      width:44px;height:44px;border-radius:10px;
+      background: linear-gradient(180deg, #111827, #374151);
+      box-shadow: 0 10px 18px rgba(17,24,39,.18);
+      position:relative;
+      overflow:hidden;
+    }
+    .logo::before{
+      content:"";
+      position:absolute; inset:8px;
+      border-radius:7px;
+      border: 2px dashed rgba(255,255,255,.55);
+      opacity:.85;
+    }
+    .brand h1{
+      margin:0;
+      font-size:20px;
+      font-weight:900;
+      color: var(--ink);
+      letter-spacing:.2px;
+      text-transform: lowercase;
+    }
+    .brand small{
+      display:block;
+      margin-top:3px;
+      font-weight:800;
+      color: var(--muted);
+      font-size:11px;
+      letter-spacing:.2px;
+    }
+
+    .nav{
+      display:flex;
+      gap:14px;
+      align-items:center;
+      margin-left: 18px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.70);
+      border: 1px solid var(--line);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+      z-index:1;
+    }
+    .nav a{
+      color: var(--accent2);
+      text-decoration:none;
+      font-weight:800;
+      font-size:13px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .nav a i{font-size:14px; opacity:.9}
+    .nav a.active{
+      background: linear-gradient(180deg, #111827, #374151);
+      box-shadow: 0 10px 18px rgba(17,24,39,.14);
+      color:#fff;
+    }
+
+    .top-right{
+      margin-left:auto;
+      display:flex;
+      align-items:center;
+      gap:14px;
+      z-index:2;
+    }
+    .user{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.70);
+      border: 1px solid var(--line);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+      color: var(--ink);
+      font-weight:900;
+    }
+    .avatar{
+      width:34px;height:34px;border-radius:50%;
+      background: radial-gradient(circle at 30% 30%, #e5e7eb, #9ca3af 45%, #4b5563 100%);
+      border: 2px solid rgba(17,24,39,.12);
+      box-shadow: 0 10px 18px rgba(17,24,39,.12);
+      position:relative;
+      overflow:hidden;
+    }
+    .avatar::after{
+      content:"";
+      position:absolute; left:10px; top:10px;
+      width:14px; height:14px; border-radius:50%;
+      background: rgba(255,255,255,.35);
+      filter: blur(1px);
+    }
+    .bell{
+      width:42px;height:42px;border-radius:12px;
+      display:grid;place-items:center;
+      color: var(--ink);
+      background: rgba(255,255,255,.70);
+      border: 1px solid var(--line);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+    }
+
+    /* Sidebar */
+    .sidebar{
+      border-radius: 16px;
+      background: rgba(255,255,255,.70);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-soft);
+      padding: 12px 10px;
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      align-items:center;
+      min-height: 700px;
+      position:sticky;
+      top: 18px;
+      height: calc(100vh - 36px);
+      backdrop-filter: blur(6px);
+    }
+    .sitem{
+      width: 86px;
+      padding: 12px 10px;
+      border-radius: 14px;
+      text-decoration:none;
+      color: var(--accent2);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 8px;
+      font-weight:900;
+      font-size: 12px;
+      letter-spacing:.2px;
+      opacity:.95;
+    }
+    .sitem i{
+      font-size:18px;
+      width: 42px;height:42px;border-radius: 12px;
+      display:grid;place-items:center;
+      background: rgba(17,24,39,.04);
+      border: 1px solid var(--line);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+      color: var(--accent3);
+    }
+    .sitem.active{
+      background: rgba(17,24,39,.04);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.75);
+      border: 1px solid var(--line);
+    }
+    .sitem.active i{
+      background: linear-gradient(180deg, #111827, #374151);
+      border-color: rgba(255,255,255,.18);
+      box-shadow: 0 12px 18px rgba(17,24,39,.16);
+      color:#fff;
+    }
+
+    /* Main */
+    .main{
+      display:flex;
+      flex-direction:column;
+      gap: 18px;
+    }
+
+    /* Card base */
+    .card{
+      background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card .hd{
+      padding: 18px 18px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+    }
+    .title{
+      font-weight:900;
+      font-size:18px;
+      color: var(--ink);
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .title .tinyIcon{
+      width:16px;height:16px;border-radius:4px;
+      border: 1px solid var(--line2);
+      background: linear-gradient(180deg, #ffffff, #f3f4f6);
+      display:grid;place-items:center;
+      color: var(--accent2);
+      font-size:10px;
+    }
+
+    /* Metrics row */
+    .metrics{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .metric{
+      padding: 18px 18px 14px;
+      position:relative;
+      min-height: 112px;
+    }
+    .metric h3{
+      margin:0;
+      font-size:15px;
+      font-weight:900;
+      color: var(--accent2);
+    }
+    .metric .row{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      margin-top: 8px;
+      gap: 10px;
+    }
+    .metric .big{
+      font-size:44px;
+      font-weight:900;
+      letter-spacing: -1px;
+      color: var(--ink);
+      line-height:1;
+    }
+    .metric .sub{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-weight:800;
+      font-size:12px;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:50%;
+      background: #9ca3af;
+      box-shadow: 0 0 0 4px rgba(156,163,175,.20);
+    }
+    .gain{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-weight:900;
+      color: var(--green);
+      font-size:16px;
+      white-space:nowrap;
+    }
+    .gain small{
+      display:block;
+      margin-top: 4px;
+      font-size:11px;
+      color: var(--muted);
+      font-weight:900;
+    }
+    .metric .rightBadge{
+      width: 54px;
+      height: 54px;
+      border-radius: 12px;
+      display:grid;
+      place-items:center;
+      background: linear-gradient(180deg, #ffffff, #f3f4f6);
+      border: 1px solid var(--line2);
+      color: var(--accent2);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+    }
+    .metric .rightBadge i{font-size:20px}
+    .metric .pill{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #ffffff, #f3f4f6);
+      border: 1px solid var(--line2);
+      font-weight:900;
+      color: var(--accent2);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+      min-width: 96px;
+    }
+
+    /* Big grid row: pipeline + chart */
+    .grid2{
+      display:grid;
+      grid-template-columns: 1.22fr 1fr;
+      gap: 16px;
+    }
+
+    .pipelineBody{
+      padding: 0 18px 18px;
+    }
+    .pipeRow{
+      display:grid;
+      grid-template-columns: 1fr 170px;
+      gap: 10px;
+      align-items:center;
+      margin-top: 10px;
+    }
+    .barWrap{
+      height: 44px;
+      border-radius: 10px;
+      background: #f3f4f6;
+      border: 1px solid var(--line2);
+      position:relative;
+      overflow:hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+    }
+    .barBlue{
+      position:absolute;
+      left:0; top:0; bottom:0;
+      width: var(--w, 65%);
+      background: linear-gradient(180deg, #111827, #374151);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 0 12px;
+      color:#fff;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+    .barBlue .lbl{font-weight:900}
+    .barBlue .cnt{
+      background: rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.22);
+      padding: 5px 10px;
+      border-radius: 10px;
+      font-size: 13px;
+    }
+
+    .barGreen{
+      position:absolute;
+      top:6px; bottom:6px;
+      border-radius: 9px;
+      background: linear-gradient(180deg, #9ca3af, #6b7280);
+      border: 1px solid rgba(255,255,255,.18);
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      padding-right: 12px;
+      color:#fff;
+      font-weight:900;
+      box-shadow: 0 10px 18px rgba(17,24,39,.08);
+    }
+    .pipeVal{
+      height: 44px;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #ffffff, #f3f4f6);
+      border: 1px solid var(--line2);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:900;
+      color: var(--accent2);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+      white-space:nowrap;
+    }
+
+    .chartBody{
+      padding: 0 18px 18px;
+    }
+    .chartBox{
+      height: 282px;
+      border-radius: 12px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+    }
+
+    /* Lower row: 3 cards */
+    .grid3{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+    .list{
+      padding: 0 18px 18px;
+    }
+    .item{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 14px 0;
+      border-top: 1px solid var(--line);
+      gap: 12px;
+    }
+    .item:first-child{border-top:0}
+    .left{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .ico{
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      display:grid; place-items:center;
+      background: linear-gradient(180deg, #ffffff, #f3f4f6);
+      border: 1px solid var(--line2);
+      color: var(--accent2);
+      flex:0 0 auto;
+    }
+    .ico.orange{
+      color:#b45309;
+      background: linear-gradient(180deg, #fff7ed, #ffedd5);
+      border-color: #fed7aa;
+    }
+    .txt{
+      min-width: 0;
+    }
+    .txt b{
+      display:block;
+      font-weight:900;
+      color: var(--ink);
+      font-size: 14px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 310px;
+    }
+    .meta{
+      color: var(--muted);
+      font-weight:900;
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .amount{
+      font-weight:900;
+      color: var(--ink);
+      white-space:nowrap;
+    }
+
+    .clientIcon{
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      display:grid; place-items:center;
+      color:#fff;
+      font-weight:900;
+      border: 2px solid rgba(255,255,255,.7);
+      box-shadow: 0 12px 18px rgba(17,24,39,.10);
+      flex:0 0 auto;
+    }
+    .c1{background: linear-gradient(180deg, #111827, #4b5563);}
+    .c2{background: linear-gradient(180deg, #1f2937, #374151);}
+    .c3{background: linear-gradient(180deg, #4b5563, #6b7280);}
+
+    .tag{
+      padding: 8px 12px;
+      border-radius: 10px;
+      color:#fff;
+      font-weight:900;
+      font-size:12px;
+      white-space:nowrap;
+      box-shadow: 0 10px 16px rgba(17,24,39,.10);
+    }
+    .t-red{background: linear-gradient(180deg, #ef4444, #b91c1c);}
+    .t-green{background: linear-gradient(180deg, #22c55e, #16a34a);}
+    .t-blue{background: linear-gradient(180deg, #111827, #374151);}
+    .t-gray{background: linear-gradient(180deg, #9ca3af, #6b7280);}
+
+    /* Responsive */
+    @media (max-width: 1180px){
+      .metrics{grid-template-columns: repeat(2, 1fr);}
+      .grid2{grid-template-columns: 1fr;}
+      .grid3{grid-template-columns: 1fr;}
+      .sidebar{position:relative; height:auto;}
+      .app{grid-template-columns: 1fr;}
+      .topbar{flex-wrap:wrap; height:auto; padding: 14px;}
+      .brand{min-width: unset}
+      .nav{width:100%; order: 10; justify-content:flex-start; flex-wrap:wrap}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <small>POS • ERP • CRM • Retail & Distribution</small>
+          <h1>ecommer.in</h1>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Top navigation">
+        <a class="active" href="#"><i class="fa-solid fa-gauge-high"></i>Dashboard</a>
+        <a href="#"><i class="fa-solid fa-cash-register"></i>POS</a>
+        <a href="#"><i class="fa-solid fa-boxes-stacked"></i>ERP</a>
+        <a href="#"><i class="fa-regular fa-address-book"></i>CRM</a>
+        <a href="#"><i class="fa-regular fa-file-lines"></i>Reports</a>
+        <a href="#"><i class="fa-solid fa-gear"></i>Settings</a>
+      </nav>
+
+      <div class="top-right">
+        <div class="user">
+          <div class="avatar" aria-hidden="true"></div>
+          Admin Panel
+        </div>
+        <div class="bell" title="Notifications"><i class="fa-regular fa-bell"></i></div>
+      </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" aria-label="Sidebar">
+      <a class="sitem active" href="#">
+        <i class="fa-solid fa-house"></i>
+        <span>Overview</span>
+      </a>
+      <a class="sitem" href="#">
+        <i class="fa-solid fa-store"></i>
+        <span>Stores</span>
+      </a>
+      <a class="sitem" href="#">
+        <i class="fa-solid fa-receipt"></i>
+        <span>Invoices</span>
+      </a>
+      <a class="sitem" href="#">
+        <i class="fa-solid fa-users"></i>
+        <span>Customers</span>
+      </a>
+      <a class="sitem" href="#">
+        <i class="fa-solid fa-list-check"></i>
+        <span>Tasks</span>
+      </a>
+      <a class="sitem" href="#">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>Analytics</span>
+      </a>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- Metric Cards -->
+      <section class="metrics">
+        <div class="card metric">
+          <h3>New Business Leads</h3>
+          <div class="row">
+            <div>
+              <div class="big">128</div>
+              <div class="sub"><span class="dot"></span>+10% vs last month</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+              <div class="gain">+15%</div>
+              <small style="color:var(--muted); font-weight:900; font-size:11px;">This Month</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="card metric">
+          <h3>Active Implementations</h3>
+          <div class="row">
+            <div>
+              <div class="big">54</div>
+              <div class="sub"><span class="dot"></span>Sites in progress</div>
+            </div>
+            <div class="pill">5 Pending</div>
+          </div>
+        </div>
+
+        <div class="card metric">
+          <h3>Monthly Billing</h3>
+          <div class="row">
+            <div>
+              <div class="big" style="font-size:36px; letter-spacing:-.6px;">₹82,500</div>
+              <div class="sub"><span class="dot"></span>+12% this month</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end;">
+              <div class="gain">+12%</div>
+              <small style="color:var(--muted); font-weight:900; font-size:11px; margin-top:4px;">This Month</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="card metric">
+          <h3>Support Tickets</h3>
+          <div class="row">
+            <div>
+              <div class="big">23</div>
+              <div class="sub"><span class="dot"></span>3 Unresolved</div>
+            </div>
+            <div class="rightBadge" style="width:68px;height:52px;border-radius:12px;background:linear-gradient(180deg,#111827,#374151);border:1px solid rgba(17,24,39,.15);color:#fff;">
+              <i class="fa-solid fa-caret-down" style="font-size:16px;"></i>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- POS Sales Pipeline + Revenue Growth -->
+      <section class="grid2">
+        <!-- Pipeline -->
+        <div class="card">
+          <div class="hd">
+            <div class="title">Implementation Pipeline</div>
+            <div style="height:12px;width:12px;border-radius:50%;background:#f3f4f6;border:1px solid var(--line2);"></div>
+          </div>
+
+          <div class="pipelineBody">
+            <div class="pipeRow">
+              <div class="barWrap">
+                <div class="barBlue" style="width:78%;">
+                  <span class="lbl">Lead</span>
+                  <span class="cnt">32</span>
+                </div>
+              </div>
+              <div class="pipeVal">₹18,200</div>
+            </div>
+
+            <div class="pipeRow">
+              <div class="barWrap">
+                <div class="barBlue" style="width:58%;">
+                  <span class="lbl">Demo Scheduled</span>
+                  <span class="cnt">21</span>
+                </div>
+                <div class="barGreen" style="left: 52%; width: 32%;">₹25,200</div>
+              </div>
+              <div class="pipeVal">₹25,800</div>
+            </div>
+
+            <div class="pipeRow">
+              <div class="barWrap">
+                <div class="barBlue" style="width:46%;">
+                  <span class="lbl">Proposal</span>
+                  <span class="cnt">14</span>
+                </div>
+                <div class="barGreen" style="left: 44%; width: 28%;">₹14,400</div>
+              </div>
+              <div class="pipeVal">₹33,400</div>
+            </div>
+
+            <div class="pipeRow">
+              <div class="barWrap">
+                <div class="barBlue" style="width:28%;">
+                  <span class="lbl">Negotiation</span>
+                  <span class="cnt">8</span>
+                </div>
+                <div class="barGreen" style="left: 28%; width: 30%;">₹19,700</div>
+              </div>
+              <div class="pipeVal">₹19,700</div>
+            </div>
+
+            <div class="pipeRow">
+              <div class="barWrap">
+                <div class="barBlue" style="width:90%; background:linear-gradient(180deg,#111827,#1f2937);">
+                  <span class="lbl">Go-Live</span>
+                  <span class="cnt">22</span>
+                </div>
+              </div>
+              <div class="pipeVal">₹82,500</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Revenue Growth -->
+        <div class="card">
+          <div class="hd">
+            <div class="title"><span class="tinyIcon"><i class="fa-solid fa-square"></i></span>Revenue Growth</div>
+          </div>
+          <div class="chartBody">
+            <div class="chartBox">
+              <canvas id="revChart"></canvas>
+            </div>
+            <div style="display:flex; justify-content:center; gap:26px; padding-top:10px; color:var(--accent2); font-weight:900; font-size:12px;">
+              <span style="display:flex; align-items:center; gap:8px;">
+                <span style="width:12px;height:12px;border-radius:3px;background:#111827;"></span>Monthly Revenue
+              </span>
+              <span style="display:flex; align-items:center; gap:8px;">
+                <span style="width:12px;height:12px;border-radius:999px;background:#6b7280;"></span>Revenue Trend
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Lower row -->
+      <section class="grid3">
+        <!-- Recent Activities -->
+        <div class="card">
+          <div class="hd">
+            <div class="title">Recent Activities</div>
+          </div>
+          <div class="list">
+            <div class="item">
+              <div class="left">
+                <div class="ico"><i class="fa-solid fa-handshake"></i></div>
+                <div class="txt"><b>Demo completed for Shree Retail (POS)</b></div>
+              </div>
+              <div class="meta">2h ago</div>
+            </div>
+            <div class="item">
+              <div class="left">
+                <div class="ico"><i class="fa-regular fa-envelope"></i></div>
+                <div class="txt"><b>Proposal sent to Metro Distributors (ERP)</b></div>
+              </div>
+              <div class="meta">2h ago</div>
+            </div>
+            <div class="item">
+              <div class="left">
+                <div class="ico"><i class="fa-solid fa-phone"></i></div>
+                <div class="txt"><b>Follow-up call with Sunrise Pharma (CRM)</b></div>
+              </div>
+              <div class="meta">2d ago</div>
+            </div>
+            <div class="item">
+              <div class="left">
+                <div class="ico orange"><i class="fa-solid fa-circle"></i></div>
+                <div class="txt"><b>New lead: BlueMart Superstore</b></div>
+              </div>
+              <div class="meta">2d ago</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Clients -->
+        <div class="card">
+          <div class="hd">
+            <div class="title"><span class="tinyIcon"><i class="fa-solid fa-square"></i></span>Top Clients</div>
+          </div>
+          <div class="list">
+            <div class="item">
+              <div class="left">
+                <div class="clientIcon c1"><i class="fa-solid fa-store"></i></div>
+                <div class="txt"><b>Beta Retail Pvt. Ltd.</b></div>
+              </div>
+              <div class="amount">₹2,45,000</div>
+            </div>
+            <div class="item">
+              <div class="left">
+                <div class="clientIcon c2"><i class="fa-solid fa-industry"></i></div>
+                <div class="txt"><b>CyberWorks Distribution</b></div>
+              </div>
+              <div class="amount">₹1,83,000</div>
+            </div>
+            <div class="item">
+              <div class="left">
+                <div class="clientIcon c3"><i class="fa-solid fa-truck-fast"></i></div>
+                <div class="txt"><b>NetWave Traders</b></div>
+              </div>
+              <div class="amount">₹1,57,000</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Task Overview -->
+        <div class="card">
+          <div class="hd">
+            <div class="title"><span class="tinyIcon"><i class="fa-solid fa-square"></i></span>Task Overview</div>
+          </div>
+          <div class="list">
+            <div class="item">
+              <div class="left">
+                <div class="ico"><i class="fa-solid fa-file-signature"></i></div>
+                <div class="txt"><b>Finalize proposal for ABC Mart (POS + ERP)</b></div>
+              </div>
+              <div class="tag t-red">Due Today</div>
+            </div>
+            <div class="item">
+              <div class="left">
+                <div class="ico"><i class="fa-solid fa-message"></i></div>
+                <div class="txt"><b>Follow up with Mark (Billing & AMC)</b></div>
+              </div>
+              <div class="tag t-green">In Progress</div>
+            </div>
+            <div class="item">
+              <div class="left">
+                <div class="ico"><i class="fa-solid fa-database"></i></div>
+                <div class="txt"><b>Release v2.4 POS inventory sync patch</b></div>
+              </div>
+              <div class="tag t-blue">Completed</div>
+            </div>
+            <div class="item">
+              <div class="left">
+                <div class="ico"><i class="fa-solid fa-calendar-days"></i></div>
+                <div class="txt"><b>Schedule ERP onboarding workshop</b></div>
+              </div>
+              <div class="tag t-gray">Upcoming</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Revenue Growth chart (bars + line) with INR labels
+    const ctx = document.getElementById('revChart');
+
+    const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul'];
+    const revenue = [12, 14, 13, 18, 16, 17, 20]; // (units: ₹ lakh, for display style)
+    const trend   = [14, 16, 15, 19, 21, 20, 22];
+
+    // Monochrome bar gradient (dark grey)
+    const grad = (c) => {
+      const g = c.createLinearGradient(0, 0, 0, 260);
+      g.addColorStop(0, 'rgba(17,24,39,0.95)');  // #111827
+      g.addColorStop(1, 'rgba(55,65,81,0.95)');  // #374151
+      return g;
+    };
+
+    const formatINR = (lakhs) => {
+      if (lakhs === 0) return '₹0';
+      return `₹${lakhs}L`;
+    };
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            type: 'bar',
+            label: 'Monthly Revenue',
+            data: revenue,
+            backgroundColor: (context) => grad(context.chart.ctx),
+            borderRadius: 8,
+            barPercentage: .8,
+            categoryPercentage: .78
+          },
+          {
+            type: 'line',
+            label: 'Revenue Trend',
+            data: trend,
+            borderColor: 'rgba(107,114,128,1)',      // #6b7280
+            backgroundColor: 'rgba(107,114,128,1)',
+            pointBackgroundColor: 'rgba(107,114,128,1)',
+            pointBorderColor: 'rgba(107,114,128,1)',
+            pointRadius: 3,
+            borderWidth: 3,
+            tension: .35,
+            yAxisID: 'y'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(17,24,39,.95)',
+            titleColor: '#fff',
+            bodyColor: '#f3f4f6',
+            borderColor: 'rgba(255,255,255,.12)',
+            borderWidth: 1,
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${formatINR(ctx.parsed.y)}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display:false },
+            ticks: {
+              color: '#374151',
+              font: { weight: 900 }
+            },
+            border: { display:false }
+          },
+          y: {
+            min: 0,
+            max: 25,
+            ticks: {
+              stepSize: 5,
+              color: '#6b7280',
+              font: { weight: 900 },
+              callback: (v) => formatINR(v)
+            },
+            grid: {
+              color: 'rgba(229,231,235,.95)', // gray-200
+              drawBorder: false
+            },
+            border: { display:false }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

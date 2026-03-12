@@ -1,0 +1,1207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Makura Studios • Realtime Blue Dashboard</title>
+
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+  <!-- Chart -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{
+      /* ===== BLUE THEME ===== */
+      --bg0:#cfe9ff;
+      --bg1:#bfe0ff;
+      --bg2:#d9f0ff;
+
+      --glass: rgba(255,255,255,.55);
+      --stroke: rgba(255,255,255,.55);
+
+      --text:#102a43;
+      --muted:#486581;
+
+      --shadow: 0 18px 50px rgba(10, 35, 66, .18);
+      --shadow2: 0 10px 28px rgba(10, 35, 66, .14);
+
+      --r: 18px;
+      --r2: 22px;
+
+      /* widths */
+      --sidebarW: 290px;
+      --sidebarWCollapsed: 92px;
+
+      /* accents */
+      --navActiveA: rgba(64, 156, 255, .60);
+      --navActiveB: rgba(64, 156, 255, .22);
+
+      --pillBg: rgba(64,156,255,.18);
+      --pillBd: rgba(64,156,255,.25);
+      --pillTx: #155a9a;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:Poppins, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 700px at 15% 15%, #d8f1ff 0%, rgba(216,241,255,0) 55%),
+        radial-gradient(1100px 700px at 85% 25%, #cfe9ff 0%, rgba(207,233,255,0) 58%),
+        linear-gradient(135deg, var(--bg0), var(--bg1) 40%, var(--bg2));
+      overflow:hidden;
+    }
+
+    .app{width:100vw;height:100vh;padding:22px}
+
+    /* -------- Sidebar collapse logic -------- */
+    .frame{
+      width:100%;
+      height:100%;
+      display:grid;
+      grid-template-columns: var(--sidebarW) 1fr;
+      gap: 20px;
+      align-items: stretch;
+      transition: grid-template-columns .22s ease;
+    }
+    body.sb-collapsed .frame{
+      grid-template-columns: var(--sidebarWCollapsed) 1fr;
+    }
+
+    /* ====== Sidebar ====== */
+    .sidebar{
+      border-radius: 26px;
+      padding: 22px 18px 18px;
+      color:#eaf6ff;
+      background:
+        radial-gradient(650px 650px at 30% 15%, rgba(64,156,255,.32), rgba(64,156,255,0) 55%),
+        radial-gradient(500px 500px at 80% 70%, rgba(120,210,255,.22), rgba(120,210,255,0) 60%),
+        linear-gradient(180deg, #071a2e, #0a2a4a 35%, #0a2a4a 70%, #071a2e);
+      box-shadow: var(--shadow);
+      position:relative;
+      overflow:hidden;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      transition: padding .22s ease;
+    }
+
+    /* brand row */
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      margin-bottom: 6px;
+      padding: 6px;
+      flex: 0 0 auto;
+      transition: justify-content .22s ease;
+    }
+    .brand .logoImg{
+      width:48px;height:48px;
+      display:block;
+      object-fit:contain;
+      padding:0;border:none;background:transparent;box-shadow:none;border-radius:0;
+      filter: drop-shadow(0 10px 18px rgba(0,0,0,.22));
+    }
+    .brand .twrap{transition: opacity .18s ease, transform .18s ease;}
+    .brand .t1{font-weight:800; line-height:1.05;}
+    .brand .t2{font-size:12px; opacity:.85; margin-top:2px}
+
+    /* ✅ COLLAPSED */
+    body.sb-collapsed .sidebar{padding: 22px 10px 18px;}
+    body.sb-collapsed .brand{justify-content:center}
+    body.sb-collapsed .brand .twrap{
+      opacity:0;
+      transform: translateX(-8px);
+      pointer-events:none;
+      width:0;
+      overflow:hidden;
+    }
+
+    /* NAV WRAPPER */
+    .navWrap{
+      flex: 1 1 auto;
+      min-height: 0;
+      padding-right: 6px;
+      overflow:auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .navWrap::-webkit-scrollbar{width:0;height:0}
+    body.sb-collapsed .navWrap{padding-right:0;}
+
+    .nav{
+      display:flex;
+      flex-direction:column;
+      gap: 8px;
+      margin-top: 6px;
+      padding-bottom: 10px;
+    }
+
+    .nav a{
+      text-decoration:none;
+      color:#eaf6ff;
+      padding: 12px 12px;
+      border-radius: 14px;
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      opacity:.88;
+      transition: .15s ease;
+    }
+
+    .nav a i{
+      width:18px;
+      text-align:center;
+      flex: 0 0 auto;
+    }
+
+    .nav a:hover{opacity:1; background: rgba(255,255,255,.06)}
+    .nav a.active{
+      opacity:1;
+      background: linear-gradient(135deg, var(--navActiveA), var(--navActiveB));
+      border: 1px solid rgba(255,255,255,.16);
+      box-shadow: 0 14px 30px rgba(64,156,255,.20);
+    }
+
+    .nav a .label{
+      white-space:nowrap;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    /* ✅ COLLAPSED: center icons perfectly */
+    body.sb-collapsed .nav a{
+      justify-content:center;
+      padding: 12px 0;
+      gap: 0;
+    }
+    body.sb-collapsed .nav a i{
+      width:auto;
+      text-align:center;
+    }
+    body.sb-collapsed .nav a .label{
+      opacity:0;
+      transform: translateX(-8px);
+      width:0;
+      overflow:hidden;
+      pointer-events:none;
+    }
+
+    /* Sidebar footer */
+    .sidebar-footer{
+      flex: 0 0 auto;
+      display:grid;
+      gap: 12px;
+      padding-top: 2px;
+    }
+
+    .profile{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+      transition: justify-content .22s ease, padding .22s ease, background .22s ease, border-color .22s ease;
+    }
+
+    /* ✅ FIX: profile photo frame alignment */
+    .profileLogo{
+      width:44px;height:44px;border-radius: 16px;
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.18);
+      box-shadow: 0 10px 18px rgba(0,0,0,.18);
+      object-fit:contain;
+      object-position:center;
+      padding:6px;
+      display:block;
+      flex: 0 0 auto;
+    }
+
+    .profile .ptext{transition: opacity .18s ease, transform .18s ease;}
+    .profile .name{font-weight:800; font-size:14px; line-height:1.1}
+    .profile .role{font-size:12px; opacity:.75}
+
+    /* ✅ COLLAPSED: remove the big background card, show only logo (centered) */
+    body.sb-collapsed .profile{
+      justify-content:center;
+      padding: 0;                 /* no extra space */
+      background: transparent;    /* remove card bg */
+      border-color: transparent;  /* remove border */
+      box-shadow: none;
+    }
+    body.sb-collapsed .profile .ptext{
+      opacity:0;
+      transform: translateX(-8px);
+      width:0;
+      overflow:hidden;
+      pointer-events:none;
+    }
+
+    .logout{
+      display:flex; justify-content:space-between; align-items:center;
+      font-size:12px; opacity:.78;
+      padding: 0 6px;
+      transition: opacity .18s ease;
+    }
+    body.sb-collapsed .logout{
+      opacity:0;
+      height:0;
+      overflow:hidden;
+      padding:0;
+      pointer-events:none;
+    }
+
+    /* ====== Main ====== */
+    .main{
+      border-radius: 28px;
+      padding: 18px 18px 14px;
+      background: rgba(255,255,255,.22);
+      border: 1px solid rgba(255,255,255,.35);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      height:100%;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      gap: 12px;
+      position:relative;
+    }
+
+    .content{
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow:auto;
+      padding-right: 6px;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .content::-webkit-scrollbar{width:0;height:0}
+
+    .topbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+    .hello{
+      display:flex; align-items:center; gap: 14px;
+      min-width: 340px;
+    }
+
+    .hello .brandBadge{
+      width:52px;height:52px;border-radius: 18px;
+      background: rgba(255,255,255,.55);
+      border: 1px solid rgba(255,255,255,.70);
+      box-shadow: var(--shadow2);
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+      flex: 0 0 auto;
+    }
+    .hello .brandBadge img{
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      padding:8px;
+    }
+
+    .hello small{display:block; color: var(--muted); font-weight:800; margin-bottom:2px}
+    .hello h1{margin:0; font-size:30px; line-height:1.05}
+    .hello p{margin:4px 0 0; color: var(--muted); font-size:13px}
+
+    .topnav{
+      display:flex; align-items:center; gap: 12px;
+      flex: 0 0 auto;
+    }
+    .tabs{
+      display:flex; gap: 10px;
+      padding: 8px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.28);
+      border: 1px solid rgba(255,255,255,.45);
+      box-shadow: 0 10px 22px rgba(10, 35, 66, .10);
+    }
+    .tab{
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-weight:900;
+      font-size:13px;
+      color: #1b3a57;
+      opacity:.88;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .tab.active{
+      background: rgba(255,255,255,.60);
+      opacity:1;
+      box-shadow: 0 12px 24px rgba(10, 35, 66, .10);
+      border: 1px solid rgba(255,255,255,.70);
+    }
+
+    .actions{
+      display:flex; align-items:center; gap: 10px;
+      padding: 8px 10px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.28);
+      border: 1px solid rgba(255,255,255,.45);
+      box-shadow: 0 10px 22px rgba(10, 35, 66, .10);
+    }
+    .iconbtn{
+      width:38px;height:38px;border-radius:14px;
+      display:grid;place-items:center;
+      background: rgba(255,255,255,.58);
+      border: 1px solid rgba(255,255,255,.72);
+      cursor:pointer;
+      color:#1b3a57;
+      position:relative;
+    }
+    .togglebtn{
+      width:38px;height:38px;border-radius:14px;
+      display:grid;place-items:center;
+      background: rgba(255,255,255,.58);
+      border: 1px solid rgba(255,255,255,.72);
+      cursor:pointer;
+      color:#1b3a57;
+    }
+
+    .userchip{
+      display:flex; align-items:center; gap:10px;
+      padding: 6px 10px 6px 8px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.58);
+      border: 1px solid rgba(255,255,255,.72);
+      font-weight:900;
+      font-size:13px;
+      color:#1b3a57;
+      white-space:nowrap;
+    }
+
+    /* Cards */
+    .stats{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin: 12px 0 14px;
+    }
+
+    .card{
+      border-radius: var(--r2);
+      padding: 14px 14px;
+      background: var(--glass);
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow2);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      position:relative;
+      overflow:hidden;
+    }
+
+    .stat{
+      display:flex; align-items:center; justify-content:space-between; gap: 12px;
+      min-height: 74px;
+    }
+    .stat .meta small{
+      display:block;
+      color: var(--muted);
+      font-weight:900;
+      font-size:12px;
+      margin-bottom:4px;
+    }
+    .stat .meta .big{
+      font-size:30px;
+      font-weight:900;
+      color:#102a43;
+      letter-spacing:-.5px;
+      display:flex;
+      align-items:baseline;
+      gap:6px;
+    }
+
+    .pill{
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:22px; height:22px;
+      padding: 0 7px;
+      border-radius: 8px;
+      font-size:11px;
+      font-weight:900;
+      color:var(--pillTx);
+      background: var(--pillBg);
+      border: 1px solid var(--pillBd);
+      transform: translateY(-2px);
+    }
+
+    .stat .iconbox{
+      width:52px;height:52px;border-radius: 18px;
+      display:grid;place-items:center;
+      background: rgba(255,255,255,.62);
+      border: 1px solid rgba(255,255,255,.78);
+      box-shadow: 0 10px 20px rgba(10, 35, 66, .10);
+      position:relative;
+      overflow:hidden;
+      color:#1b3a57;
+    }
+    .iconbox.grad-a:before,
+    .iconbox.grad-b:before,
+    .iconbox.grad-c:before,
+    .iconbox.grad-d:before{
+      content:"";
+      position:absolute; inset:-18px;
+      opacity:.95;
+    }
+    .iconbox.grad-a:before{background: linear-gradient(135deg, rgba(120,210,255,.55), rgba(255,255,255,0) 60%)}
+    .iconbox.grad-b:before{background: linear-gradient(135deg, rgba(92,178,255,.55), rgba(255,255,255,0) 60%)}
+    .iconbox.grad-c:before{background: linear-gradient(135deg, rgba(64,156,255,.45), rgba(255,255,255,0) 60%)}
+    .iconbox.grad-d:before{background: linear-gradient(135deg, rgba(150,220,255,.55), rgba(255,255,255,0) 60%)}
+    .iconbox i{position:relative; z-index:1;}
+
+    /* Middle row */
+    .mid{
+      display:grid;
+      grid-template-columns: 2.2fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .chartCard{
+      padding: 16px 16px 12px;
+      background:
+        radial-gradient(900px 360px at 45% 45%, rgba(92,178,255,.22), rgba(92,178,255,0) 70%),
+        radial-gradient(800px 320px at 80% 60%, rgba(150,220,255,.20), rgba(150,220,255,0) 68%),
+        linear-gradient(135deg, rgba(7, 26, 46, .92), rgba(10, 64, 110, .78));
+      color:#fff;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    .chartHead{
+      display:flex; align-items:flex-start; justify-content:space-between; gap: 10px;
+      margin-bottom: 6px;
+    }
+    .chartHead h2{margin:0; font-size:22px; letter-spacing:.2px;}
+    .chartHead p{margin:4px 0 0; opacity:.80; font-size:12px; max-width: 340px;}
+    .badge{
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(3, 18, 32, .55);
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 16px 28px rgba(0,0,0,.20);
+      min-width: 140px;
+      text-align:left;
+      align-self:center;
+      margin-top: 14px;
+    }
+    .badge small{display:block; opacity:.78; font-weight:900; font-size:11px}
+    .badge .money{font-size:20px; font-weight:900; margin-top:2px}
+    .chartWrap{height: 240px; margin-top: 10px;}
+
+    .rightCol{display:grid; gap: 14px;}
+
+    .revenue{
+      padding: 16px;
+      color:#fff;
+      background:
+        radial-gradient(600px 250px at 30% 10%, rgba(64,156,255,.30), rgba(64,156,255,0) 65%),
+        radial-gradient(520px 260px at 80% 70%, rgba(150,220,255,.28), rgba(150,220,255,0) 65%),
+        linear-gradient(135deg, rgba(7, 26, 46, .92), rgba(64,156,255,.50));
+      border: 1px solid rgba(255,255,255,.14);
+      overflow:hidden;
+    }
+    .revenue .amt{font-weight:900; font-size:26px; letter-spacing:-.4px; margin: 0;}
+    .revenue .sub{margin: 2px 0 12px; opacity:.80; font-weight:900; font-size:12px;}
+    .btn{
+      display:inline-flex; align-items:center; gap:10px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.20);
+      color:#fff;
+      font-weight:900;
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+      box-shadow: 0 16px 28px rgba(0,0,0,.18);
+    }
+
+    .task h3{margin: 0 0 10px; font-size:16px; letter-spacing:.2px;}
+    .cardHead{display:flex; align-items:center; justify-content:space-between; margin-bottom: 10px;}
+    .dots{
+      width:34px;height:34px;border-radius: 14px;
+      display:grid;place-items:center;
+      background: rgba(255,255,255,.58);
+      border: 1px solid rgba(255,255,255,.72);
+      color:#1b3a57;
+      cursor:pointer;
+    }
+    .task .row{
+      display:flex; justify-content:space-between; align-items:center;
+      padding: 10px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.40);
+      border: 1px solid rgba(255,255,255,.58);
+      margin-bottom: 10px;
+    }
+    .task .left{display:flex; align-items:center; gap: 10px; font-weight:900; color:#102a43; font-size:13px;}
+    .dot{
+      width:30px;height:30px;border-radius: 12px;
+      display:grid;place-items:center;
+      border: 1px solid rgba(255,255,255,.85);
+      background: rgba(255,255,255,.58);
+      box-shadow: 0 10px 18px rgba(10, 35, 66, .10);
+      flex: 0 0 auto;
+      color:#1b3a57;
+    }
+    .dot.p{background: linear-gradient(135deg, rgba(120,210,255,.35), rgba(255,255,255,.58))}
+    .dot.o{background: linear-gradient(135deg, rgba(92,178,255,.35), rgba(255,255,255,.58))}
+    .dot.m{background: linear-gradient(135deg, rgba(150,220,255,.35), rgba(255,255,255,.58))}
+    .check{
+      width:18px;height:18px;border-radius: 6px;
+      border: 2px solid rgba(16, 42, 67, .25);
+      display:inline-block;
+      position:relative;
+      background: rgba(255,255,255,.48);
+    }
+    .check.on{border-color: rgba(64,156,255,.35); background: rgba(64,156,255,.16);}
+    .check.on:after{
+      content:"";
+      position:absolute;
+      width:8px;height:4px;
+      border-left: 2px solid rgba(16, 42, 67, .75);
+      border-bottom: 2px solid rgba(16, 42, 67, .75);
+      transform: rotate(-45deg);
+      left:4px; top:5px;
+    }
+
+    /* Bottom row */
+    .bottom{
+      display:grid;
+      grid-template-columns: 1.25fr 1fr 1fr;
+      gap: 14px;
+      margin-top: 2px;
+      padding-bottom: 6px;
+    }
+
+    .cardTitle{margin:0; font-size:16px; letter-spacing:.2px;}
+    .list{display:grid; gap: 10px;}
+    .item{
+      display:flex; align-items:center; justify-content:space-between; gap: 10px;
+      padding: 10px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.38);
+      border: 1px solid rgba(255,255,255,.58);
+    }
+    .item .l{display:flex; align-items:center; gap: 0; min-width: 0;}
+    .bottom .thumb{display:none !important;}
+    .item .txt{min-width:0}
+
+    .item .title{
+      font-weight:900;
+      font-size:13px;
+      color:#102a43;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .item .sub{
+      font-size:11px;
+      font-weight:900;
+      color: var(--muted);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      margin-top:2px;
+    }
+    .pillCount{display:flex; align-items:center; gap: 10px; color:#1b3a57; font-weight:900;}
+    .miniCount{
+      width:28px;height:28px;border-radius: 12px;
+      display:grid;place-items:center;
+      background: rgba(64,156,255,.16);
+      border: 1px solid rgba(64,156,255,.22);
+      font-size:12px;
+      color:#155a9a;
+    }
+    .arrow{
+      width:30px;height:30px;border-radius: 12px;
+      display:grid;place-items:center;
+      background: rgba(255,255,255,.58);
+      border: 1px solid rgba(255,255,255,.72);
+      cursor:pointer;
+      color:#1b3a57;
+    }
+
+    .clients .righttag{
+      font-size:11px;
+      font-weight:900;
+      color:#155a9a;
+      background: rgba(255,255,255,.44);
+      border: 1px solid rgba(255,255,255,.62);
+      padding: 8px 10px;
+      border-radius: 14px;
+      white-space:nowrap;
+    }
+    .timeTag{
+      font-size:11px;
+      font-weight:900;
+      color:#1b3a57;
+      padding: 6px 10px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.46);
+      border: 1px solid rgba(255,255,255,.64);
+      white-space:nowrap;
+    }
+
+    /* -------- Mobile behavior -------- */
+    @media (max-width: 860px){
+      .frame{grid-template-columns: 1fr;}
+
+      .sidebar{
+        position: fixed;
+        left: 22px;
+        top: 22px;
+        bottom: 22px;
+        width: min(86vw, var(--sidebarW));
+        z-index: 50;
+        transform: translateX(calc(-100% - 28px));
+        transition: transform .22s ease;
+      }
+      body.sb-open .sidebar{transform: translateX(0);}
+
+      .overlay{
+        position: fixed;
+        inset: 0;
+        background: rgba(7,26,46,.35);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .2s ease;
+        z-index: 40;
+      }
+      body.sb-open .overlay{
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .topbar{flex-direction:column; align-items:flex-start}
+      .topnav{width:100%; justify-content:space-between}
+      .tabs{flex-wrap:wrap}
+    }
+
+    @media (max-width: 1180px){
+      :root{--sidebarW: 250px;}
+      .stats{grid-template-columns: repeat(2, 1fr);}
+      .mid{grid-template-columns: 1fr;}
+      .bottom{grid-template-columns: 1fr;}
+    }
+  </style>
+</head>
+
+<body>
+  <div class="overlay" id="overlay"></div>
+
+  <div class="app">
+    <div class="frame">
+
+      <!-- ===== Sidebar ===== -->
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">
+          <img
+            src="https://imgs.search.brave.com/LLin1_tWwDA09e5EmZpQ2WCfLUOeHxoAhJiu4382qso/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9zdGF0/aWMudmVjdGVlenku/Y29tL3N5c3RlbS9y/ZXNvdXJjZXMvdGh1/bWJuYWlscy8wNjAv/MzU5LzU3MS9zbWFs/bC9tb2Rlcm4tZ2xv/c3N5LWRzbHItY2Ft/ZXJhLXByZWNpc2lv/bi1lcXVpcG1lbnQt/ZnJlZS1wbmcucG5n"
+            alt="Camera"
+            class="logoImg"
+          />
+          <div class="twrap">
+            <div class="t1">Makura Studios</div>
+            <div class="t2">Dashboard</div>
+          </div>
+        </div>
+
+        <div class="navWrap">
+          <nav class="nav">
+            <a class="active" href="#"><i class="fa-solid fa-house"></i><span class="label">Dashboard</span></a>
+            <a href="#"><i class="fa-regular fa-calendar"></i><span class="label">Calendar</span></a>
+            <a href="#"><i class="fa-solid fa-users"></i><span class="label">Clients</span></a>
+            <a href="#"><i class="fa-regular fa-folder-open"></i><span class="label">Projects</span></a>
+
+            <a href="#"><i class="fa-solid fa-file-invoice"></i><span class="label">Invoices</span></a>
+            <a href="#"><i class="fa-solid fa-chart-line"></i><span class="label">Analytics</span></a>
+            <a href="#"><i class="fa-solid fa-camera"></i><span class="label">Equipment</span></a>
+            <a href="#"><i class="fa-solid fa-image"></i><span class="label">Gallery</span></a>
+            <a href="#"><i class="fa-solid fa-calendar-check"></i><span class="label">Bookings</span></a>
+            <a href="#"><i class="fa-solid fa-list-check"></i><span class="label">Tasks</span></a>
+            <a href="#"><i class="fa-solid fa-ticket"></i><span class="label">Support</span></a>
+
+            <a href="#"><i class="fa-solid fa-gear"></i><span class="label">Settings</span></a>
+          </nav>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="profile">
+            <img src="makura.jpg" alt="Makura Logo" class="profileLogo">
+            <div class="ptext">
+              <div class="name">Makura Studios</div>
+              <div class="role">Photography &amp; Creative</div>
+            </div>
+          </div>
+
+          <div class="logout">
+            <span><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</span>
+            <span style="opacity:.7"><i class="fa-solid fa-camera"></i></span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ===== Main ===== -->
+      <main class="main">
+        <div class="content">
+
+          <!-- Top bar -->
+          <div class="topbar">
+            <div class="hello">
+              <div class="brandBadge" aria-hidden="true">
+                <img src="makura.jpg" alt="Makura Logo">
+              </div>
+              <div>
+                <small id="welcomeLine">Welcome back, Makura Studios!</small>
+                <h1>Makura Studios</h1>
+                <p>Here's a quick overview of your studio activities</p>
+              </div>
+            </div>
+
+            <div class="topnav">
+              <div class="tabs">
+                <div class="tab active">Dashboard</div>
+                <div class="tab">Calendar</div>
+                <div class="tab">Clients</div>
+                <div class="tab">Projects</div>
+              </div>
+
+              <div class="actions">
+                <div class="togglebtn" id="toggleSidebar" title="Toggle Sidebar">
+                  <i class="fa-solid fa-bars-staggered"></i>
+                </div>
+
+                <div class="iconbtn" title="Search"><i class="fa-solid fa-magnifying-glass"></i></div>
+                <div class="iconbtn" title="Notifications"><i class="fa-regular fa-bell"></i></div>
+
+                <div class="userchip">Makura Studios</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stats row -->
+          <section class="stats">
+            <div class="card stat">
+              <div class="meta">
+                <small>Upcoming Sessions</small>
+                <div class="big"><span id="statSessions">12</span> <span style="font-size:12px;font-weight:900;color:var(--muted)">Summary</span></div>
+              </div>
+              <div class="iconbox grad-a"><i class="fa-regular fa-clipboard"></i></div>
+            </div>
+
+            <div class="card stat">
+              <div class="meta">
+                <small>Pending Edits</small>
+                <div class="big"><span id="statEdits">15</span> <span class="pill" id="pillEdits">16</span></div>
+              </div>
+              <div class="iconbox grad-b"><i class="fa-regular fa-image"></i></div>
+            </div>
+
+            <div class="card stat">
+              <div class="meta">
+                <small>Pending Payments</small>
+                <div class="big">₹<span id="statPayments">1,350</span></div>
+                <div style="margin-top:2px;font-size:11px;color:#486581;font-weight:900;">
+                  <span id="statPayers">2</span> payers
+                </div>
+              </div>
+              <div class="iconbox grad-c"><i class="fa-regular fa-credit-card"></i></div>
+            </div>
+
+            <div class="card stat">
+              <div class="meta">
+                <small>New Inquiries</small>
+                <div class="big"><span id="statInquiries">8</span> <span class="pill" id="pillInq">18</span></div>
+              </div>
+              <div class="iconbox grad-d"><i class="fa-regular fa-envelope"></i></div>
+            </div>
+          </section>
+
+          <!-- Middle row -->
+          <section class="mid">
+            <div class="card chartCard">
+              <div class="chartHead">
+                <div>
+                  <h2>Sales Overview</h2>
+                  <p>Monthly bookings and revenue trend for Makura Studios.</p>
+                </div>
+                <div class="badge">
+                  <small>Avg earnings</small>
+                  <div class="money">₹<span id="avgEarnings">4,350</span></div>
+                </div>
+              </div>
+              <div class="chartWrap">
+                <canvas id="salesChart"></canvas>
+              </div>
+            </div>
+
+            <div class="rightCol">
+              <div class="card revenue">
+                <p class="amt">₹<span id="monthRevenue">28,400</span></p>
+                <div class="sub">THIS MONTH</div>
+                <div class="btn">VIEW REPORT <i class="fa-solid fa-angle-down"></i></div>
+              </div>
+
+              <div class="card task">
+                <div class="cardHead">
+                  <h3>Task List</h3>
+                  <div class="dots"><i class="fa-solid fa-bars"></i></div>
+                </div>
+
+                <div class="row">
+                  <div class="left">
+                    <div class="dot p"><i class="fa-solid fa-check"></i></div>
+                    Edit wedding gallery
+                  </div>
+                  <div class="right"><span class="check on"></span></div>
+                </div>
+
+                <div class="row">
+                  <div class="left">
+                    <div class="dot o"><i class="fa-solid fa-check"></i></div>
+                    Send invoice to client
+                  </div>
+                  <div class="right"><span class="check" id="taskInvoice"></span></div>
+                </div>
+
+                <div class="row" style="margin-bottom:0">
+                  <div class="left">
+                    <div class="dot m"><i class="fa-solid fa-envelope"></i></div>
+                    Follow up with new inquiries
+                  </div>
+                  <div class="right"><span class="check on"></span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Bottom row -->
+          <section class="bottom">
+            <div class="card">
+              <div class="cardHead">
+                <h3 class="cardTitle">Today's Sessions</h3>
+                <div class="dots"><i class="fa-solid fa-ellipsis"></i></div>
+              </div>
+
+              <div class="list">
+                <div class="item">
+                  <div class="l">
+                    <div class="txt">
+                      <div class="title">Wedding - Aarav &amp; Diya</div>
+                      <div class="sub">10:30 AM</div>
+                    </div>
+                  </div>
+                  <div class="pillCount">
+                    <div class="miniCount" id="sess1">8</div>
+                    <div class="arrow"><i class="fa-solid fa-angle-right"></i></div>
+                  </div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="txt">
+                      <div class="title">Portrait - Rohan Mehta</div>
+                      <div class="sub">1:00 PM</div>
+                    </div>
+                  </div>
+                  <div class="pillCount">
+                    <div class="miniCount" id="sess2" style="background:rgba(150,220,255,.18);border-color:rgba(150,220,255,.25);color:#155a9a">30</div>
+                    <div class="arrow"><i class="fa-solid fa-angle-right"></i></div>
+                  </div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="txt">
+                      <div class="title">Family - Kapoor Family</div>
+                      <div class="sub">3:30 PM</div>
+                    </div>
+                  </div>
+                  <div class="pillCount">
+                    <div class="miniCount" id="sess3">9</div>
+                    <div class="arrow"><i class="fa-solid fa-angle-right"></i></div>
+                  </div>
+                </div>
+
+                <div class="item">
+                  <div class="l">
+                    <div class="txt">
+                      <div class="title">Engagement - Karan &amp; Neha</div>
+                      <div class="sub">6:00 PM</div>
+                    </div>
+                  </div>
+                  <div class="pillCount">
+                    <div class="miniCount" id="sess4" style="background:rgba(64,156,255,.16);border-color:rgba(64,156,255,.22);color:#155a9a">51</div>
+                    <div class="arrow"><i class="fa-solid fa-angle-right"></i></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card clients">
+              <div class="cardHead">
+                <h3 class="cardTitle">Recent Clients</h3>
+                <div class="dots"><i class="fa-solid fa-ellipsis"></i></div>
+              </div>
+
+              <div class="list">
+                <div class="item"><div class="l"><div class="txt"><div class="title">Ananya Sharma</div><div class="sub">Wedding Photography</div></div></div><div class="righttag">Wedding</div></div>
+                <div class="item"><div class="l"><div class="txt"><div class="title">Vikram Singh</div><div class="sub">Portrait Photography</div></div></div><div class="righttag">Portrait</div></div>
+                <div class="item"><div class="l"><div class="txt"><div class="title">Priya Iyer</div><div class="sub">Family Photography</div></div></div><div class="righttag">Family</div></div>
+                <div class="item"><div class="l"><div class="txt"><div class="title">Arjun Nair</div><div class="sub">Event Photography</div></div></div><div class="righttag">Event</div></div>
+              </div>
+            </div>
+
+            <div class="card inquiries">
+              <div class="cardHead">
+                <h3 class="cardTitle">New Inquiries</h3>
+                <div class="dots"><i class="fa-solid fa-ellipsis"></i></div>
+              </div>
+
+              <div class="list">
+                <div class="item"><div class="l"><div class="txt"><div class="title">Mia Kapoor</div><div class="sub">Lifestyle shoot</div></div></div><div class="timeTag" id="t1">12:24 AM</div></div>
+                <div class="item"><div class="l"><div class="txt"><div class="title">Dev Malhotra</div><div class="sub">Corporate headshots</div></div></div><div class="timeTag" id="t2">9:40 AM</div></div>
+                <div class="item"><div class="l"><div class="txt"><div class="title">Aanya Rao</div><div class="sub">Newborn session</div></div></div><div class="timeTag" id="t3">8:15 AM</div></div>
+              </div>
+            </div>
+          </section>
+
+        </div><!-- /content -->
+      </main>
+    </div>
+  </div>
+
+  <script>
+    // ===== Sidebar toggle logic =====
+    const body = document.body;
+    const btn = document.getElementById('toggleSidebar');
+    const overlay = document.getElementById('overlay');
+
+    function isMobile(){
+      return window.matchMedia('(max-width: 860px)').matches;
+    }
+
+    function toggleSidebar(){
+      if (isMobile()){
+        body.classList.toggle('sb-open');
+      } else {
+        body.classList.toggle('sb-collapsed');
+      }
+    }
+
+    btn.addEventListener('click', toggleSidebar);
+    overlay.addEventListener('click', () => body.classList.remove('sb-open'));
+
+    window.addEventListener('resize', () => {
+      if (!isMobile()) body.classList.remove('sb-open');
+    });
+
+    // ===== Helpers =====
+    const fmtInt = (n) => n.toLocaleString('en-IN');
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    const rand = (a,b) => Math.random()*(b-a)+a;
+
+    function walk(v, step, min, max){
+      const nv = v + rand(-step, step);
+      return clamp(nv, min, max);
+    }
+
+    // ===== Real-time state =====
+    let state = {
+      sessions: 12,
+      edits: 15,
+      editsBadge: 16,
+      payments: 1350,
+      payers: 2,
+      inquiries: 8,
+      inquiriesBadge: 18,
+      monthRevenue: 28400,
+      avgEarnings: 4350,
+
+      sess1: 8, sess2: 30, sess3: 9, sess4: 51,
+      taskInvoiceDone: false
+    };
+
+    // ===== DOM refs =====
+    const $ = (id) => document.getElementById(id);
+    const refs = {
+      sessions: $('statSessions'),
+      edits: $('statEdits'),
+      editsBadge: $('pillEdits'),
+      payments: $('statPayments'),
+      payers: $('statPayers'),
+      inquiries: $('statInquiries'),
+      inquiriesBadge: $('pillInq'),
+      monthRevenue: $('monthRevenue'),
+      avgEarnings: $('avgEarnings'),
+      sess1: $('sess1'),
+      sess2: $('sess2'),
+      sess3: $('sess3'),
+      sess4: $('sess4'),
+      taskInvoice: $('taskInvoice')
+    };
+
+    function render(){
+      refs.sessions.textContent = fmtInt(Math.round(state.sessions));
+      refs.edits.textContent = fmtInt(Math.round(state.edits));
+      refs.editsBadge.textContent = fmtInt(Math.round(state.editsBadge));
+      refs.payments.textContent = fmtInt(Math.round(state.payments));
+      refs.payers.textContent = fmtInt(Math.round(state.payers));
+      refs.inquiries.textContent = fmtInt(Math.round(state.inquiries));
+      refs.inquiriesBadge.textContent = fmtInt(Math.round(state.inquiriesBadge));
+      refs.monthRevenue.textContent = fmtInt(Math.round(state.monthRevenue));
+      refs.avgEarnings.textContent = fmtInt(Math.round(state.avgEarnings));
+
+      refs.sess1.textContent = fmtInt(Math.round(state.sess1));
+      refs.sess2.textContent = fmtInt(Math.round(state.sess2));
+      refs.sess3.textContent = fmtInt(Math.round(state.sess3));
+      refs.sess4.textContent = fmtInt(Math.round(state.sess4));
+
+      refs.taskInvoice.className = 'check' + (state.taskInvoiceDone ? ' on' : '');
+    }
+
+    // ===== Chart.js setup =====
+    const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let seriesA = [20, 42, 38, 55, 40, 62, 58, 70, 64, 82, 72, 88];
+    let seriesB = [14, 30, 28, 44, 34, 52, 46, 62, 58, 74, 66, 80];
+
+    const ctx = document.getElementById('salesChart');
+
+    const gradient1 = (chart) => {
+      const {ctx, chartArea} = chart;
+      if (!chartArea) return null;
+      const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+      g.addColorStop(0, 'rgba(92, 178, 255, .55)');
+      g.addColorStop(1, 'rgba(92, 178, 255, 0)');
+      return g;
+    };
+
+    const gradient2 = (chart) => {
+      const {ctx, chartArea} = chart;
+      if (!chartArea) return null;
+      const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+      g.addColorStop(0, 'rgba(150, 220, 255, .45)');
+      g.addColorStop(1, 'rgba(150, 220, 255, 0)');
+      return g;
+    };
+
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Bookings',
+            data: seriesA,
+            tension: 0.45,
+            borderWidth: 3,
+            borderColor: 'rgba(150, 220, 255, .95)',
+            pointRadius: 0,
+            fill: true,
+            backgroundColor: (c) => gradient2(c.chart),
+          },
+          {
+            label: 'Revenue Index',
+            data: seriesB,
+            tension: 0.45,
+            borderWidth: 3,
+            borderColor: 'rgba(240, 251, 255, .95)',
+            pointRadius: 3,
+            pointHoverRadius: 4,
+            pointBackgroundColor: 'rgba(255,255,255,.95)',
+            pointBorderWidth: 0,
+            fill: true,
+            backgroundColor: (c) => gradient1(c.chart),
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 450 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(7, 26, 46, .78)',
+            borderColor: 'rgba(255,255,255,.15)',
+            borderWidth: 1,
+            titleColor: 'rgba(255,255,255,.95)',
+            bodyColor: 'rgba(255,255,255,.90)',
+            padding: 10
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: 'rgba(240,251,255,.75)', font: { weight: '900' } } },
+          y: { grid: { color: 'rgba(240,251,255,.10)' }, ticks: { color: 'rgba(240,251,255,.65)', font: { weight: '900' } } }
+        }
+      }
+    });
+
+    // ===== Realtime update loop =====
+    function tick(){
+      state.sessions       = walk(state.sessions, 0.7, 6, 28);
+      state.edits          = walk(state.edits, 1.1, 5, 40);
+      state.editsBadge     = walk(state.editsBadge, 1.6, 8, 80);
+
+      state.payments       = walk(state.payments, 120, 200, 520000);
+      state.payers         = Math.round(walk(state.payers, 0.6, 1, 20));
+
+      state.inquiries      = walk(state.inquiries, 0.9, 0, 30);
+      state.inquiriesBadge = walk(state.inquiriesBadge, 1.2, 5, 90);
+
+      state.monthRevenue   = walk(state.monthRevenue, 4500, 12000, 1200000);
+      state.avgEarnings    = walk(state.avgEarnings, 1200, 1500, 250000);
+
+      state.sess1 = Math.round(walk(state.sess1, 1.5, 0, 60));
+      state.sess2 = Math.round(walk(state.sess2, 1.9, 0, 60));
+      state.sess3 = Math.round(walk(state.sess3, 1.4, 0, 60));
+      state.sess4 = Math.round(walk(state.sess4, 2.2, 0, 90));
+
+      if (Math.random() < 0.08) state.taskInvoiceDone = !state.taskInvoiceDone;
+
+      const lastA = chart.data.datasets[0].data.at(-1);
+      const lastB = chart.data.datasets[1].data.at(-1);
+
+      const newA = walk(lastA, 4.2, 10, 100);
+      const newB = walk(lastB, 4.2, 10, 100);
+
+      chart.data.datasets[0].data[chart.data.datasets[0].data.length - 1] = newA;
+      chart.data.datasets[1].data[chart.data.datasets[1].data.length - 1] = newB;
+
+      for (let i = 6; i <= 10; i++){
+        chart.data.datasets[0].data[i] = walk(chart.data.datasets[0].data[i], 1.2, 5, 100);
+        chart.data.datasets[1].data[i] = walk(chart.data.datasets[1].data[i], 1.2, 5, 100);
+      }
+
+      chart.update();
+      render();
+    }
+
+    render();
+    setInterval(tick, 1500);
+  </script>
+</body>
+</html>

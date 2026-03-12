@@ -1,0 +1,10 @@
+/* css/footer.css */
+.main-footer{ 
+  border-top:1px solid var(--border); 
+  background:#ffffffcc; 
+  backdrop-filter: blur(10px); 
+  padding:12px 22px; 
+  color:#6b7280; 
+  font-weight:700; 
+  font-size:12px; 
+}
