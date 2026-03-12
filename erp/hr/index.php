@@ -1,10 +1,11 @@
 <?php
 // hr/index.php (HR DASHBOARD) — Fully Dynamic (DB-driven)
-// ✅ UPDATED:
-// 1) MOBILE cards view for "Recently Joined Employees" (top 5) + keep table for desktop
-// 2) MOBILE cards view for "Recent Profile Updates" (top 5) (already list-like, but improved spacing)
-// 3) Small responsive tweaks for charts (better heights on mobile)
-// 4) Safer queries unchanged; logic unchanged
+// Uses: employees table only
+// - Stats: Total Employees, Active Employees, New Joiners (30 days), Incomplete Profiles
+// - Table: Recently Joined Employees (✅ NOW TOP 5)
+// - Chart: New joiners last 7 days
+// - Donut: Employee status split
+// - Recent activity: latest updated employees (✅ 5)
 
 session_start();
 require_once 'includes/db-config.php';
@@ -132,7 +133,7 @@ if ($st) {
   mysqli_stmt_close($st);
 }
 
-// ---------------- RECENTLY JOINED (Top 5) ----------------
+// ---------------- RECENTLY JOINED (✅ Top 5) ----------------
 $recentJoiners = [];
 $st = mysqli_prepare($conn, "
   SELECT id, full_name, employee_code, department, designation, employee_status, date_of_joining
@@ -199,7 +200,7 @@ if ($st) {
   mysqli_stmt_close($st);
 }
 
-// ---------------- RECENT UPDATES (Top 5) ----------------
+// ---------------- RECENT UPDATES (✅ 5) ----------------
 $recentUpdates = [];
 $st = mysqli_prepare($conn, "
   SELECT id, full_name, employee_code, updated_at, department, designation
@@ -278,41 +279,13 @@ $loggedName = $_SESSION['employee_name'] ?? 'HR';
 
     .chart-wrap{ height:190px; }
     .donut-wrap{ height:240px; }
-    @media (max-width: 768px){
-      .chart-wrap{ height:170px; }
-      .donut-wrap{ height:210px; }
-    }
 
     .legend{ display:flex; flex-wrap:wrap; gap:18px 26px; padding:6px 2px 4px; align-items:center; }
     .legend-item{ display:flex; align-items:center; gap:8px; font-weight:800; color:#374151; }
     .legend-dot{ width:10px; height:10px; border-radius:50%; background:#999; }
 
-    /* ✅ MOBILE Cards */
-    .emp-card{
-      border:1px solid var(--border);
-      border-radius:16px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-      padding:12px;
-    }
-    .emp-top{ display:flex; gap:10px; align-items:flex-start; justify-content:space-between; }
-    .emp-main{ flex:1 1 auto; }
-    .emp-name{ font-weight:1000; font-size:14px; color:#111827; line-height:1.25; }
-    .emp-sub{ font-size:12px; color:#6b7280; font-weight:800; margin-top:2px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-    .emp-kv{ margin-top:10px; display:grid; gap:8px; }
-    .emp-row{ display:flex; gap:10px; }
-    .emp-key{ flex:0 0 92px; color:#6b7280; font-weight:1000; font-size:12px; }
-    .emp-val{ flex:1 1 auto; font-weight:900; color:#111827; font-size:13px; line-height:1.25; }
-    .emp-actions{ margin-top:10px; display:flex; gap:8px; }
-    .emp-actions a{ flex:1 1 auto; border-radius:12px; font-weight:900; justify-content:center; }
-
     @media (max-width: 991.98px){
       .content-scroll{ padding:18px; }
-    }
-    @media (max-width: 768px){
-      .content-scroll { padding: 12px 10px 12px !important; }
-      .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
-      .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
     }
   </style>
 </head>
@@ -381,61 +354,7 @@ $loggedName = $_SESSION['employee_name'] ?? 'HR';
                   <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
                 </div>
 
-                <!-- ✅ MOBILE CARDS -->
-                <div class="d-block d-md-none">
-                  <?php if (empty($recentJoiners)): ?>
-                    <div class="text-muted" style="font-weight:900;">No joiners found.</div>
-                  <?php else: ?>
-                    <div class="d-grid gap-3">
-                      <?php foreach ($recentJoiners as $emp): ?>
-                        <?php
-                          [$label, $cls] = statusBadgeClass($emp['employee_status'] ?? '');
-                          $name = $emp['full_name'] ?? '';
-                          $code = $emp['employee_code'] ?? '';
-                          $dept = $emp['department'] ?? '';
-                          $desg = $emp['designation'] ?? '';
-                          $join = $emp['date_of_joining'] ?? '';
-                          $id   = (int)($emp['id'] ?? 0);
-                        ?>
-                        <div class="emp-card">
-                          <div class="emp-top">
-                            <div class="emp-main">
-                              <div class="emp-name"><?php echo e($name); ?></div>
-                              <div class="emp-sub">
-                                <span><i class="bi bi-hash"></i> <?php echo e($code); ?></span>
-                                <span>•</span>
-                                <span><i class="bi bi-building"></i> <?php echo e($dept); ?></span>
-                              </div>
-                            </div>
-                            <span class="badge-pill <?php echo e($cls); ?>" style="padding:6px 10px;font-size:11px;">
-                              <span class="mini-dot"></span> <?php echo e($label); ?>
-                            </span>
-                          </div>
-
-                          <div class="emp-kv">
-                            <div class="emp-row">
-                              <div class="emp-key">Role</div>
-                              <div class="emp-val"><?php echo e($desg); ?></div>
-                            </div>
-                            <div class="emp-row">
-                              <div class="emp-key">Joining</div>
-                              <div class="emp-val"><?php echo e(safeDate($join)); ?></div>
-                            </div>
-                          </div>
-
-                          <div class="emp-actions">
-                            <a class="btn btn-outline-primary btn-sm" href="../view-employee.php?id=<?php echo (int)$id; ?>">
-                              <i class="bi bi-eye"></i> View
-                            </a>
-                          </div>
-                        </div>
-                      <?php endforeach; ?>
-                    </div>
-                  <?php endif; ?>
-                </div>
-
-                <!-- ✅ DESKTOP TABLE -->
-                <div class="table-responsive d-none d-md-block">
+                <div class="table-responsive">
                   <table class="table align-middle mb-0">
                     <thead>
                       <tr>
@@ -524,15 +443,12 @@ $loggedName = $_SESSION['employee_name'] ?? 'HR';
                       $dept = $u['department'] ?? '';
                       $desg = $u['designation'] ?? '';
                       $code = $u['employee_code'] ?? '';
-                      $id   = (int)($u['id'] ?? 0);
                     ?>
                     <div class="activity-item">
                       <div class="activity-avatar"><?php echo e($initial); ?></div>
                       <div class="flex-grow-1">
                         <p class="activity-title mb-0">
-                          <a class="muted-link" href="../view-employee.php?id=<?php echo (int)$id; ?>" style="font-weight:900;">
-                            <?php echo e($name); ?>
-                          </a>
+                          <?php echo e($name); ?>
                           <span class="text-muted" style="font-weight:700;">(<?php echo e($code); ?>)</span>
                         </p>
                         <p class="activity-sub">
@@ -658,6 +574,4 @@ $loggedName = $_SESSION['employee_name'] ?? 'HR';
 
 </body>
 </html>
-<?php
-if (isset($conn) && $conn instanceof mysqli) { $conn->close(); }
-?>
+

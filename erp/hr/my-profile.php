@@ -283,27 +283,6 @@ $passbookUrl = $emp ? existingFileUrl(fileUrl($emp['passbook_photo'] ?? '')) : '
       .profile-tabs{ overflow:auto; flex-wrap:nowrap; }
       .profile-tabs .nav-link{ white-space:nowrap; }
     }
-    @media (max-width: 768px) {
-  .content-scroll {
-    padding: 12px 10px 12px !important;   /* was 22px */
-  }
-
-  .container-fluid.maxw {
-    padding-left: 6px !important;
-    padding-right: 6px !important;
-  }
-
-  .panel {
-    padding: 12px !important;
-    margin-bottom: 12px;
-    border-radius: 14px;
-  }
-
-  .sec-head {
-    padding: 10px !important;
-    border-radius: 12px;
-  }
-}
   </style>
 </head>
 

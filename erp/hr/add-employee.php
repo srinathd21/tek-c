@@ -369,27 +369,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .form-section-heading { font-size: 16px; font-weight: 800; color: #4a5568; margin: 20px 0 15px; padding-left: 12px; border-left: 4px solid var(--blue); }
     .alert { border-radius: var(--radius); border: none; box-shadow: var(--shadow); margin-bottom: 20px; }
     .optional-badge { font-size: 11px; color: #718096; font-weight: 600; margin-left: 5px; }
-    @media (max-width: 768px) {
-  .content-scroll {
-    padding: 12px 10px 12px !important;   /* was 22px */
-  }
-
-  .container-fluid.maxw {
-    padding-left: 6px !important;
-    padding-right: 6px !important;
-  }
-
-  .panel {
-    padding: 12px !important;
-    margin-bottom: 12px;
-    border-radius: 14px;
-  }
-
-  .sec-head {
-    padding: 10px !important;
-    border-radius: 12px;
-  }
-}
     </style>
 </head>
 <body>

@@ -1,16 +1,15 @@
 <?php
-// manage-employees.php (TEK-C style)
-// ✅ UPDATED:
-// 1) PRG redirect + flash messages (no resubmit)
-// 2) MOBILE cards view (like your other pages)
-// 3) Keeps desktop DataTable
-// 4) Continues to normalize files from ../admin/uploads/... via fileUrl()
-// 5) Shows passbook/file link in both mobile + desktop if available
+// manage-employees.php (TEK-C style like your current page)
+// ✅ FETCH profiles + files from ../admin (i.e., ../admin/uploads/...)
+// - Normalizes old DB paths to the new location
+// - Shows profile photo from ../admin
+// - (Optional) Shows passbook/file link in Actions if available
 
 session_start();
 require_once 'includes/db-config.php';
 
-date_default_timezone_set('Asia/Kolkata');
+// OPTIONAL auth
+// if (!isset($_SESSION['admin_id'])) { header("Location: login.php"); exit; }
 
 $success = '';
 $error = '';
@@ -31,52 +30,70 @@ function safeDate($v, $dash='Not Set'){
 
 /**
  * ✅ Normalize file path (photo/passbook) to correct URL (from THIS page)
- * Fetch from ../admin
+ * You said: fetch from ../admin
+ *
+ * New storage (preferred):
+ *   DB: admin/uploads/...
+ *   FS: ../admin/uploads/...
+ *
+ * Old storage might be:
+ *   uploads/...
+ *   /uploads/...
+ *   employees/photos/...
+ *   employees/passbook/...
  */
 function fileUrl($path){
   $p = trim((string)$path);
   if ($p === '') return '';
 
+  // Already correct for this page
   if (stripos($p, '../admin/uploads/') === 0) return $p;
+
+  // If stored as admin/uploads/... -> convert to ../admin/uploads/...
   if (stripos($p, 'admin/uploads/') === 0) return '../' . $p;
+
+  // If stored as /admin/uploads/... -> convert
   if (stripos($p, '/admin/uploads/') === 0) return '..' . $p;
 
+  // If stored as uploads/... (meaning admin/uploads/...) -> convert
   if (stripos($p, 'uploads/') === 0) return '../admin/' . $p;
+
+  // If stored as /uploads/... -> convert
   if (stripos($p, '/uploads/') === 0) return '../admin' . $p;
 
+  // If stored as employees/... -> convert to ../admin/uploads/employees/...
   if (stripos($p, 'employees/') === 0) return '../admin/uploads/' . $p;
+
+  // If stored as /employees/... -> convert
   if (stripos($p, '/employees/') === 0) return '../admin/uploads' . $p;
 
+  // If already absolute URL (http/https), keep as-is
   if (preg_match('~^https?://~i', $p)) return $p;
 
+  // Fallback: if it's some relative file, try to route via ../admin/uploads/
+  // (comment this out if you prefer returning as-is)
   return '../admin/uploads/' . ltrim($p, '/');
 }
 
-// ---------------- PRG Soft delete -> inactive ----------------
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
-  $id = (int)$_POST['delete_id'];
+// Handle POST (Soft delete -> inactive)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  if (isset($_POST['delete_id'])) {
+    $id = (int)$_POST['delete_id'];
 
-  $stmtD = mysqli_prepare($conn, "UPDATE employees SET employee_status='inactive' WHERE id=? LIMIT 1");
-  if (!$stmtD) {
-    $_SESSION['flash_error'] = "Database error: " . mysqli_error($conn);
-  } else {
-    mysqli_stmt_bind_param($stmtD, "i", $id);
-    if (mysqli_stmt_execute($stmtD)) {
-      $_SESSION['flash_success'] = "Employee marked as inactive successfully!";
+    $stmtD = mysqli_prepare($conn, "UPDATE employees SET employee_status='inactive' WHERE id=? LIMIT 1");
+    if (!$stmtD) {
+      $error = "Database error: " . mysqli_error($conn);
     } else {
-      $_SESSION['flash_error'] = "Error updating employee: " . mysqli_stmt_error($stmtD);
+      mysqli_stmt_bind_param($stmtD, "i", $id);
+      if (mysqli_stmt_execute($stmtD)) {
+        $success = "Employee marked as inactive successfully!";
+      } else {
+        $error = "Error updating employee: " . mysqli_stmt_error($stmtD);
+      }
+      mysqli_stmt_close($stmtD);
     }
-    mysqli_stmt_close($stmtD);
   }
-
-  header("Location: manage-employees.php");
-  exit;
 }
-
-// Flash messages
-$success = (string)($_SESSION['flash_success'] ?? '');
-$error   = (string)($_SESSION['flash_error'] ?? '');
-unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 // Fetch employees
 $res = mysqli_query($conn, "SELECT * FROM employees ORDER BY created_at DESC");
@@ -174,7 +191,7 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
       border-radius: 12px;
       font-weight: 800;
       font-size: 13px;
-      display: inline-flex;
+      display: flex;
       align-items: center;
       gap: 8px;
       box-shadow: 0 8px 18px rgba(45, 156, 219, 0.18);
@@ -191,7 +208,7 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
       border-radius: 12px;
       font-weight: 800;
       font-size: 13px;
-      display: inline-flex;
+      display: flex;
       align-items: center;
       gap: 8px;
       box-shadow: 0 8px 18px rgba(16, 185, 129, 0.18);
@@ -200,18 +217,18 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
     .btn-export:hover { background:#0da271; color:#fff; }
 
     .employee-photo {
-      width: 38px; height: 38px; border-radius: 10px; overflow: hidden;
+      width: 38px; height: 38px; border-radius: 8px; overflow: hidden;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       display:flex; align-items:center; justify-content:center;
       color:#fff; font-weight:900; font-size:16px; flex:0 0 auto;
     }
     .employee-photo img { width:100%; height:100%; object-fit:cover; }
 
-    .employee-name{ font-weight:1000; font-size:13px; color:#1f2937; margin-bottom:2px; line-height:1.2; }
-    .employee-code{ font-size:11px; color:#6b7280; font-weight:800; line-height:1.2; }
+    .employee-name{ font-weight:900; font-size:13px; color:#1f2937; margin-bottom:2px; line-height:1.2; }
+    .employee-code{ font-size:11px; color:#6b7280; font-weight:650; line-height:1.2; }
 
-    .role-info{ display:flex; flex-direction:column; gap:4px; }
-    .designation-text{ font-size:12px; font-weight:900; color:#2d3748; display:flex; align-items:center; gap:6px; line-height:1.2; }
+    .role-info{ display:flex; flex-direction:column; gap:3px; }
+    .designation-text{ font-size:12px; font-weight:800; color:#2d3748; display:flex; align-items:center; gap:6px; line-height:1.2; }
     .designation-text i{ color: var(--blue); font-size: 13px; }
     .department-badge{
       background: rgba(45,156,219,.1);
@@ -224,12 +241,12 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
       display:inline-flex; align-items:center; gap:4px; width:fit-content;
     }
 
-    .contact-info{ font-size:11px; color:#6b7280; display:flex; align-items:center; gap:6px; margin-top:2px; line-height:1.2; font-weight:800; }
+    .contact-info{ font-size:11px; color:#6b7280; display:flex; align-items:center; gap:6px; margin-top:2px; line-height:1.2; }
     .contact-info i{ font-size: 11px; }
 
     .status-badge{
       padding: 3px 8px; border-radius: 20px;
-      font-size: 10px; font-weight: 1000;
+      font-size: 10px; font-weight: 900;
       text-transform: uppercase; letter-spacing: .3px;
       display:inline-flex; align-items:center; gap:6px;
       white-space: nowrap;
@@ -241,8 +258,8 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
     .btn-action{
       background: transparent;
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 6px 9px;
+      border-radius: 8px;
+      padding: 5px 8px;
       color: var(--muted);
       font-size: 12px;
       margin-left: 4px;
@@ -250,53 +267,21 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      gap:6px;
-      font-weight:900;
     }
     .btn-action:hover{ background: var(--bg); color: var(--blue); }
 
     .btn-delete{
       background: transparent;
       border: 1px solid rgba(235,87,87,.25);
-      border-radius: 10px;
-      padding: 6px 9px;
+      border-radius: 8px;
+      padding: 5px 8px;
       color: var(--red);
       font-size: 12px;
-      font-weight:900;
     }
     .btn-delete:hover{ background: rgba(235,87,87,.10); color:#d32f2f; }
 
     .alert{ border-radius: var(--radius); border:none; box-shadow: var(--shadow); margin-bottom: 20px; }
-    th.actions-col, td.actions-col { width: 190px !important; white-space: nowrap !important; }
-
-    /* ✅ MOBILE: cards */
-    .emp-card{
-      border:1px solid var(--border);
-      border-radius:16px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-      padding:12px;
-    }
-    .emp-top{ display:flex; gap:10px; align-items:flex-start; }
-    .emp-kv{ margin-top:10px; display:grid; gap:8px; }
-    .emp-row{ display:flex; gap:10px; }
-    .emp-key{ flex:0 0 92px; color:#6b7280; font-weight:1000; font-size:12px; }
-    .emp-val{ flex:1 1 auto; font-weight:900; color:#111827; font-size:13px; line-height:1.25; }
-    .emp-actions{ margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
-    .emp-actions a, .emp-actions button{ flex:1 1 auto; border-radius:12px; justify-content:center; font-weight:900; }
-    .emp-actions form{ margin:0; flex:1 1 auto; }
-
-    @media (max-width: 991.98px){
-      .content-scroll{ padding:18px; }
-      .main{ margin-left: 0 !important; width: 100% !important; max-width: 100% !important; }
-      .sidebar{ position: fixed !important; transform: translateX(-100%); z-index: 1040 !important; }
-      .sidebar.open, .sidebar.active, .sidebar.show{ transform: translateX(0) !important; }
-    }
-    @media (max-width: 768px) {
-      .content-scroll { padding: 12px 10px 12px !important; }
-      .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
-      .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
-    }
+    th.actions-col, td.actions-col { width: 170px !important; white-space: nowrap !important; }
   </style>
 </head>
 
@@ -311,12 +296,12 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
       <div class="container-fluid maxw">
 
         <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div class="d-flex justify-content-between align-items-center mb-4">
           <div>
             <h1 class="h3 fw-bold text-dark mb-1">Manage Employees</h1>
             <p class="text-muted mb-0">View and manage all employee records</p>
           </div>
-          <div class="d-flex gap-2 flex-wrap">
+          <div class="d-flex gap-2">
             <a href="add-employee.php" class="btn-add">
               <i class="bi bi-person-plus"></i> Add Employee
             </a>
@@ -345,103 +330,46 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
 
         <!-- Stats -->
         <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6 col-xl-3"><div class="stat-card"><div class="stat-ic blue"><i class="bi bi-people-fill"></i></div><div><div class="stat-label">Total Employees</div><div class="stat-value"><?php echo $total_employees; ?></div></div></div></div>
-          <div class="col-12 col-md-6 col-xl-3"><div class="stat-card"><div class="stat-ic green"><i class="bi bi-person-check"></i></div><div><div class="stat-label">Active</div><div class="stat-value"><?php echo $active_employees; ?></div></div></div></div>
-          <div class="col-12 col-md-6 col-xl-3"><div class="stat-card"><div class="stat-ic yellow"><i class="bi bi-person-x"></i></div><div><div class="stat-label">Inactive</div><div class="stat-value"><?php echo $inactive_employees; ?></div></div></div></div>
-          <div class="col-12 col-md-6 col-xl-3"><div class="stat-card"><div class="stat-ic red"><i class="bi bi-person-dash"></i></div><div><div class="stat-label">Resigned</div><div class="stat-value"><?php echo $resigned_employees; ?></div></div></div></div>
-        </div>
-
-        <!-- ✅ MOBILE: Employee Cards -->
-        <div class="d-block d-md-none mb-4">
-          <?php if (empty($employees)): ?>
-            <div class="panel text-muted" style="font-weight:900;">No employees found.</div>
-          <?php else: ?>
-            <div class="d-grid gap-3">
-              <?php foreach ($employees as $employee): ?>
-                <?php
-                  $st = trim((string)($employee['employee_status'] ?? 'inactive'));
-                  if (!in_array($st, ['active','inactive','resigned'], true)) $st = 'inactive';
-                  $status_class = 'status-' . $st;
-                  $status_text  = ucfirst($st);
-
-                  $joining = safeDate($employee['date_of_joining'] ?? '', 'Not Set');
-
-                  $photoSrc    = fileUrl($employee['photo'] ?? '');
-                  $passbookSrc = fileUrl($employee['passbook_photo'] ?? '');
-                ?>
-                <div class="emp-card">
-                  <div class="emp-top">
-                    <div class="employee-photo">
-                      <?php if (!empty($photoSrc)): ?>
-                        <img src="<?php echo e($photoSrc); ?>" alt="<?php echo e($employee['full_name'] ?? ''); ?>">
-                      <?php else: ?>
-                        <?php echo strtoupper(substr((string)($employee['full_name'] ?? ''), 0, 1)); ?>
-                      <?php endif; ?>
-                    </div>
-                    <div style="flex:1 1 auto;">
-                      <div class="employee-name"><?php echo e($employee['full_name'] ?? ''); ?></div>
-                      <div class="employee-code"><i class="bi bi-hash"></i> <?php echo e($employee['employee_code'] ?? ''); ?></div>
-
-                      <div class="mt-2">
-                        <span class="status-badge <?php echo e($status_class); ?>">
-                          <i class="bi bi-circle-fill" style="font-size:8px;"></i> <?php echo e($status_text); ?>
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="emp-kv">
-                    <div class="emp-row">
-                      <div class="emp-key">Designation</div>
-                      <div class="emp-val"><?php echo e($employee['designation'] ?? '—'); ?></div>
-                    </div>
-                    <div class="emp-row">
-                      <div class="emp-key">Department</div>
-                      <div class="emp-val"><?php echo e($employee['department'] ?? '—'); ?></div>
-                    </div>
-                    <div class="emp-row">
-                      <div class="emp-key">Mobile</div>
-                      <div class="emp-val"><?php echo e($employee['mobile_number'] ?? '—'); ?></div>
-                    </div>
-                    <div class="emp-row">
-                      <div class="emp-key">Email</div>
-                      <div class="emp-val"><?php echo e($employee['email'] ?? '—'); ?></div>
-                    </div>
-                    <div class="emp-row">
-                      <div class="emp-key">Joining</div>
-                      <div class="emp-val"><?php echo e($joining); ?></div>
-                    </div>
-                  </div>
-
-                  <div class="emp-actions">
-                    <a href="view-employee.php?id=<?php echo (int)$employee['id']; ?>" class="btn btn-outline-primary btn-sm">
-                      <i class="bi bi-eye"></i> View
-                    </a>
-                    <a href="edit-employee.php?id=<?php echo (int)$employee['id']; ?>" class="btn btn-outline-secondary btn-sm">
-                      <i class="bi bi-pencil"></i> Edit
-                    </a>
-
-                    <?php if (!empty($passbookSrc)): ?>
-                      <a href="<?php echo e($passbookSrc); ?>" target="_blank" rel="noopener" class="btn btn-outline-success btn-sm">
-                        <i class="bi bi-file-earmark-arrow-down"></i> File
-                      </a>
-                    <?php endif; ?>
-
-                    <form method="POST" onsubmit="return confirm('Mark this employee as inactive?');">
-                      <input type="hidden" name="delete_id" value="<?php echo (int)$employee['id']; ?>">
-                      <button type="submit" class="btn btn-outline-danger btn-sm w-100">
-                        <i class="bi bi-trash"></i> Inactive
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              <?php endforeach; ?>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="stat-card">
+              <div class="stat-ic blue"><i class="bi bi-people-fill"></i></div>
+              <div>
+                <div class="stat-label">Total Employees</div>
+                <div class="stat-value"><?php echo $total_employees; ?></div>
+              </div>
             </div>
-          <?php endif; ?>
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="stat-card">
+              <div class="stat-ic green"><i class="bi bi-person-check"></i></div>
+              <div>
+                <div class="stat-label">Active</div>
+                <div class="stat-value"><?php echo $active_employees; ?></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="stat-card">
+              <div class="stat-ic yellow"><i class="bi bi-person-x"></i></div>
+              <div>
+                <div class="stat-label">Inactive</div>
+                <div class="stat-value"><?php echo $inactive_employees; ?></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="stat-card">
+              <div class="stat-ic red"><i class="bi bi-person-dash"></i></div>
+              <div>
+                <div class="stat-label">Resigned</div>
+                <div class="stat-value"><?php echo $resigned_employees; ?></div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- ✅ DESKTOP: DataTable -->
-        <div class="panel mb-4 d-none d-md-block">
+        <!-- Table -->
+        <div class="panel mb-4">
           <div class="panel-header">
             <h3 class="panel-title">Employee Directory</h3>
             <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
@@ -471,6 +399,7 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
                       ? strtotime($employee['date_of_joining'])
                       : 0;
 
+                    // ✅ fetch from ../admin
                     $photoSrc    = fileUrl($employee['photo'] ?? '');
                     $passbookSrc = fileUrl($employee['passbook_photo'] ?? '');
                   ?>
@@ -603,43 +532,39 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
 <!-- JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
 <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
-
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-(function () {
-  $(function () {
-    $('#employeesTable').DataTable({
-      responsive: true,
-      autoWidth: false,
-      scrollX: false,
-      pageLength: 10,
-      lengthMenu: [[10,25,50,100,-1],[10,25,50,100,'All']],
-      order: [[4, 'desc']],
-      columnDefs: [{ targets: [5], orderable: false, searchable: false }],
-      language: {
-        zeroRecords: "No matching employees found",
-        info: "Showing _START_ to _END_ of _TOTAL_ employees",
-        infoEmpty: "No employees to show",
-        lengthMenu: "Show _MENU_",
-        search: "Search:"
-      }
-    });
+  (function () {
+    $(function () {
+      $('#employeesTable').DataTable({
+        responsive: true,
+        autoWidth: false,
+        scrollX: false,
+        pageLength: 10,
+        lengthMenu: [[10,25,50,100,-1],[10,25,50,100,'All']],
+        order: [[4, 'desc']],
+        columnDefs: [{ targets: [5], orderable: false, searchable: false }],
+        language: {
+          zeroRecords: "No matching employees found",
+          info: "Showing _START_ to _END_ of _TOTAL_ employees",
+          infoEmpty: "No employees to show",
+          lengthMenu: "Show _MENU_",
+          search: "Search:"
+        }
+      });
 
-    setTimeout(function() {
-      $('.dataTables_filter input').focus();
-    }, 400);
-  });
-})();
+      setTimeout(function() {
+        $('.dataTables_filter input').focus();
+      }, 400);
+    });
+  })();
 </script>
 
 </body>
 </html>
-<?php
-if (isset($conn) && $conn instanceof mysqli) { $conn->close(); }
-?>
+
