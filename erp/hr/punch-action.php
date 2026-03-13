@@ -58,8 +58,9 @@ $att_res = mysqli_stmt_get_result($att_stmt);
 $attendance = mysqli_fetch_assoc($att_res);
 mysqli_stmt_close($att_stmt);
 
-// Role-based office punch (HR/Admin can always punch from office)
-$can_punch_office = $isHrOrAdmin || in_array($employee['designation'], ['Manager', 'Team Lead', 'Director', 'Vice President', 'General Manager']);
+// Role-based office punch (All employees can punch from office if they have access to office locations)
+// Now all roles can punch from office, but we'll show different office options
+$can_punch_office = true; // All employees can punch from office
 
 // Assigned sites (for punch in page)
 $assigned_sites = [];
@@ -75,16 +76,11 @@ $sites_res = mysqli_stmt_get_result($sites_stmt);
 $assigned_sites = mysqli_fetch_all($sites_res, MYSQLI_ASSOC);
 mysqli_stmt_close($sites_stmt);
 
-// Offices - HR/Admin can see all active offices
+// Offices - All active offices (available for all roles now)
 $offices = [];
-if ($can_punch_office) {
-    $office_query = "SELECT * FROM office_locations WHERE is_active = 1";
-    
-    // For HR/Admin, show all offices; for others, maybe filter by assigned?
-    // Currently showing all active offices for anyone who can punch from office
-    $office_res = mysqli_query($conn, $office_query);
-    if ($office_res) $offices = mysqli_fetch_all($office_res, MYSQLI_ASSOC);
-}
+$office_query = "SELECT * FROM office_locations WHERE is_active = 1 ORDER BY is_head_office DESC, location_name ASC";
+$office_res = mysqli_query($conn, $office_query);
+if ($office_res) $offices = mysqli_fetch_all($office_res, MYSQLI_ASSOC);
 
 // Prepare punch out target location
 if ($action === 'out' && $attendance && !$attendance['punch_out_time']) {
@@ -201,9 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'in') {
 
         // OFFICE punch
         if ($punch_type === 'office') {
-            if (!$can_punch_office) {
-                $error = "You are not authorized to punch from office.";
-            } elseif (!$office_id) {
+            if (!$office_id) {
                 $error = "Please select an office location.";
             } else {
                 $office_check_stmt = mysqli_prepare($conn, "
@@ -507,17 +501,12 @@ $current_date = date('d M Y');
                           <i class="bi bi-building"></i> Site Location
                         </label>
                       </div>
-                      <?php if ($can_punch_office): ?>
                       <div class="form-check">
                         <input class="form-check-input" type="radio" name="punch_type_radio_display" id="punchTypeOffice" value="office">
                         <label class="form-check-label" for="punchTypeOffice">
                           <i class="bi bi-briefcase"></i> Office Location
-                          <?php if ($isHrOrAdmin): ?>
-                            <span class="badge bg-info ms-1">All Offices</span>
-                          <?php endif; ?>
                         </label>
                       </div>
-                      <?php endif; ?>
                     </div>
                   </div>
 
@@ -537,7 +526,6 @@ $current_date = date('d M Y');
                     </select>
                   </div>
 
-                  <?php if ($can_punch_office): ?>
                   <div class="mb-3" id="officeSelectDiv" style="display:none;">
                     <label class="form-label fw-bold">Select Office Location</label>
                     <select class="form-select" name="office_id" id="officeSelect">
@@ -555,13 +543,10 @@ $current_date = date('d M Y');
                         </option>
                       <?php endforeach; ?>
                     </select>
-                    <?php if ($isHrOrAdmin): ?>
-                      <small class="text-muted mt-1 d-block">
-                        <i class="bi bi-info-circle"></i> HR/Admin: You have access to all office locations
-                      </small>
-                    <?php endif; ?>
+                    <small class="text-muted mt-1 d-block">
+                      <i class="bi bi-info-circle"></i> Select your current office location
+                    </small>
                   </div>
-                  <?php endif; ?>
 
                   <!-- Current Location Details -->
                   <div class="mb-3">
@@ -620,7 +605,7 @@ $current_date = date('d M Y');
                 </form>
 
               <?php else: ?>
-                <form method="POST" id="punchForm">
+                <form method="POST" id="punchOutForm">
                   <input type="hidden" name="latitude" id="punchLat">
                   <input type="hidden" name="longitude" id="punchLng">
                   <input type="hidden" name="location" id="punchAddress">
@@ -629,10 +614,10 @@ $current_date = date('d M Y');
                     <div class="d-flex align-items-center">
                       <i class="bi bi-info-circle-fill me-3 fs-4"></i>
                       <div>
-                        <strong>Punch Out Location: <?= htmlspecialchars($punch_location_data['name']) ?></strong><br>
+                        <strong>Punch Out Location: <?= htmlspecialchars($punch_location_data['name'] ?? '') ?></strong><br>
                         <small>
-                          Type: <?= ucfirst($punch_location_data['type']) ?> |
-                          Required Radius: <?= (int)$punch_location_data['radius'] ?>m
+                          Type: <?= ucfirst($punch_location_data['type'] ?? '') ?> |
+                          Required Radius: <?= (int)($punch_location_data['radius'] ?? 100) ?>m
                         </small>
                       </div>
                     </div>
@@ -683,8 +668,8 @@ $current_date = date('d M Y');
 
                   <div class="alert alert-warning mb-3">
                     <i class="bi bi-exclamation-triangle me-2"></i>
-                    You must be within <?= (int)$punch_location_data['radius'] ?>m of the
-                    <?= htmlspecialchars($punch_location_data['type']) ?> location to punch out.
+                    You must be within <?= (int)($punch_location_data['radius'] ?? 100) ?>m of the
+                    <?= htmlspecialchars($punch_location_data['type'] ?? '') ?> location to punch out.
                   </div>
 
                   <div class="d-flex gap-2">
@@ -1057,6 +1042,7 @@ async function initializeLocation() {
 
 document.addEventListener('DOMContentLoaded', function() {
   const form = document.getElementById('punchForm');
+  const punchOutForm = document.getElementById('punchOutForm');
   const submitBtn = document.getElementById('submitBtn');
   const refreshLocationBtn = document.getElementById('refreshLocationBtn');
 
@@ -1070,32 +1056,32 @@ document.addEventListener('DOMContentLoaded', function() {
   const officeSelect = document.getElementById('officeSelect');
 
   if (punchTypeSite && siteSelectDiv) {
-  punchTypeSite.addEventListener('change', function() {
-    siteSelectDiv.style.display = 'block';
-    if (officeSelectDiv) officeSelectDiv.style.display = 'none';
-    if (punchTypeHidden) punchTypeHidden.value = 'site';
-    
-    // Manage required attributes
-    if (siteSelect) siteSelect.required = true;
-    if (officeSelect) officeSelect.required = false;
-    
-    if (currentLat && currentLng) validateCurrentLocationForPunchIn();
-  });
-}
+    punchTypeSite.addEventListener('change', function() {
+      siteSelectDiv.style.display = 'block';
+      if (officeSelectDiv) officeSelectDiv.style.display = 'none';
+      if (punchTypeHidden) punchTypeHidden.value = 'site';
+      
+      // Manage required attributes
+      if (siteSelect) siteSelect.required = true;
+      if (officeSelect) officeSelect.required = false;
+      
+      if (currentLat && currentLng) validateCurrentLocationForPunchIn();
+    });
+  }
 
-if (punchTypeOffice && officeSelectDiv) {
-  punchTypeOffice.addEventListener('change', function() {
-    if (siteSelectDiv) siteSelectDiv.style.display = 'none';
-    officeSelectDiv.style.display = 'block';
-    if (punchTypeHidden) punchTypeHidden.value = 'office';
-    
-    // Manage required attributes
-    if (siteSelect) siteSelect.required = false;
-    if (officeSelect) officeSelect.required = true;
-    
-    if (currentLat && currentLng) validateCurrentLocationForPunchIn();
-  });
-}
+  if (punchTypeOffice && officeSelectDiv) {
+    punchTypeOffice.addEventListener('change', function() {
+      if (siteSelectDiv) siteSelectDiv.style.display = 'none';
+      officeSelectDiv.style.display = 'block';
+      if (punchTypeHidden) punchTypeHidden.value = 'office';
+      
+      // Manage required attributes
+      if (siteSelect) siteSelect.required = false;
+      if (officeSelect) officeSelect.required = true;
+      
+      if (currentLat && currentLng) validateCurrentLocationForPunchIn();
+    });
+  }
 
   if (siteSelect) {
     siteSelect.addEventListener('change', function() {
@@ -1135,130 +1121,142 @@ if (punchTypeOffice && officeSelectDiv) {
     });
   }
 
+  // Handle Punch In Form
   if (form) {
-  form.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const originalBtnText = submitBtn.innerHTML;
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Validating...';
-
-    try {
-      // First, handle the required field validation manually
-      const punchType = document.querySelector('input[name="punch_type_radio_display"]:checked')?.value || 'site';
-      const punchTypeHidden = document.getElementById('punchType');
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
       
-      // Set the hidden punch type value
-      if (punchTypeHidden) {
-        punchTypeHidden.value = punchType;
-      }
+      const originalBtnText = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Validating...';
 
-      // Temporarily remove required attributes from hidden fields
-      const siteSelect = document.getElementById('siteSelect');
-      const officeSelect = document.getElementById('officeSelect');
-      
-      if (siteSelect) siteSelect.required = false;
-      if (officeSelect) officeSelect.required = false;
-
-      // Now validate based on selected type
-      if (punchType === 'site') {
-        if (!siteSelect || !siteSelect.value) {
-          alert('Please select a site');
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = originalBtnText;
-          if (siteSelect) siteSelect.required = true; // Restore for next validation
-          return false;
+      try {
+        // First, handle the required field validation manually
+        const punchType = document.querySelector('input[name="punch_type_radio_display"]:checked')?.value || 'site';
+        const punchTypeHidden = document.getElementById('punchType');
+        
+        // Set the hidden punch type value
+        if (punchTypeHidden) {
+          punchTypeHidden.value = punchType;
         }
-        // Temporarily set required for validation
-        siteSelect.required = true;
-      } else if (punchType === 'office') {
-        if (!officeSelect || !officeSelect.value) {
-          alert('Please select an office location');
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = originalBtnText;
-          if (officeSelect) officeSelect.required = true; // Restore for next validation
-          return false;
+
+        // Temporarily remove required attributes from hidden fields
+        const siteSelect = document.getElementById('siteSelect');
+        const officeSelect = document.getElementById('officeSelect');
+        
+        if (siteSelect) siteSelect.required = false;
+        if (officeSelect) officeSelect.required = false;
+
+        // Now validate based on selected type
+        if (punchType === 'site') {
+          if (!siteSelect || !siteSelect.value) {
+            alert('Please select a site');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+            if (siteSelect) siteSelect.required = true;
+            return false;
+          }
+          siteSelect.required = true;
+        } else if (punchType === 'office') {
+          if (!officeSelect || !officeSelect.value) {
+            alert('Please select an office location');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+            if (officeSelect) officeSelect.required = true;
+            return false;
+          }
+          officeSelect.required = true;
         }
-        // Temporarily set required for validation
-        officeSelect.required = true;
-      }
 
-      // Re-fetch latest GPS just before submit
-      await fetchAndStoreLocation({ timeout: 30000, maximumAge: 0 });
+        // Re-fetch latest GPS just before submit
+        await fetchAndStoreLocation({ timeout: 30000, maximumAge: 0 });
 
-      // Validate based on action type
-      <?php if ($action === 'in'): ?>
+        // Validate based on action type
         await validateCurrentLocationForPunchIn();
         if (submitBtn.disabled) {
-          // Validation failed, show error and re-enable button
           setStatus('danger', '❌ Validation Failed', 'Please check your location and try again');
           submitBtn.disabled = false;
           submitBtn.innerHTML = originalBtnText;
           
-          // Restore required attributes
           if (siteSelect) siteSelect.required = (punchType === 'site');
           if (officeSelect) officeSelect.required = (punchType === 'office');
           return false;
         }
-      <?php else: ?>
+
+        setTimeout(() => {
+          form.submit();
+        }, 100);
+        
+      } catch (err) {
+        console.error('Form submission error:', err);
+        let msg = 'Unable to get your location. ';
+        if (err.code === 1) msg += 'Please allow location access in browser settings.';
+        else if (err.code === 2) msg += 'Location unavailable. Check GPS.';
+        else if (err.code === 3) msg += 'Location request timed out.';
+        else msg += err.message || 'Please try again.';
+        
+        alert(msg);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+      }
+    });
+  }
+
+  // Handle Punch Out Form
+  if (punchOutForm) {
+    punchOutForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const originalBtnText = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Validating...';
+
+      try {
+        // Re-fetch latest GPS just before submit
+        await fetchAndStoreLocation({ timeout: 30000, maximumAge: 0 });
+
+        // Validate location for punch out
         await validateCurrentLocationForPunchOut();
         if (submitBtn.disabled) {
-          // Validation failed, show error and re-enable button
           setStatus('danger', '❌ Validation Failed', 'You are outside the required radius');
           submitBtn.disabled = false;
           submitBtn.innerHTML = originalBtnText;
-          
-          // Restore required attributes
-          if (siteSelect) siteSelect.required = (punchType === 'site');
-          if (officeSelect) officeSelect.required = (punchType === 'office');
           return false;
         }
-      <?php endif; ?>
 
-      // All validations passed, submit the form
-      // Use a small timeout to ensure UI updates before submission
-      setTimeout(() => {
-        form.submit();
-      }, 100);
-      
-    } catch (err) {
-      console.error('Form submission error:', err);
-      let msg = 'Unable to get your location. ';
-      if (err.code === 1) msg += 'Please allow location access in browser settings.';
-      else if (err.code === 2) msg += 'Location unavailable. Check GPS.';
-      else if (err.code === 3) msg += 'Location request timed out.';
-      else msg += err.message || 'Please try again.';
-      
-      alert(msg);
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalBtnText;
-      
-      // Restore required attributes
-      const siteSelect = document.getElementById('siteSelect');
-      const officeSelect = document.getElementById('officeSelect');
-      const punchType = document.querySelector('input[name="punch_type_radio_display"]:checked')?.value || 'site';
-      
-      if (siteSelect) siteSelect.required = (punchType === 'site');
-      if (officeSelect) officeSelect.required = (punchType === 'office');
-    }
-  });
-}
+        setTimeout(() => {
+          punchOutForm.submit();
+        }, 100);
+        
+      } catch (err) {
+        console.error('Punch out error:', err);
+        let msg = 'Unable to get your location. ';
+        if (err.code === 1) msg += 'Please allow location access in browser settings.';
+        else if (err.code === 2) msg += 'Location unavailable. Check GPS.';
+        else if (err.code === 3) msg += 'Location request timed out.';
+        else msg += err.message || 'Please try again.';
+        
+        alert(msg);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+      }
+    });
+  }
 
   // Initial setup
   updateCurrentLocationUI();
   initializeLocation();
 
-  // Set initial radio button state
-// Set initial radio button state and required attributes
-if (punchTypeSite && punchTypeSite.checked) {
-  if (punchTypeHidden) punchTypeHidden.value = 'site';
-  if (siteSelect) siteSelect.required = true;
-  if (officeSelect) officeSelect.required = false;
-} else if (punchTypeOffice && punchTypeOffice.checked) {
-  if (punchTypeHidden) punchTypeHidden.value = 'office';
-  if (siteSelect) siteSelect.required = false;
-  if (officeSelect) officeSelect.required = true;
-}
+  // Set initial radio button state and required attributes
+  if (punchTypeSite && punchTypeSite.checked) {
+    if (punchTypeHidden) punchTypeHidden.value = 'site';
+    if (siteSelect) siteSelect.required = true;
+    if (officeSelect) officeSelect.required = false;
+  } else if (punchTypeOffice && punchTypeOffice.checked) {
+    if (punchTypeHidden) punchTypeHidden.value = 'office';
+    if (siteSelect) siteSelect.required = false;
+    if (officeSelect) officeSelect.required = true;
+  }
 });
 </script>
 </body>

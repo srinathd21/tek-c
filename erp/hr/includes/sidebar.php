@@ -63,9 +63,9 @@
 
 <div class="collapse ps-2" id="menuHiring">
 
-  <a class="side-link" href="new-hiring-request.php">
+  <a class="side-link" href="hiring-requests.php">
     <i class="bi bi-plus-circle"></i>
-    <span class="label">New Hiring Request</span>
+    <span class="label">Hiring Request</span>
   </a>
 
   <a class="side-link" href="candidates.php">
@@ -169,7 +169,7 @@
     <span class="label">Apply Leave</span>
   </a>
 
-  <a class="side-link" href="my-leave-history.php">
+  <a class="side-link" href="leave-request.php">
     <i class="bi bi-calendar-check"></i>
     <span class="label">My Leave History</span>
   </a>

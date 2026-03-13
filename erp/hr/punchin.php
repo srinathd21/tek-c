@@ -332,6 +332,10 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
             <p class="text-muted mb-0">Mark your daily attendance with location validation</p>
           </div>
           <div class="d-flex gap-2">
+            <!-- After the "My Attendance" button, add: -->
+<a href="attendance-regulations.php" class="btn-action">
+    <i class="bi bi-gear"></i> Regulations
+</a>
             <a href="my-attendance.php" class="btn-action">
               <i class="bi bi-calendar-check"></i> My Attendance
             </a>

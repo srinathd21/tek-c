@@ -45,6 +45,11 @@ $employee = mysqli_fetch_assoc($emp_res);
 mysqli_stmt_close($emp_stmt);
 if (!$employee) die("Employee not found or inactive.");
 
+// Check if user is HR or Admin
+$designation = strtolower(trim($employee['designation'] ?? ''));
+$department = strtolower(trim($employee['department'] ?? ''));
+$isHrOrAdmin = ($designation === 'hr' || $department === 'hr' || $designation === 'administrator' || $designation === 'admin');
+
 // Today's attendance
 $att_stmt = mysqli_prepare($conn, "SELECT * FROM attendance WHERE employee_id = ? AND attendance_date = ? LIMIT 1");
 mysqli_stmt_bind_param($att_stmt, "is", $current_employee_id, $today);
@@ -53,8 +58,9 @@ $att_res = mysqli_stmt_get_result($att_stmt);
 $attendance = mysqli_fetch_assoc($att_res);
 mysqli_stmt_close($att_stmt);
 
-// Role-based office punch
-$can_punch_office = in_array($employee['designation'], ['Manager', 'Team Lead', 'Director', 'Vice President', 'General Manager']);
+// Role-based office punch (All employees can punch from office if they have access to office locations)
+// Now all roles can punch from office, but we'll show different office options
+$can_punch_office = true; // All employees can punch from office
 
 // Assigned sites (for punch in page)
 $assigned_sites = [];
@@ -70,12 +76,11 @@ $sites_res = mysqli_stmt_get_result($sites_stmt);
 $assigned_sites = mysqli_fetch_all($sites_res, MYSQLI_ASSOC);
 mysqli_stmt_close($sites_stmt);
 
-// Offices (for managers)
+// Offices - All active offices (available for all roles now)
 $offices = [];
-if ($can_punch_office) {
-    $office_res = mysqli_query($conn, "SELECT * FROM office_locations WHERE is_active = 1");
-    if ($office_res) $offices = mysqli_fetch_all($office_res, MYSQLI_ASSOC);
-}
+$office_query = "SELECT * FROM office_locations WHERE is_active = 1 ORDER BY is_head_office DESC, location_name ASC";
+$office_res = mysqli_query($conn, $office_query);
+if ($office_res) $offices = mysqli_fetch_all($office_res, MYSQLI_ASSOC);
 
 // Prepare punch out target location
 if ($action === 'out' && $attendance && !$attendance['punch_out_time']) {
@@ -192,9 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'in') {
 
         // OFFICE punch
         if ($punch_type === 'office') {
-            if (!$can_punch_office) {
-                $error = "You are not authorized to punch from office.";
-            } elseif (!$office_id) {
+            if (!$office_id) {
                 $error = "Please select an office location.";
             } else {
                 $office_check_stmt = mysqli_prepare($conn, "
@@ -333,6 +336,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
         }
     }
 }
+
+// Get current time for display
+$current_time = date('h:i A');
+$current_date = date('d M Y');
 ?>
 <!doctype html>
 <html lang="en">
@@ -357,6 +364,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
     .pill{ display:inline-flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px; font-size:12px; font-weight:700; }
     .pill-blue{ background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
     .pill-green{ background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
+    .pill-purple{ background:#f3e8ff; color:#6b21a8; border:1px solid #d8b4fe; }
 
     .info-grid{
       display:grid;
@@ -401,6 +409,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
       word-break:break-word;
     }
 
+    .role-badge{
+      display:inline-block;
+      padding:4px 10px;
+      border-radius:20px;
+      font-size:11px;
+      font-weight:700;
+      margin-left:8px;
+    }
+    .role-hr{
+      background:#e3f2fd;
+      color:#0d47a1;
+    }
+    .role-admin{
+      background:#f3e5f5;
+      color:#4a148c;
+    }
+
     @media (max-width: 991.98px){
       .main{
         margin-left: 0 !important;
@@ -438,6 +463,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
             <h1 class="h3 fw-bold mb-1"><?= $action === 'in' ? 'Punch In' : 'Punch Out' ?></h1>
             <p class="text-muted mb-0">
               <?= $action === 'in' ? 'Validate location and mark punch in' : 'Validate location and mark punch out' ?>
+              <?php if ($isHrOrAdmin): ?>
+                <span class="role-badge <?= $designation === 'administrator' || $designation === 'admin' ? 'role-admin' : 'role-hr' ?>">
+                  <i class="bi bi-shield-check me-1"></i>
+                  <?= $designation === 'administrator' || $designation === 'admin' ? 'Admin Access' : 'HR Access' ?>
+                </span>
+              <?php endif; ?>
             </p>
           </div>
           <a href="punchin.php" class="btn btn-outline-secondary">
@@ -463,21 +494,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
 
                   <div class="mb-3">
                     <label class="form-label fw-bold">Select Punch Location Type</label>
-                    <div class="d-flex gap-4">
+                    <div class="d-flex gap-4 flex-wrap">
                       <div class="form-check">
                         <input class="form-check-input" type="radio" name="punch_type_radio_display" id="punchTypeSite" value="site" checked>
                         <label class="form-check-label" for="punchTypeSite">
                           <i class="bi bi-building"></i> Site Location
                         </label>
                       </div>
-                      <?php if ($can_punch_office): ?>
                       <div class="form-check">
                         <input class="form-check-input" type="radio" name="punch_type_radio_display" id="punchTypeOffice" value="office">
                         <label class="form-check-label" for="punchTypeOffice">
                           <i class="bi bi-briefcase"></i> Office Location
                         </label>
                       </div>
-                      <?php endif; ?>
                     </div>
                   </div>
 
@@ -497,7 +526,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
                     </select>
                   </div>
 
-                  <?php if ($can_punch_office): ?>
                   <div class="mb-3" id="officeSelectDiv" style="display:none;">
                     <label class="form-label fw-bold">Select Office Location</label>
                     <select class="form-select" name="office_id" id="officeSelect">
@@ -509,11 +537,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
                           data-radius="<?= (int)($office['geo_fence_radius'] ?? 100) ?>"
                           data-name="<?= htmlspecialchars($office['location_name']) ?>">
                           <?= htmlspecialchars($office['location_name']) ?>
+                          <?php if ($office['is_head_office']): ?>
+                            (Head Office)
+                          <?php endif; ?>
                         </option>
                       <?php endforeach; ?>
                     </select>
+                    <small class="text-muted mt-1 d-block">
+                      <i class="bi bi-info-circle"></i> Select your current office location
+                    </small>
                   </div>
-                  <?php endif; ?>
 
                   <!-- Current Location Details -->
                   <div class="mb-3">
@@ -572,7 +605,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
                 </form>
 
               <?php else: ?>
-                <form method="POST" id="punchForm">
+                <form method="POST" id="punchOutForm">
                   <input type="hidden" name="latitude" id="punchLat">
                   <input type="hidden" name="longitude" id="punchLng">
                   <input type="hidden" name="location" id="punchAddress">
@@ -581,10 +614,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
                     <div class="d-flex align-items-center">
                       <i class="bi bi-info-circle-fill me-3 fs-4"></i>
                       <div>
-                        <strong>Punch Out Location: <?= htmlspecialchars($punch_location_data['name']) ?></strong><br>
+                        <strong>Punch Out Location: <?= htmlspecialchars($punch_location_data['name'] ?? '') ?></strong><br>
                         <small>
-                          Type: <?= ucfirst($punch_location_data['type']) ?> |
-                          Required Radius: <?= (int)$punch_location_data['radius'] ?>m
+                          Type: <?= ucfirst($punch_location_data['type'] ?? '') ?> |
+                          Required Radius: <?= (int)($punch_location_data['radius'] ?? 100) ?>m
                         </small>
                       </div>
                     </div>
@@ -635,8 +668,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
 
                   <div class="alert alert-warning mb-3">
                     <i class="bi bi-exclamation-triangle me-2"></i>
-                    You must be within <?= (int)$punch_location_data['radius'] ?>m of the
-                    <?= htmlspecialchars($punch_location_data['type']) ?> location to punch out.
+                    You must be within <?= (int)($punch_location_data['radius'] ?? 100) ?>m of the
+                    <?= htmlspecialchars($punch_location_data['type'] ?? '') ?> location to punch out.
                   </div>
 
                   <div class="d-flex gap-2">
@@ -652,11 +685,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
 
           <div class="col-lg-4">
             <div class="card-panel p-4">
-              <h5 class="fw-bold mb-3">Employee Details</h5>
+              <div class="d-flex align-items-center justify-content-between mb-3">
+                <h5 class="fw-bold mb-0">Employee Details</h5>
+                <?php if ($isHrOrAdmin): ?>
+                  <span class="badge <?= $designation === 'administrator' || $designation === 'admin' ? 'bg-dark' : 'bg-info' ?>">
+                    <i class="bi bi-shield-check"></i>
+                    <?= $designation === 'administrator' || $designation === 'admin' ? 'ADMIN' : 'HR' ?>
+                  </span>
+                <?php endif; ?>
+              </div>
               <div class="mb-2"><strong>Name:</strong> <?= htmlspecialchars($employee['full_name']) ?></div>
               <div class="mb-2"><strong>Code:</strong> <?= htmlspecialchars($employee['employee_code']) ?></div>
               <div class="mb-2"><strong>Designation:</strong> <?= htmlspecialchars($employee['designation']) ?></div>
-              <div class="mb-2"><strong>Date:</strong> <?= date('d M Y') ?></div>
+              <div class="mb-2"><strong>Date:</strong> <?= $current_date ?></div>
+              <div class="mb-2"><strong>Time:</strong> <?= $current_time ?></div>
 
               <?php if ($attendance): ?>
                 <hr>
@@ -677,6 +719,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
 
               <hr>
               <div class="small text-muted">
+                <i class="bi bi-info-circle me-1"></i>
                 If GPS fails, enable location permissions in browser and refresh the page.
               </div>
             </div>
@@ -779,23 +822,29 @@ function renderMap(currentLat, currentLng, targetLat, targetLng, radius) {
     position: { lat: parseFloat(currentLat), lng: parseFloat(currentLng) },
     map: map,
     title: 'Your Location',
-    icon: { url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png' }
+    icon: {
+      url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+      scaledSize: new google.maps.Size(40, 40)
+    }
   });
 
   targetMarker = new google.maps.Marker({
     position: { lat: parseFloat(targetLat), lng: parseFloat(targetLng) },
     map: map,
     title: 'Target Location',
-    icon: { url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png' }
+    icon: {
+      url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+      scaledSize: new google.maps.Size(40, 40)
+    }
   });
 
   targetCircle = new google.maps.Circle({
     map: map,
     center: { lat: parseFloat(targetLat), lng: parseFloat(targetLng) },
     radius: parseFloat(radius),
-    fillColor: '#43e97b',
+    fillColor: '#3b82f6',
     fillOpacity: 0.10,
-    strokeColor: '#43e97b',
+    strokeColor: '#3b82f6',
     strokeOpacity: 0.55,
     strokeWeight: 2
   });
@@ -820,7 +869,7 @@ function setStatus(type, title, subtitle = '') {
 
   el.innerHTML = `
     <div class="d-flex align-items-center ${cls}">
-      <i class="bi bi-${icon} me-2"></i>
+      <i class="bi bi-${icon} me-2 fs-4"></i>
       <div>
         <strong>${title}</strong>${subtitle ? '<br><small class="text-muted">' + subtitle + '</small>' : ''}
       </div>
@@ -833,7 +882,7 @@ function setLoadingStatus(msg = 'Getting your location...') {
   if (!el) return;
   el.innerHTML = `
     <div class="d-flex align-items-center">
-      <div class="spinner-border spinner-border-sm me-2"></div>
+      <div class="spinner-border spinner-border-sm me-2" role="status"></div>
       <span>${msg}</span>
     </div>
   `;
@@ -875,6 +924,7 @@ async function validateCurrentLocationForPunchIn() {
   const officeRadio = document.getElementById('punchTypeOffice');
   const siteSelect = document.getElementById('siteSelect');
   const officeSelect = document.getElementById('officeSelect');
+  const punchTypeHidden = document.getElementById('punchType');
 
   if (!currentLat || !currentLng) {
     submitBtn.disabled = true;
@@ -886,6 +936,7 @@ async function validateCurrentLocationForPunchIn() {
 
   if (siteRadio && siteRadio.checked) {
     mode = 'site';
+    if (punchTypeHidden) punchTypeHidden.value = 'site';
     if (!siteSelect || !siteSelect.value) {
       setStatus('warning', 'Please select a site');
       submitBtn.disabled = true;
@@ -894,6 +945,7 @@ async function validateCurrentLocationForPunchIn() {
     selectedOption = siteSelect.options[siteSelect.selectedIndex];
   } else if (officeRadio && officeRadio.checked) {
     mode = 'office';
+    if (punchTypeHidden) punchTypeHidden.value = 'office';
     if (!officeSelect || !officeSelect.value) {
       setStatus('warning', 'Please select an office');
       submitBtn.disabled = true;
@@ -973,7 +1025,7 @@ async function initializeLocation() {
     <?php endif; ?>
 
   } catch (error) {
-    console.error(error);
+    console.error('Location error:', error);
     let msg = 'Unable to get your location. ';
     if (error.code === 1) msg += 'Please allow location access in browser settings.';
     else if (error.code === 2) msg += 'Location unavailable. Please check GPS.';
@@ -990,6 +1042,7 @@ async function initializeLocation() {
 
 document.addEventListener('DOMContentLoaded', function() {
   const form = document.getElementById('punchForm');
+  const punchOutForm = document.getElementById('punchOutForm');
   const submitBtn = document.getElementById('submitBtn');
   const refreshLocationBtn = document.getElementById('refreshLocationBtn');
 
@@ -1007,7 +1060,12 @@ document.addEventListener('DOMContentLoaded', function() {
       siteSelectDiv.style.display = 'block';
       if (officeSelectDiv) officeSelectDiv.style.display = 'none';
       if (punchTypeHidden) punchTypeHidden.value = 'site';
-      validateCurrentLocationForPunchIn();
+      
+      // Manage required attributes
+      if (siteSelect) siteSelect.required = true;
+      if (officeSelect) officeSelect.required = false;
+      
+      if (currentLat && currentLng) validateCurrentLocationForPunchIn();
     });
   }
 
@@ -1016,12 +1074,26 @@ document.addEventListener('DOMContentLoaded', function() {
       if (siteSelectDiv) siteSelectDiv.style.display = 'none';
       officeSelectDiv.style.display = 'block';
       if (punchTypeHidden) punchTypeHidden.value = 'office';
-      validateCurrentLocationForPunchIn();
+      
+      // Manage required attributes
+      if (siteSelect) siteSelect.required = false;
+      if (officeSelect) officeSelect.required = true;
+      
+      if (currentLat && currentLng) validateCurrentLocationForPunchIn();
     });
   }
 
-  if (siteSelect) siteSelect.addEventListener('change', validateCurrentLocationForPunchIn);
-  if (officeSelect) officeSelect.addEventListener('change', validateCurrentLocationForPunchIn);
+  if (siteSelect) {
+    siteSelect.addEventListener('change', function() {
+      if (currentLat && currentLng) validateCurrentLocationForPunchIn();
+    });
+  }
+  
+  if (officeSelect) {
+    officeSelect.addEventListener('change', function() {
+      if (currentLat && currentLng) validateCurrentLocationForPunchIn();
+    });
+  }
 
   if (refreshLocationBtn) {
     refreshLocationBtn.addEventListener('click', async function() {
@@ -1036,11 +1108,12 @@ document.addEventListener('DOMContentLoaded', function() {
           await validateCurrentLocationForPunchOut();
         <?php endif; ?>
       } catch (err) {
-        console.error(err);
+        console.error('Refresh error:', err);
         let msg = 'Unable to refresh location.';
         if (err.code === 1) msg = 'Please allow location access in browser settings.';
         else if (err.code === 2) msg = 'Location unavailable. Check GPS.';
         else if (err.code === 3) msg = 'Location request timed out.';
+        else msg += ' ' + (err.message || '');
         alert(msg);
       } finally {
         setRefreshButtonLoading(false);
@@ -1048,49 +1121,148 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // Handle Punch In Form
   if (form) {
     form.addEventListener('submit', async function(e) {
       e.preventDefault();
-
-      const original = submitBtn.innerHTML;
+      
+      const originalBtnText = submitBtn.innerHTML;
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Validating...';
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Validating...';
+
+      try {
+        // First, handle the required field validation manually
+        const punchType = document.querySelector('input[name="punch_type_radio_display"]:checked')?.value || 'site';
+        const punchTypeHidden = document.getElementById('punchType');
+        
+        // Set the hidden punch type value
+        if (punchTypeHidden) {
+          punchTypeHidden.value = punchType;
+        }
+
+        // Temporarily remove required attributes from hidden fields
+        const siteSelect = document.getElementById('siteSelect');
+        const officeSelect = document.getElementById('officeSelect');
+        
+        if (siteSelect) siteSelect.required = false;
+        if (officeSelect) officeSelect.required = false;
+
+        // Now validate based on selected type
+        if (punchType === 'site') {
+          if (!siteSelect || !siteSelect.value) {
+            alert('Please select a site');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+            if (siteSelect) siteSelect.required = true;
+            return false;
+          }
+          siteSelect.required = true;
+        } else if (punchType === 'office') {
+          if (!officeSelect || !officeSelect.value) {
+            alert('Please select an office location');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+            if (officeSelect) officeSelect.required = true;
+            return false;
+          }
+          officeSelect.required = true;
+        }
+
+        // Re-fetch latest GPS just before submit
+        await fetchAndStoreLocation({ timeout: 30000, maximumAge: 0 });
+
+        // Validate based on action type
+        await validateCurrentLocationForPunchIn();
+        if (submitBtn.disabled) {
+          setStatus('danger', '❌ Validation Failed', 'Please check your location and try again');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalBtnText;
+          
+          if (siteSelect) siteSelect.required = (punchType === 'site');
+          if (officeSelect) officeSelect.required = (punchType === 'office');
+          return false;
+        }
+
+        setTimeout(() => {
+          form.submit();
+        }, 100);
+        
+      } catch (err) {
+        console.error('Form submission error:', err);
+        let msg = 'Unable to get your location. ';
+        if (err.code === 1) msg += 'Please allow location access in browser settings.';
+        else if (err.code === 2) msg += 'Location unavailable. Check GPS.';
+        else if (err.code === 3) msg += 'Location request timed out.';
+        else msg += err.message || 'Please try again.';
+        
+        alert(msg);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+      }
+    });
+  }
+
+  // Handle Punch Out Form
+  if (punchOutForm) {
+    punchOutForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const originalBtnText = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Validating...';
 
       try {
         // Re-fetch latest GPS just before submit
         await fetchAndStoreLocation({ timeout: 30000, maximumAge: 0 });
 
-        // Basic client-side check before final submit
-        <?php if ($action === 'in'): ?>
-          await validateCurrentLocationForPunchIn();
-          if (submitBtn.disabled) {
-            submitBtn.innerHTML = original;
-            return false;
-          }
-        <?php else: ?>
-          await validateCurrentLocationForPunchOut();
-          if (submitBtn.disabled) {
-            submitBtn.innerHTML = original;
-            return false;
-          }
-        <?php endif; ?>
+        // Validate location for punch out
+        await validateCurrentLocationForPunchOut();
+        if (submitBtn.disabled) {
+          setStatus('danger', '❌ Validation Failed', 'You are outside the required radius');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalBtnText;
+          return false;
+        }
 
-        form.submit();
+        setTimeout(() => {
+          punchOutForm.submit();
+        }, 100);
+        
       } catch (err) {
-        let msg = 'Unable to get your location.';
-        if (err.code === 1) msg = 'Please allow location access in browser settings.';
-        else if (err.code === 2) msg = 'Location unavailable. Check GPS.';
-        else if (err.code === 3) msg = 'Location request timed out.';
+        console.error('Punch out error:', err);
+        let msg = 'Unable to get your location. ';
+        if (err.code === 1) msg += 'Please allow location access in browser settings.';
+        else if (err.code === 2) msg += 'Location unavailable. Check GPS.';
+        else if (err.code === 3) msg += 'Location request timed out.';
+        else msg += err.message || 'Please try again.';
+        
         alert(msg);
         submitBtn.disabled = false;
-        submitBtn.innerHTML = original;
+        submitBtn.innerHTML = originalBtnText;
       }
     });
   }
 
+  // Initial setup
   updateCurrentLocationUI();
   initializeLocation();
+
+  // Set initial radio button state and required attributes
+  if (punchTypeSite && punchTypeSite.checked) {
+    if (punchTypeHidden) punchTypeHidden.value = 'site';
+    if (siteSelect) siteSelect.required = true;
+    if (officeSelect) officeSelect.required = false;
+  } else if (punchTypeOffice && punchTypeOffice.checked) {
+    if (punchTypeHidden) punchTypeHidden.value = 'office';
+    if (siteSelect) siteSelect.required = false;
+    if (officeSelect) officeSelect.required = true;
+  }
 });
 </script>
 </body>
 </html>
+<?php
+if (isset($conn) && $conn) {
+  mysqli_close($conn);
+}
+?>
