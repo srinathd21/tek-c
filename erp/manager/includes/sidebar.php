@@ -1,66 +1,228 @@
 <!-- Sidebar (MANAGER MENU) -->
 <aside id="sidebar" class="sidebar" aria-label="Sidebar">
-  <div class="brand">
-    <div class="brand-badge p-0">
-      <img src="assets/tek-c.png" alt="TEK-C" />
-    </div>
-    <div class="brand-title">TEK-C</div>
+
+<div class="brand">
+  <div class="brand-badge p-0">
+    <img src="assets/tek-c.png" alt="TEK-C" />
   </div>
+  <div class="brand-title">TEK-C</div>
+</div>
 
-  <div class="nav-section">
+<div class="nav-section">
 
-    <!-- Dashboard -->
-    <a class="side-link" href="index.php">
-      <i class="bi bi-grid-1x2"></i><span class="label">Dashboard</span>
-    </a>
+<!-- Dashboard -->
+<a class="side-link" href="index.php">
+<i class="bi bi-speedometer2"></i>
+<span class="label">Dashboard</span>
+</a>
 
-    <!-- My Projects -->
-    <a class="side-link" href="my-projects.php">
-      <i class="bi bi-kanban"></i><span class="label">My Projects</span>
-    </a>
+<!-- Attendance -->
+<a class="side-link" href="attendance.php">
+<i class="bi bi-calendar-check"></i>
+<span class="label">Attendance</span>
+</a>
 
-    <!-- My Team -->
-    <a class="side-link" href="my-team.php">
-      <i class="bi bi-people"></i><span class="label">My Team</span>
-    </a>
+<!-- My Project -->
+<a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#projectMenu">
+<i class="bi bi-kanban"></i>
+<span class="label">My Project</span>
+<span class="ms-auto label chevron-wrap">
+<i class="bi bi-chevron-down chevron"></i>
+</span>
+</a>
 
-    <!-- My Profile -->
-    <a class="side-link" href="my-profile.php">
-      <i class="bi bi-person-circle"></i><span class="label">My Profile</span>
-    </a>
+<div class="collapse ps-2 side-submenu-collapse" id="projectMenu">
 
-    <!-- Progress Report -->
-    <a class="side-link" href="reports.php">
-      <i class="bi bi-graph-up-arrow"></i><span class="label">Progress Report</span>
-    </a>
+<a class="side-link sub-link" href="site1.php">
+<i class="bi bi-building"></i>
+<span class="label">Site 1</span>
+</a>
 
-    <!-- Time Management (Bootstrap collapse like Admin sidebar) -->
-    <a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#tmMenu" role="button" aria-expanded="false" aria-controls="tmMenu">
-      <i class="bi bi-clock-history"></i><span class="label">Leave Management</span>
-      <span class="ms-auto label chevron-wrap"><i class="bi bi-chevron-down chevron"></i></span>
-    </a>
+<a class="side-link sub-link" href="site2.php">
+<i class="bi bi-building"></i>
+<span class="label">Site 2</span>
+</a>
 
-    <div class="collapse ps-2 side-submenu-collapse" id="tmMenu">
-      <a class="side-link sub-link" href="leave-app-rej-list.php">
-        <i class="bi bi-card-checklist"></i><span class="label">Leave Request List</span>
-      </a>
-      <a class="side-link sub-link" href="leave-request-list.php">
-        <i class="bi bi-calendar-plus"></i><span class="label">Apply Leave</span>
-      </a>
-    </div>
+<a class="side-link sub-link" href="site3.php">
+<i class="bi bi-building"></i>
+<span class="label">Site 3</span>
+</a>
 
-    <!-- Logout -->
-    <a class="side-link" href="logout.php" id="logoutLink">
-      <i class="bi bi-box-arrow-right"></i><span class="label">Logout</span>
-    </a>
+<a class="side-link sub-link" href="site4.php">
+<i class="bi bi-building"></i>
+<span class="label">Site 4</span>
+</a>
 
-  </div>
+</div>
 
-  <div class="sidebar-footer">
-    <div class="footer-text">© TEK-C • v1.0</div>
-  </div>
+<!-- Task Approval -->
+<a class="side-link" href="task-approval.php">
+<i class="bi bi-check2-square"></i>
+<span class="label">Task Approval</span>
+</a>
+
+<!-- Mail -->
+<a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#mailMenu">
+<i class="bi bi-envelope"></i>
+<span class="label">Mail</span>
+<span class="ms-auto label chevron-wrap">
+<i class="bi bi-chevron-down chevron"></i>
+</span>
+</a>
+
+<div class="collapse ps-2 side-submenu-collapse" id="mailMenu">
+
+<a class="side-link sub-link" href="inbox.php">
+<i class="bi bi-inbox"></i>
+<span class="label">Inbox</span>
+</a>
+
+<a class="side-link sub-link" href="compose.php">
+<i class="bi bi-pencil-square"></i>
+<span class="label">Compose</span>
+</a>
+
+<a class="side-link sub-link" href="sent.php">
+<i class="bi bi-send"></i>
+<span class="label">Sent</span>
+</a>
+
+<a class="side-link sub-link" href="drafts.php">
+<i class="bi bi-file-earmark-text"></i>
+<span class="label">Drafts</span>
+</a>
+
+<a class="side-link sub-link" href="scheduled.php">
+<i class="bi bi-clock-history"></i>
+<span class="label">Scheduled</span>
+</a>
+
+<a class="side-link sub-link" href="spam.php">
+<i class="bi bi-exclamation-octagon"></i>
+<span class="label">Spam</span>
+</a>
+
+<a class="side-link sub-link" href="trash.php">
+<i class="bi bi-trash"></i>
+<span class="label">Trash</span>
+</a>
+
+</div>
+
+<!-- Hiring -->
+<a class="side-link" data-bs-toggle="collapse" href="#menuHiring">
+  <i class="bi bi-briefcase"></i>
+  <span class="label">Hiring</span>
+  <span class="ms-auto label"><i class="bi bi-chevron-down"></i></span>
+</a>
+
+<div class="collapse ps-2" id="menuHiring">
+
+  <a class="side-link" href="hiring-requests.php">
+    <i class="bi bi-plus-circle"></i>
+    <span class="label">Hiring Request</span>
+  </a>
+
+  <a class="side-link" href="candidates.php">
+    <i class="bi bi-people"></i>
+    <span class="label">Candidates</span>
+  </a>
+
+  <a class="side-link" href="interviews.php">
+    <i class="bi bi-camera-video"></i>
+    <span class="label">Interviews</span>
+  </a>
+
+  <a class="side-link" href="offer-approval.php">
+    <i class="bi bi-check-circle"></i>
+    <span class="label">Offer Approval</span>
+  </a>
+
+  <a class="side-link" href="onboarding.php">
+    <i class="bi bi-person-check"></i>
+    <span class="label">Onboarding</span>
+  </a>
+
+
+</div>
+
+<!-- Reports -->
+<a class="side-link" href="reports.php">
+<i class="bi bi-bar-chart-line"></i>
+<span class="label">Reports Hub</span>
+</a>
+
+<!-- HR -->
+<a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#hrMenu">
+<i class="bi bi-person-badge"></i>
+<span class="label">HR</span>
+<span class="ms-auto label chevron-wrap">
+<i class="bi bi-chevron-down chevron"></i>
+</span>
+</a>
+
+<div class="collapse ps-2 side-submenu-collapse" id="hrMenu">
+
+<a class="side-link sub-link" href="profile.php">
+<i class="bi bi-person"></i>
+<span class="label">Profile</span>
+</a>
+
+<a class="side-link sub-link" href="attendance-profile.php">
+<i class="bi bi-calendar2-check"></i>
+<span class="label">Attendance Profile</span>
+</a>
+
+<a class="side-link sub-link" href="leave-ledger.php">
+<i class="bi bi-journal-text"></i>
+<span class="label">Leave Ledger</span>
+</a>
+
+<a class="side-link sub-link" href="payslips.php">
+<i class="bi bi-receipt"></i>
+<span class="label">Payslips</span>
+</a>
+
+<a class="side-link sub-link" href="hr-policy.php">
+<i class="bi bi-file-earmark-text"></i>
+<span class="label">HR Policy</span>
+</a>
+
+<a class="side-link sub-link" href="salary-loan.php">
+<i class="bi bi-cash-coin"></i>
+<span class="label">Salary Loan</span>
+</a>
+
+<a class="side-link sub-link" href="attendance-regularization.php">
+<i class="bi bi-clock-history"></i>
+<span class="label">Attendance Regularization</span>
+</a>
+
+<a class="side-link sub-link" href="apply-leave.php">
+<i class="bi bi-calendar-plus"></i>
+<span class="label">Apply Leave</span>
+</a>
+
+<a class="side-link sub-link" href="my-leave-history.php">
+<i class="bi bi-clock"></i>
+<span class="label">My Leave History</span>
+</a>
+
+</div>
+
+<!-- Logout -->
+<a class="side-link" href="logout.php" id="logoutLink">
+<i class="bi bi-box-arrow-right"></i>
+<span class="label">Logout</span>
+</a>
+
+</div>
+
+<div class="sidebar-footer">
+<div class="footer-text">© TEK-C • v1.0</div>
+</div>
+
 </aside>
-
 <div id="overlay" class="overlay" aria-hidden="true"></div>
 
 <style>

@@ -761,7 +761,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             </thead>
                             <tbody>
                                 <?php if (mysqli_num_rows($requests) === 0): ?>
-                                   
+                                    
                                 <?php else: ?>
                                     <?php while ($row = mysqli_fetch_assoc($requests)): ?>
                                         <tr>
