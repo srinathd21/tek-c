@@ -1,0 +1,1911 @@
+<?php
+// hr/payslips.php - Payslip Management
+session_start();
+require_once 'includes/db-config.php';
+require_once 'includes/activity-logger.php';
+
+date_default_timezone_set('Asia/Kolkata');
+
+$conn = get_db_connection();
+if (!$conn) {
+    die("Database connection failed.");
+}
+
+// ---------------- AUTH (HR/Manager/Employee) ----------------
+if (empty($_SESSION['employee_id'])) {
+    header("Location: ../login.php");
+    exit;
+}
+
+$current_employee_id = $_SESSION['employee_id'];
+
+// Get current employee details
+$emp_stmt = mysqli_prepare($conn, "SELECT * FROM employees WHERE id = ? AND employee_status = 'active'");
+mysqli_stmt_bind_param($emp_stmt, "i", $current_employee_id);
+mysqli_stmt_execute($emp_stmt);
+$emp_res = mysqli_stmt_get_result($emp_stmt);
+$current_employee = mysqli_fetch_assoc($emp_res);
+mysqli_stmt_close($emp_stmt);
+
+if (!$current_employee) {
+    die("Employee not found.");
+}
+
+// Check permissions
+$designation = strtolower(trim($current_employee['designation'] ?? ''));
+$department = strtolower(trim($current_employee['department'] ?? ''));
+
+$isHr = ($designation === 'hr' || $department === 'hr');
+$isManager = in_array($designation, ['manager', 'team lead', 'project manager', 'director', 'vice president', 'general manager']);
+$isAdmin = ($designation === 'administrator' || $designation === 'admin' || $designation === 'director');
+$isEmployee = !$isHr && !$isManager && !$isAdmin;
+
+// ---------------- CREATE PAYSLIPS TABLE IF NOT EXISTS ----------------
+$check_table = mysqli_query($conn, "SHOW TABLES LIKE 'payslips'");
+if (mysqli_num_rows($check_table) == 0) {
+    $create_table = "
+    CREATE TABLE `payslips` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `payslip_no` varchar(50) NOT NULL,
+        `employee_id` int(11) NOT NULL,
+        `employee_name` varchar(150) NOT NULL,
+        `employee_code` varchar(50) NOT NULL,
+        `department` varchar(50) NOT NULL,
+        `designation` varchar(100) NOT NULL,
+        `month` tinyint(4) NOT NULL,
+        `year` smallint(6) NOT NULL,
+        `joining_date` date DEFAULT NULL,
+        `pan_number` varchar(20) DEFAULT NULL,
+        `bank_name` varchar(100) DEFAULT NULL,
+        `bank_account` varchar(50) DEFAULT NULL,
+        `ifsc_code` varchar(20) DEFAULT NULL,
+        `uan_number` varchar(50) DEFAULT NULL,
+        `pf_number` varchar(50) DEFAULT NULL,
+        `esi_number` varchar(50) DEFAULT NULL,
+        
+        -- Earnings
+        `basic_salary` decimal(12,2) NOT NULL,
+        `hra` decimal(12,2) NOT NULL,
+        `conveyance` decimal(12,2) NOT NULL,
+        `medical` decimal(12,2) NOT NULL,
+        `special_allowance` decimal(12,2) NOT NULL,
+        `bonus` decimal(12,2) DEFAULT NULL,
+        `overtime_amount` decimal(12,2) DEFAULT NULL,
+        `incentives` decimal(12,2) DEFAULT NULL,
+        `reimbursements` decimal(12,2) DEFAULT NULL,
+        `other_earnings` decimal(12,2) DEFAULT NULL,
+        `other_earnings_desc` varchar(255) DEFAULT NULL,
+        `gross_earnings` decimal(12,2) GENERATED ALWAYS AS (
+            `basic_salary` + `hra` + `conveyance` + `medical` + `special_allowance` + 
+            IFNULL(`bonus`, 0) + IFNULL(`overtime_amount`, 0) + IFNULL(`incentives`, 0) + 
+            IFNULL(`reimbursements`, 0) + IFNULL(`other_earnings`, 0)
+        ) STORED,
+        
+        -- Deductions
+        `pf_deduction` decimal(12,2) DEFAULT NULL,
+        `esi_deduction` decimal(12,2) DEFAULT NULL,
+        `pt_deduction` decimal(12,2) DEFAULT NULL,
+        `tds_deduction` decimal(12,2) DEFAULT NULL,
+        `loan_deduction` decimal(12,2) DEFAULT NULL,
+        `loan_deduction_desc` varchar(255) DEFAULT NULL,
+        `advance_deduction` decimal(12,2) DEFAULT NULL,
+        `other_deductions` decimal(12,2) DEFAULT NULL,
+        `other_deductions_desc` varchar(255) DEFAULT NULL,
+        `total_deductions` decimal(12,2) GENERATED ALWAYS AS (
+            IFNULL(`pf_deduction`, 0) + IFNULL(`esi_deduction`, 0) + IFNULL(`pt_deduction`, 0) + 
+            IFNULL(`tds_deduction`, 0) + IFNULL(`loan_deduction`, 0) + IFNULL(`advance_deduction`, 0) + 
+            IFNULL(`other_deductions`, 0)
+        ) STORED,
+        
+        -- Net Salary
+        `net_salary` decimal(12,2) GENERATED ALWAYS AS (`gross_earnings` - `total_deductions`) STORED,
+        
+        -- Attendance
+        `working_days` int(11) DEFAULT NULL,
+        `present_days` int(11) DEFAULT NULL,
+        `absent_days` int(11) DEFAULT NULL,
+        `leave_days` int(11) DEFAULT NULL,
+        `loss_of_pay_days` int(11) DEFAULT NULL,
+        `overtime_hours` decimal(5,2) DEFAULT NULL,
+        
+        -- Payment Details
+        `payment_status` enum('Draft','Generated','Processed','Paid') NOT NULL DEFAULT 'Draft',
+        `payment_date` date DEFAULT NULL,
+        `payment_mode` enum('Bank Transfer','Cheque','Cash') DEFAULT NULL,
+        `transaction_id` varchar(100) DEFAULT NULL,
+        `payment_remarks` text,
+        
+        -- Generated By
+        `generated_by` int(11) DEFAULT NULL,
+        `generated_by_name` varchar(150) DEFAULT NULL,
+        `generated_at` datetime DEFAULT NULL,
+        
+        -- PDF Path
+        `pdf_path` varchar(255) DEFAULT NULL,
+        
+        -- Email Status
+        `email_sent` tinyint(1) DEFAULT 0,
+        `email_sent_at` datetime DEFAULT NULL,
+        
+        -- Remarks
+        `remarks` text,
+        
+        `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+        `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+        
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `payslip_no` (`payslip_no`),
+        UNIQUE KEY `unique_employee_month` (`employee_id`,`month`,`year`),
+        KEY `idx_employee` (`employee_id`),
+        KEY `idx_month_year` (`month`,`year`),
+        KEY `idx_status` (`payment_status`),
+        KEY `idx_payment_date` (`payment_date`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ";
+    mysqli_query($conn, $create_table);
+}
+
+// ---------------- HANDLE PAYSLIP ACTIONS ----------------
+$message = '';
+$messageType = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    
+    // Generate Payslip (HR only)
+    if (isset($_POST['action']) && $_POST['action'] === 'generate_payslip' && ($isHr || $isAdmin)) {
+        $employee_id = (int)$_POST['employee_id'];
+        $month = (int)$_POST['month'];
+        $year = (int)$_POST['year'];
+        
+        // Get employee details
+        $emp_query = "SELECT * FROM employees WHERE id = ?";
+        $emp_stmt = mysqli_prepare($conn, $emp_query);
+        mysqli_stmt_bind_param($emp_stmt, "i", $employee_id);
+        mysqli_stmt_execute($emp_stmt);
+        $emp_res = mysqli_stmt_get_result($emp_stmt);
+        $employee = mysqli_fetch_assoc($emp_res);
+        
+        if (!$employee) {
+            $message = "Employee not found.";
+            $messageType = "danger";
+        } else {
+            // Check if payslip already exists
+            $check_query = "SELECT id FROM payslips WHERE employee_id = ? AND month = ? AND year = ?";
+            $check_stmt = mysqli_prepare($conn, $check_query);
+            mysqli_stmt_bind_param($check_stmt, "iii", $employee_id, $month, $year);
+            mysqli_stmt_execute($check_stmt);
+            $check_res = mysqli_stmt_get_result($check_stmt);
+            
+            if (mysqli_num_rows($check_res) > 0) {
+                $message = "Payslip already exists for this employee for the selected month.";
+                $messageType = "warning";
+            } else {
+                // Generate payslip number
+                $payslip_no = "PSLIP-" . $year . str_pad($month, 2, '0', STR_PAD_LEFT) . "-" . str_pad($employee_id, 4, '0', STR_PAD_LEFT);
+                
+                // Get payroll data if available
+                $payroll_query = "SELECT * FROM payroll_history WHERE employee_id = ? AND month = ? AND year = ?";
+                $payroll_stmt = mysqli_prepare($conn, $payroll_query);
+                mysqli_stmt_bind_param($payroll_stmt, "iii", $employee_id, $month, $year);
+                mysqli_stmt_execute($payroll_stmt);
+                $payroll_res = mysqli_stmt_get_result($payroll_stmt);
+                $payroll = mysqli_fetch_assoc($payroll_res);
+                
+                if ($payroll) {
+                    // Insert payslip from payroll data
+                    $insert_stmt = mysqli_prepare($conn, "
+                        INSERT INTO payslips (
+                            payslip_no, employee_id, employee_name, employee_code, department, designation,
+                            month, year, joining_date, pan_number, bank_account, ifsc_code,
+                            basic_salary, hra, conveyance, medical, special_allowance, bonus,
+                            overtime_amount, incentives, reimbursements,
+                            pf_deduction, esi_deduction, pt_deduction, tds_deduction,
+                            working_days, present_days, leave_days, loss_of_pay_days, overtime_hours,
+                            payment_status, generated_by, generated_by_name, generated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Generated', ?, ?, NOW())
+                    ");
+                    
+                    mysqli_stmt_bind_param(
+                        $insert_stmt,
+                        "sissssiiissssddddddddddddiiiiiiis",
+                        $payslip_no,
+                        $employee_id,
+                        $employee['full_name'],
+                        $employee['employee_code'],
+                        $employee['department'],
+                        $employee['designation'],
+                        $month,
+                        $year,
+                        $employee['date_of_joining'],
+                        $employee['pancard_number'],
+                        $employee['bank_account_number'],
+                        $employee['ifsc_code'],
+                        $payroll['basic_salary'],
+                        $payroll['hra'],
+                        $payroll['conveyance'],
+                        $payroll['medical'],
+                        $payroll['special_allowance'],
+                        $payroll['bonus'],
+                        $payroll['overtime_amount'],
+                        $payroll['incentives'],
+                        $payroll['reimbursements'],
+                        $payroll['pf_deduction'],
+                        $payroll['esi_deduction'],
+                        $payroll['pt_deduction'],
+                        $payroll['tds_deduction'],
+                        $payroll['working_days'],
+                        $payroll['present_days'],
+                        $payroll['leave_days'],
+                        $payroll['loss_of_pay_days'],
+                        $payroll['overtime_hours'],
+                        $current_employee_id,
+                        $current_employee['full_name']
+                    );
+                } else {
+                    // Insert default payslip
+                    $insert_stmt = mysqli_prepare($conn, "
+                        INSERT INTO payslips (
+                            payslip_no, employee_id, employee_name, employee_code, department, designation,
+                            month, year, joining_date, pan_number, bank_account, ifsc_code,
+                            basic_salary, hra, conveyance, medical, special_allowance,
+                            payment_status, generated_by, generated_by_name, generated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Generated', ?, ?, NOW())
+                    ");
+                    
+                    mysqli_stmt_bind_param(
+                        $insert_stmt,
+                        "sissssiiissssdddddis",
+                        $payslip_no,
+                        $employee_id,
+                        $employee['full_name'],
+                        $employee['employee_code'],
+                        $employee['department'],
+                        $employee['designation'],
+                        $month,
+                        $year,
+                        $employee['date_of_joining'],
+                        $employee['pancard_number'],
+                        $employee['bank_account_number'],
+                        $employee['ifsc_code'],
+                        0, // basic_salary
+                        0, // hra
+                        0, // conveyance
+                        0, // medical
+                        0, // special_allowance
+                        $current_employee_id,
+                        $current_employee['full_name']
+                    );
+                }
+                
+                if (mysqli_stmt_execute($insert_stmt)) {
+                    $payslip_id = mysqli_insert_id($conn);
+                    
+                    logActivity(
+                        $conn,
+                        'CREATE',
+                        'payslip',
+                        "Generated payslip: {$payslip_no} for {$employee['full_name']} - {$month}/{$year}",
+                        $payslip_id,
+                        null,
+                        null,
+                        json_encode(['employee_id' => $employee_id, 'month' => $month, 'year' => $year])
+                    );
+                    
+                    $message = "Payslip generated successfully! Payslip #: {$payslip_no}";
+                    $messageType = "success";
+                } else {
+                    $message = "Error generating payslip: " . mysqli_error($conn);
+                    $messageType = "danger";
+                }
+            }
+        }
+    }
+    
+    // Bulk Generate Payslips (HR only)
+    elseif (isset($_POST['action']) && $_POST['action'] === 'bulk_generate' && ($isHr || $isAdmin)) {
+        $month = (int)$_POST['month'];
+        $year = (int)$_POST['year'];
+        $department = isset($_POST['department']) ? mysqli_real_escape_string($conn, $_POST['department']) : '';
+        
+        // Get employees based on department filter
+        $emp_query = "SELECT * FROM employees WHERE employee_status = 'active'";
+        if (!empty($department)) {
+            $emp_query .= " AND department = '{$department}'";
+        }
+        $emp_query .= " ORDER BY full_name ASC";
+        
+        $emp_result = mysqli_query($conn, $emp_query);
+        
+        $success_count = 0;
+        $error_count = 0;
+        $skipped_count = 0;
+        
+        while ($employee = mysqli_fetch_assoc($emp_result)) {
+            // Check if payslip already exists
+            $check_query = "SELECT id FROM payslips WHERE employee_id = ? AND month = ? AND year = ?";
+            $check_stmt = mysqli_prepare($conn, $check_query);
+            mysqli_stmt_bind_param($check_stmt, "iii", $employee['id'], $month, $year);
+            mysqli_stmt_execute($check_stmt);
+            $check_res = mysqli_stmt_get_result($check_stmt);
+            
+            if (mysqli_num_rows($check_res) > 0) {
+                $skipped_count++;
+                continue;
+            }
+            
+            // Generate payslip number
+            $payslip_no = "PSLIP-" . $year . str_pad($month, 2, '0', STR_PAD_LEFT) . "-" . str_pad($employee['id'], 4, '0', STR_PAD_LEFT);
+            
+            // Get payroll data if available
+            $payroll_query = "SELECT * FROM payroll_history WHERE employee_id = ? AND month = ? AND year = ?";
+            $payroll_stmt = mysqli_prepare($conn, $payroll_query);
+            mysqli_stmt_bind_param($payroll_stmt, "iii", $employee['id'], $month, $year);
+            mysqli_stmt_execute($payroll_stmt);
+            $payroll_res = mysqli_stmt_get_result($payroll_stmt);
+            $payroll = mysqli_fetch_assoc($payroll_res);
+            
+            if ($payroll) {
+                $insert_stmt = mysqli_prepare($conn, "
+                    INSERT INTO payslips (
+                        payslip_no, employee_id, employee_name, employee_code, department, designation,
+                        month, year, joining_date, pan_number, bank_account, ifsc_code,
+                        basic_salary, hra, conveyance, medical, special_allowance, bonus,
+                        overtime_amount, incentives, reimbursements,
+                        pf_deduction, esi_deduction, pt_deduction, tds_deduction,
+                        working_days, present_days, leave_days, loss_of_pay_days, overtime_hours,
+                        payment_status, generated_by, generated_by_name, generated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Generated', ?, ?, NOW())
+                ");
+                
+                mysqli_stmt_bind_param(
+                    $insert_stmt,
+                    "sissssiiissssddddddddddddiiiiiiis",
+                    $payslip_no,
+                    $employee['id'],
+                    $employee['full_name'],
+                    $employee['employee_code'],
+                    $employee['department'],
+                    $employee['designation'],
+                    $month,
+                    $year,
+                    $employee['date_of_joining'],
+                    $employee['pancard_number'],
+                    $employee['bank_account_number'],
+                    $employee['ifsc_code'],
+                    $payroll['basic_salary'],
+                    $payroll['hra'],
+                    $payroll['conveyance'],
+                    $payroll['medical'],
+                    $payroll['special_allowance'],
+                    $payroll['bonus'],
+                    $payroll['overtime_amount'],
+                    $payroll['incentives'],
+                    $payroll['reimbursements'],
+                    $payroll['pf_deduction'],
+                    $payroll['esi_deduction'],
+                    $payroll['pt_deduction'],
+                    $payroll['tds_deduction'],
+                    $payroll['working_days'],
+                    $payroll['present_days'],
+                    $payroll['leave_days'],
+                    $payroll['loss_of_pay_days'],
+                    $payroll['overtime_hours'],
+                    $current_employee_id,
+                    $current_employee['full_name']
+                );
+            } else {
+                $insert_stmt = mysqli_prepare($conn, "
+                    INSERT INTO payslips (
+                        payslip_no, employee_id, employee_name, employee_code, department, designation,
+                        month, year, joining_date, pan_number, bank_account, ifsc_code,
+                        basic_salary, hra, conveyance, medical, special_allowance,
+                        payment_status, generated_by, generated_by_name, generated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Generated', ?, ?, NOW())
+                ");
+                
+                mysqli_stmt_bind_param(
+                    $insert_stmt,
+                    "sissssiiissssdddddis",
+                    $payslip_no,
+                    $employee['id'],
+                    $employee['full_name'],
+                    $employee['employee_code'],
+                    $employee['department'],
+                    $employee['designation'],
+                    $month,
+                    $year,
+                    $employee['date_of_joining'],
+                    $employee['pancard_number'],
+                    $employee['bank_account_number'],
+                    $employee['ifsc_code'],
+                    0, 0, 0, 0, 0,
+                    $current_employee_id,
+                    $current_employee['full_name']
+                );
+            }
+            
+            if (mysqli_stmt_execute($insert_stmt)) {
+                $success_count++;
+            } else {
+                $error_count++;
+            }
+        }
+        
+        logActivity(
+            $conn,
+            'CREATE',
+            'payslip',
+            "Bulk generated payslips for {$month}/{$year} - Success: {$success_count}, Skipped: {$skipped_count}, Errors: {$error_count}",
+            null,
+            null,
+            null,
+            json_encode(['month' => $month, 'year' => $year, 'department' => $department])
+        );
+        
+        $message = "Bulk generation completed. Success: {$success_count}, Skipped: {$skipped_count}, Errors: {$error_count}";
+        $messageType = $error_count > 0 ? 'warning' : 'success';
+    }
+    
+    // Mark as Paid
+    elseif (isset($_POST['action']) && $_POST['action'] === 'mark_paid' && ($isHr || $isAdmin)) {
+        $payslip_id = (int)$_POST['payslip_id'];
+        $payment_date = mysqli_real_escape_string($conn, $_POST['payment_date']);
+        $payment_mode = mysqli_real_escape_string($conn, $_POST['payment_mode']);
+        $transaction_id = mysqli_real_escape_string($conn, $_POST['transaction_id'] ?? '');
+        $payment_remarks = mysqli_real_escape_string($conn, $_POST['payment_remarks'] ?? '');
+        
+        $update_stmt = mysqli_prepare($conn, "
+            UPDATE payslips 
+            SET payment_status = 'Paid',
+                payment_date = ?,
+                payment_mode = ?,
+                transaction_id = ?,
+                payment_remarks = ?
+            WHERE id = ? AND payment_status IN ('Generated', 'Processed')
+        ");
+        
+        mysqli_stmt_bind_param($update_stmt, "ssssi", $payment_date, $payment_mode, $transaction_id, $payment_remarks, $payslip_id);
+        
+        if (mysqli_stmt_execute($update_stmt)) {
+            logActivity(
+                $conn,
+                'UPDATE',
+                'payslip',
+                "Marked payslip as paid ID: {$payslip_id}",
+                $payslip_id,
+                null,
+                null,
+                json_encode(['payment_date' => $payment_date, 'mode' => $payment_mode])
+            );
+            
+            $message = "Payslip marked as paid!";
+            $messageType = "success";
+        } else {
+            $message = "Error updating payslip: " . mysqli_error($conn);
+            $messageType = "danger";
+        }
+    }
+    
+    // Send Payslip via Email
+    elseif (isset($_POST['action']) && $_POST['action'] === 'send_email' && ($isHr || $isAdmin)) {
+        $payslip_id = (int)$_POST['payslip_id'];
+        
+        $update_stmt = mysqli_prepare($conn, "
+            UPDATE payslips 
+            SET email_sent = 1,
+                email_sent_at = NOW()
+            WHERE id = ?
+        ");
+        
+        mysqli_stmt_bind_param($update_stmt, "i", $payslip_id);
+        
+        if (mysqli_stmt_execute($update_stmt)) {
+            logActivity(
+                $conn,
+                'UPDATE',
+                'payslip',
+                "Sent payslip email ID: {$payslip_id}",
+                $payslip_id,
+                null,
+                null,
+                null
+            );
+            
+            $message = "Payslip email sent successfully!";
+            $messageType = "success";
+        } else {
+            $message = "Error sending email: " . mysqli_error($conn);
+            $messageType = "danger";
+        }
+    }
+    
+    // Delete Payslip
+    elseif (isset($_POST['action']) && $_POST['action'] === 'delete_payslip' && ($isHr || $isAdmin)) {
+        $payslip_id = (int)$_POST['payslip_id'];
+        
+        $delete_stmt = mysqli_prepare($conn, "DELETE FROM payslips WHERE id = ?");
+        mysqli_stmt_bind_param($delete_stmt, "i", $payslip_id);
+        
+        if (mysqli_stmt_execute($delete_stmt)) {
+            logActivity(
+                $conn,
+                'DELETE',
+                'payslip',
+                "Deleted payslip ID: {$payslip_id}",
+                $payslip_id,
+                null,
+                null,
+                null
+            );
+            
+            $message = "Payslip deleted successfully!";
+            $messageType = "success";
+        } else {
+            $message = "Error deleting payslip: " . mysqli_error($conn);
+            $messageType = "danger";
+        }
+    }
+}
+
+// ---------------- FILTERS ----------------
+$month_filter = $_GET['month'] ?? date('m');
+$year_filter = $_GET['year'] ?? date('Y');
+$status_filter = $_GET['status'] ?? 'all';
+$employee_filter = isset($_GET['employee_id']) ? (int)$_GET['employee_id'] : 0;
+$search = trim($_GET['search'] ?? '');
+
+// Build query based on user role
+if ($isEmployee) {
+    // Employees can only see their own payslips
+    $query = "SELECT * FROM payslips WHERE employee_id = ?";
+    $params = [$current_employee_id];
+    $types = "i";
+} else {
+    // HR/Managers can see all payslips
+    $query = "SELECT p.*, e.photo as employee_photo FROM payslips p LEFT JOIN employees e ON p.employee_id = e.id WHERE 1=1";
+    $params = [];
+    $types = "";
+}
+
+// Add filters
+if ($month_filter !== 'all') {
+    $query .= " AND p.month = ?";
+    $params[] = $month_filter;
+    $types .= "i";
+}
+
+if ($year_filter !== 'all') {
+    $query .= " AND p.year = ?";
+    $params[] = $year_filter;
+    $types .= "i";
+}
+
+if ($status_filter !== 'all') {
+    $query .= " AND p.payment_status = ?";
+    $params[] = $status_filter;
+    $types .= "s";
+}
+
+if ($employee_filter > 0 && !$isEmployee) {
+    $query .= " AND p.employee_id = ?";
+    $params[] = $employee_filter;
+    $types .= "i";
+}
+
+// Search
+if (!empty($search) && !$isEmployee) {
+    $search_term = "%{$search}%";
+    $query .= " AND (p.employee_name LIKE ? OR p.employee_code LIKE ? OR p.payslip_no LIKE ?)";
+    $params[] = $search_term;
+    $params[] = $search_term;
+    $params[] = $search_term;
+    $types .= "sss";
+}
+
+$query .= " ORDER BY p.year DESC, p.month DESC, p.employee_name ASC";
+
+// Prepare and execute
+if (!empty($params)) {
+    $stmt = mysqli_prepare($conn, $query);
+    mysqli_stmt_bind_param($stmt, $types, ...$params);
+    mysqli_stmt_execute($stmt);
+    $payslips = mysqli_stmt_get_result($stmt);
+} else {
+    $payslips = mysqli_query($conn, $query);
+}
+
+// Get employees for filter dropdown (HR/Manager only)
+if (!$isEmployee) {
+    $emp_filter_query = "SELECT id, full_name, employee_code FROM employees WHERE employee_status = 'active' ORDER BY full_name ASC";
+    $emp_filter_result = mysqli_query($conn, $emp_filter_query);
+}
+
+// Get departments for bulk generation
+$dept_query = "SELECT DISTINCT department FROM employees WHERE employee_status = 'active' ORDER BY department";
+$dept_result = mysqli_query($conn, $dept_query);
+
+// Get statistics
+if ($isEmployee) {
+    // Employee view stats
+    $stats_query = "
+        SELECT 
+            COUNT(*) as total_payslips,
+            SUM(CASE WHEN payment_status = 'Generated' THEN 1 ELSE 0 END) as generated_count,
+            SUM(CASE WHEN payment_status = 'Processed' THEN 1 ELSE 0 END) as processed_count,
+            SUM(CASE WHEN payment_status = 'Paid' THEN 1 ELSE 0 END) as paid_count,
+            SUM(net_salary) as total_earned,
+            AVG(net_salary) as avg_salary
+        FROM payslips
+        WHERE employee_id = ?
+    ";
+    $stats_stmt = mysqli_prepare($conn, $stats_query);
+    mysqli_stmt_bind_param($stats_stmt, "i", $current_employee_id);
+    mysqli_stmt_execute($stats_stmt);
+    $stats_res = mysqli_stmt_get_result($stats_stmt);
+    $stats = mysqli_fetch_assoc($stats_res);
+} else {
+    // HR/Manager view stats
+    $stats_query = "
+        SELECT 
+            COUNT(*) as total_payslips,
+            COUNT(DISTINCT employee_id) as total_employees,
+            SUM(CASE WHEN payment_status = 'Generated' THEN 1 ELSE 0 END) as generated_count,
+            SUM(CASE WHEN payment_status = 'Processed' THEN 1 ELSE 0 END) as processed_count,
+            SUM(CASE WHEN payment_status = 'Paid' THEN 1 ELSE 0 END) as paid_count,
+            SUM(net_salary) as total_payout,
+            AVG(net_salary) as avg_salary
+        FROM payslips
+        WHERE month = ? AND year = ?
+    ";
+    $stats_stmt = mysqli_prepare($conn, $stats_query);
+    mysqli_stmt_bind_param($stats_stmt, "ii", $month_filter, $year_filter);
+    mysqli_stmt_execute($stats_stmt);
+    $stats_res = mysqli_stmt_get_result($stats_stmt);
+    $stats = mysqli_fetch_assoc($stats_res);
+}
+
+// ---------------- HELPER FUNCTIONS ----------------
+function e($v)
+{
+    return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+}
+
+function formatCurrency($amount)
+{
+    if (!$amount || $amount == 0)
+        return '—';
+    return '₹ ' . number_format($amount, 2);
+}
+
+function formatMonthYear($month, $year)
+{
+    return date('F Y', mktime(0, 0, 0, $month, 1, $year));
+}
+
+function getPayslipStatusBadge($status)
+{
+    $classes = [
+        'Draft' => 'bg-secondary',
+        'Generated' => 'bg-info',
+        'Processed' => 'bg-primary',
+        'Paid' => 'bg-success'
+    ];
+    $icons = [
+        'Draft' => 'bi-pencil',
+        'Generated' => 'bi-file-text',
+        'Processed' => 'bi-gear',
+        'Paid' => 'bi-cash'
+    ];
+    $class = $classes[$status] ?? 'bg-secondary';
+    $icon = $icons[$status] ?? 'bi-question';
+    return "<span class='badge {$class} px-3 py-2'><i class='bi {$icon} me-1'></i> {$status}</span>";
+}
+
+function getInitials($name)
+{
+    $name = trim((string) $name);
+    if ($name === '')
+        return 'U';
+    $parts = preg_split('/\s+/', $name);
+    $first = strtoupper(substr($parts[0] ?? 'U', 0, 1));
+    $last = strtoupper(substr(end($parts) ?: '', 0, 1));
+    return (count($parts) > 1) ? ($first . $last) : $first;
+}
+
+$loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
+?>
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Payslips - TEK-C HR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <!-- DataTables -->
+    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
+    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
+
+    <!-- Select2 -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css"
+        rel="stylesheet" />
+
+    <!-- TEK-C Custom Styles -->
+    <link href="assets/css/layout-styles.css" rel="stylesheet" />
+    <link href="assets/css/topbar.css" rel="stylesheet" />
+    <link href="assets/css/footer.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --blue: #2d9cdb;
+            --surface: #ffffff;
+            --border: #e5e7eb;
+            --radius: 16px;
+            --shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+            --muted: #6b7280;
+            --bg: #f3f4f6;
+        }
+
+        .content-scroll {
+            flex: 1 1 auto;
+            overflow: auto;
+            padding: 22px;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .panel-title {
+            font-weight: 900;
+            font-size: 18px;
+            color: #1f2937;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 16px 18px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .stat-ic {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            font-size: 22px;
+            flex: 0 0 auto;
+        }
+
+        .stat-ic.total {
+            background: var(--blue);
+        }
+
+        .stat-ic.generated {
+            background: #3b82f6;
+        }
+
+        .stat-ic.processed {
+            background: #8b5cf6;
+        }
+
+        .stat-ic.paid {
+            background: #10b981;
+        }
+
+        .stat-ic.amount {
+            background: #f59e0b;
+        }
+
+        .stat-label {
+            color: #4b5563;
+            font-weight: 750;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 900;
+            line-height: 1;
+            margin-top: 4px;
+            color: #1f2937;
+        }
+
+        .filter-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .btn-primary-custom {
+            background: var(--blue);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 8px 18px rgba(45, 156, 219, 0.18);
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .btn-primary-custom:hover {
+            background: #2a8bc9;
+            color: #fff;
+        }
+
+        .btn-success-custom {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 8px 18px rgba(16, 185, 129, 0.18);
+            white-space: nowrap;
+        }
+
+        .btn-success-custom:hover {
+            background: #0da271;
+            color: #fff;
+        }
+
+        .btn-filter {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-weight: 800;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-filter:hover {
+            background: #0da271;
+            color: #fff;
+        }
+
+        .btn-reset {
+            background: #6b7280;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-weight: 800;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+
+        .btn-reset:hover {
+            background: #4b5563;
+            color: #fff;
+        }
+
+        .employee-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 900;
+            font-size: 16px;
+            flex: 0 0 auto;
+        }
+
+        .employee-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .employee-name {
+            font-weight: 900;
+            font-size: 14px;
+            color: #1f2937;
+            line-height: 1.3;
+        }
+
+        .employee-code {
+            font-size: 11px;
+            color: #6b7280;
+            font-weight: 650;
+        }
+
+        .payslip-no {
+            font-weight: 900;
+            font-size: 13px;
+            color: #1f2937;
+        }
+
+        .payslip-month {
+            font-size: 11px;
+            color: #6b7280;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-action {
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px 10px;
+            color: var(--muted);
+            font-size: 12px;
+            margin: 0 2px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .btn-action:hover {
+            background: var(--bg);
+            color: var(--blue);
+        }
+
+        .btn-action.view:hover {
+            background: #dbeafe;
+            color: #1e40af;
+            border-color: #1e40af;
+        }
+
+        .btn-action.edit:hover {
+            background: #d1fae5;
+            color: #065f46;
+            border-color: #065f46;
+        }
+
+        .btn-action.email:hover {
+            background: #fef3c7;
+            color: #92400e;
+            border-color: #92400e;
+        }
+
+        .btn-action.paid:hover {
+            background: #d1fae5;
+            color: #065f46;
+            border-color: #065f46;
+        }
+
+        .btn-action.delete:hover {
+            background: #fee2e2;
+            color: #991b1b;
+            border-color: #991b1b;
+        }
+
+        .btn-action.pdf:hover {
+            background: #dc2626;
+            color: white;
+            border-color: #dc2626;
+        }
+
+        th.actions-col,
+        td.actions-col {
+            width: 160px !important;
+            white-space: nowrap !important;
+        }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-size: 11px;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-badge.bg-info {
+            background: rgba(59, 130, 246, 0.12);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.22);
+        }
+
+        .status-badge.bg-primary {
+            background: rgba(139, 92, 246, 0.12);
+            color: #8b5cf6;
+            border: 1px solid rgba(139, 92, 246, 0.22);
+        }
+
+        .status-badge.bg-success {
+            background: rgba(16, 185, 129, 0.12);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.22);
+        }
+
+        .status-badge.bg-secondary {
+            background: rgba(107, 114, 128, 0.12);
+            color: #6b7280;
+            border: 1px solid rgba(107, 114, 128, 0.22);
+        }
+
+        .amount-positive {
+            color: #059669;
+            font-weight: 900;
+        }
+
+        .amount-negative {
+            color: #dc2626;
+            font-weight: 900;
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table thead th {
+            font-size: 11px;
+            color: #6b7280;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            border-bottom: 1px solid var(--border) !important;
+            padding: 12px 10px !important;
+            white-space: nowrap;
+        }
+
+        .table td {
+            vertical-align: middle;
+            border-color: var(--border);
+            font-weight: 650;
+            color: #374151;
+            padding: 12px 10px !important;
+        }
+
+        .modal-content {
+            border-radius: var(--radius);
+            border: none;
+            box-shadow: var(--shadow);
+        }
+
+        .modal-header {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 20px;
+        }
+
+        .modal-title {
+            font-weight: 900;
+            font-size: 18px;
+            color: #1f2937;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            border-top: 1px solid var(--border);
+            padding: 16px 20px;
+        }
+
+        .form-label {
+            font-weight: 800;
+            font-size: 12px;
+            color: #4b5563;
+            margin-bottom: 4px;
+        }
+
+        .required:after {
+            content: " *";
+            color: #ef4444;
+        }
+
+        .form-control, .form-select {
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--blue);
+            box-shadow: 0 0 0 3px rgba(45, 156, 219, 0.1);
+        }
+
+        .alert {
+            border-radius: var(--radius);
+            border: none;
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+            padding: 14px 18px;
+            font-weight: 600;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .alert-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        /* Payslip Card for Employee View */
+        .payslip-card {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 20px;
+            transition: all 0.2s;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .payslip-card:hover {
+            box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .payslip-card .month-badge {
+            font-size: 16px;
+            font-weight: 900;
+            color: #1f2937;
+        }
+
+        .payslip-card .amount {
+            font-size: 24px;
+            font-weight: 900;
+            color: #059669;
+            margin: 12px 0;
+        }
+
+        .payslip-card .stats-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-top: 1px solid #e5e7eb;
+            border-bottom: 1px solid #e5e7eb;
+            margin: 12px 0;
+        }
+
+        .select2-container--bootstrap-5 .select2-selection {
+            border-radius: 10px !important;
+            border: 1px solid var(--border) !important;
+            min-height: 38px;
+        }
+
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+            padding: 6px 12px !important;
+        }
+
+        @media (max-width: 768px) {
+            .content-scroll {
+                padding: 12px;
+            }
+            
+            .stat-card {
+                height: auto;
+                padding: 12px;
+            }
+            
+            .stat-value {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <?php include 'includes/sidebar.php'; ?>
+
+        <main class="main" aria-label="Main">
+            <?php include 'includes/topbar.php'; ?>
+
+            <div class="content-scroll">
+                <div class="container-fluid maxw">
+
+                    <!-- Flash Messages -->
+                    <?php if (!empty($message)): ?>
+                        <div class="alert alert-<?php echo $messageType; ?> alert-dismissible fade show" role="alert">
+                            <i class="bi bi-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>-fill me-2"></i>
+                            <?php echo e($message); ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    <?php endif; ?>
+
+                    <!-- Header -->
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+                        <div>
+                            <h1 class="h3 fw-bold text-dark mb-1">
+                                <i class="bi bi-file-earmark-text me-2" style="color: var(--blue);"></i>
+                                Payslips
+                            </h1>
+                            <p class="text-muted mb-0">
+                                <?php if ($isEmployee): ?>
+                                    View your monthly salary slips and download PDF copies
+                                <?php else: ?>
+                                    Generate and manage employee payslips for payroll processing
+                                <?php endif; ?>
+                            </p>
+                        </div>
+                        <div class="d-flex gap-2 mt-3 mt-md-0">
+                            <?php if (!$isEmployee && ($isHr || $isAdmin)): ?>
+                                <button class="btn-primary-custom" onclick="openGenerateModal()">
+                                    <i class="bi bi-plus-lg"></i> Generate Payslip
+                                </button>
+                                <button class="btn-success-custom" onclick="openBulkGenerateModal()">
+                                    <i class="bi bi-files"></i> Bulk Generate
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Statistics -->
+                    <div class="row g-3 mb-4">
+                        <?php if ($isEmployee): ?>
+                            <!-- Employee View Stats -->
+                            <div class="col-6 col-md-3">
+                                <div class="stat-card">
+                                    <div class="stat-ic total"><i class="bi bi-file-text"></i></div>
+                                    <div>
+                                        <div class="stat-label">Total Payslips</div>
+                                        <div class="stat-value"><?php echo (int) ($stats['total_payslips'] ?? 0); ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="stat-card">
+                                    <div class="stat-ic amount"><i class="bi bi-currency-rupee"></i></div>
+                                    <div>
+                                        <div class="stat-label">Total Earned</div>
+                                        <div class="stat-value"><?php echo formatCurrency($stats['total_earned'] ?? 0); ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="stat-card">
+                                    <div class="stat-ic processed"><i class="bi bi-cash"></i></div>
+                                    <div>
+                                        <div class="stat-label">Avg. Salary</div>
+                                        <div class="stat-value"><?php echo formatCurrency($stats['avg_salary'] ?? 0); ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="stat-card">
+                                    <div class="stat-ic paid"><i class="bi bi-check-circle"></i></div>
+                                    <div>
+                                        <div class="stat-label">Paid</div>
+                                        <div class="stat-value"><?php echo (int) ($stats['paid_count'] ?? 0); ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php else: ?>
+                            <!-- HR/Manager View Stats -->
+                            <div class="col-6 col-md-3">
+                                <div class="stat-card">
+                                    <div class="stat-ic total"><i class="bi bi-people"></i></div>
+                                    <div>
+                                        <div class="stat-label">Employees</div>
+                                        <div class="stat-value"><?php echo (int) ($stats['total_employees'] ?? 0); ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="stat-card">
+                                    <div class="stat-ic generated"><i class="bi bi-file-text"></i></div>
+                                    <div>
+                                        <div class="stat-label">Generated</div>
+                                        <div class="stat-value"><?php echo (int) ($stats['generated_count'] ?? 0); ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="stat-card">
+                                    <div class="stat-ic paid"><i class="bi bi-cash"></i></div>
+                                    <div>
+                                        <div class="stat-label">Paid</div>
+                                        <div class="stat-value"><?php echo (int) ($stats['paid_count'] ?? 0); ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="stat-card">
+                                    <div class="stat-ic amount"><i class="bi bi-currency-rupee"></i></div>
+                                    <div>
+                                        <div class="stat-label">Total Payout</div>
+                                        <div class="stat-value"><?php echo formatCurrency($stats['total_payout'] ?? 0); ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Filters (for HR/Manager view) -->
+                    <?php if (!$isEmployee): ?>
+                        <div class="filter-card">
+                            <form method="GET" class="row g-3 align-items-end">
+                                <div class="col-md-2">
+                                    <label class="form-label">Month</label>
+                                    <select name="month" class="form-select form-select-sm">
+                                        <option value="all">All Months</option>
+                                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                                            <option value="<?php echo $m; ?>" <?php echo $month_filter == $m ? 'selected' : ''; ?>>
+                                                <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                                            </option>
+                                        <?php endfor; ?>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-2">
+                                    <label class="form-label">Year</label>
+                                    <select name="year" class="form-select form-select-sm">
+                                        <option value="all">All Years</option>
+                                        <?php for ($y = date('Y') - 2; $y <= date('Y') + 1; $y++): ?>
+                                            <option value="<?php echo $y; ?>" <?php echo $year_filter == $y ? 'selected' : ''; ?>>
+                                                <?php echo $y; ?>
+                                            </option>
+                                        <?php endfor; ?>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-2">
+                                    <label class="form-label">Status</label>
+                                    <select name="status" class="form-select form-select-sm">
+                                        <option value="all">All Status</option>
+                                        <option value="Generated" <?php echo $status_filter === 'Generated' ? 'selected' : ''; ?>>Generated</option>
+                                        <option value="Processed" <?php echo $status_filter === 'Processed' ? 'selected' : ''; ?>>Processed</option>
+                                        <option value="Paid" <?php echo $status_filter === 'Paid' ? 'selected' : ''; ?>>Paid</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">Employee</label>
+                                    <select name="employee_id" class="form-select form-select-sm">
+                                        <option value="0">All Employees</option>
+                                        <?php 
+                                        mysqli_data_seek($emp_filter_result, 0);
+                                        while ($emp = mysqli_fetch_assoc($emp_filter_result)): 
+                                        ?>
+                                            <option value="<?php echo $emp['id']; ?>" <?php echo $employee_filter == $emp['id'] ? 'selected' : ''; ?>>
+                                                <?php echo e($emp['full_name']); ?> (<?php echo e($emp['employee_code']); ?>)
+                                            </option>
+                                        <?php endwhile; ?>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">Search</label>
+                                    <input type="text" name="search" class="form-control form-control-sm"
+                                        placeholder="Name, Code, Payslip #..." value="<?php echo e($search); ?>">
+                                </div>
+
+                                <div class="col-12 d-flex justify-content-end gap-2">
+                                    <button type="submit" class="btn-filter btn-sm">
+                                        <i class="bi bi-funnel"></i> Apply Filters
+                                    </button>
+                                    <a href="payslips.php" class="btn-reset btn-sm">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Reset
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    <?php endif; ?>
+
+                    <!-- Payslips Display -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3 class="panel-title">
+                                <?php if ($isEmployee): ?>
+                                    <i class="bi bi-file-text" style="color: var(--blue);"></i> My Payslips
+                                <?php else: ?>
+                                    <i class="bi bi-files" style="color: var(--blue);"></i> Payslips for <?php echo formatMonthYear($month_filter, $year_filter); ?>
+                                <?php endif; ?>
+                            </h3>
+                            <span class="badge bg-secondary"><?php echo mysqli_num_rows($payslips); ?> records</span>
+                        </div>
+
+                        <?php if ($isEmployee): ?>
+                            <!-- Employee View - Card Layout -->
+                            <div class="row g-4">
+                                <?php if (mysqli_num_rows($payslips) === 0): ?>
+                                    <div class="col-12 text-center py-5">
+                                        <i class="bi bi-inbox" style="font-size: 4rem; color: #d1d5db;"></i>
+                                        <p class="mt-3 text-muted fs-5">No payslips found</p>
+                                        <p class="text-muted">Payslips will appear here once generated by HR</p>
+                                    </div>
+                                <?php else: ?>
+                                    <?php while ($payslip = mysqli_fetch_assoc($payslips)): ?>
+                                        <div class="col-md-6 col-lg-4">
+                                            <div class="payslip-card">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div>
+                                                        <span class="month-badge"><?php echo formatMonthYear($payslip['month'], $payslip['year']); ?></span>
+                                                        <div class="employee-code mt-1">
+                                                            <i class="bi bi-hash"></i> <?php echo e($payslip['payslip_no']); ?>
+                                                        </div>
+                                                    </div>
+                                                    <?php echo getPayslipStatusBadge($payslip['payment_status']); ?>
+                                                </div>
+                                                
+                                                <div class="amount"><?php echo formatCurrency($payslip['net_salary']); ?></div>
+                                                
+                                                <div class="stats-row">
+                                                    <div>
+                                                        <small class="text-muted d-block">Gross</small>
+                                                        <strong><?php echo formatCurrency($payslip['gross_earnings']); ?></strong>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <small class="text-muted d-block">Deductions</small>
+                                                        <strong class="text-danger">-<?php echo formatCurrency($payslip['total_deductions']); ?></strong>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="d-flex gap-2 mt-2">
+                                                    <a href="view-payslip.php?id=<?php echo $payslip['id']; ?>" class="btn-action view flex-grow-1 text-center">
+                                                        <i class="bi bi-eye"></i> View
+                                                    </a>
+                                                    <a href="download-payslip.php?id=<?php echo $payslip['id']; ?>" class="btn-action pdf" title="Download PDF">
+                                                        <i class="bi bi-file-pdf"></i>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endwhile; ?>
+                                <?php endif; ?>
+                            </div>
+                        <?php else: ?>
+                            <!-- HR/Manager View - Table Layout -->
+                            <div class="table-responsive">
+                                <table id="payslipsTable" class="table align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Payslip #</th>
+                                            <th>Employee</th>
+                                            <th>Month</th>
+                                            <th>Gross</th>
+                                            <th>Deductions</th>
+                                            <th>Net Salary</th>
+                                            <th>Status</th>
+                                            <th>Generated</th>
+                                            <th class="text-end actions-col">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (mysqli_num_rows($payslips) === 0): ?>
+                                            <tr>
+                                                <td colspan="9" class="text-center py-5">
+                                                    <i class="bi bi-inbox" style="font-size: 3rem; color: #d1d5db;"></i>
+                                                    <p class="mt-3 text-muted">No payslips found for the selected filters</p>
+                                                </td>
+                                            </tr>
+                                        <?php else: ?>
+                                            <?php while ($payslip = mysqli_fetch_assoc($payslips)): ?>
+                                                <tr>
+                                                    <td>
+                                                        <div class="payslip-no"><?php echo e($payslip['payslip_no']); ?></div>
+                                                        <div class="payslip-month">
+                                                            <i class="bi bi-calendar"></i>
+                                                            <?php echo formatMonthYear($payslip['month'], $payslip['year']); ?>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <div class="employee-avatar">
+                                                                <?php if (!empty($payslip['employee_photo'])): ?>
+                                                                    <img src="../<?php echo e($payslip['employee_photo']); ?>" alt="Photo">
+                                                                <?php else: ?>
+                                                                    <?php echo getInitials($payslip['employee_name']); ?>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                            <div>
+                                                                <div class="employee-name"><?php echo e($payslip['employee_name']); ?></div>
+                                                                <div class="employee-code">
+                                                                    <i class="bi bi-hash"></i> <?php echo e($payslip['employee_code']); ?>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td><?php echo formatMonthYear($payslip['month'], $payslip['year']); ?></td>
+                                                    <td class="fw-bold"><?php echo formatCurrency($payslip['gross_earnings']); ?></td>
+                                                    <td class="text-danger">-<?php echo formatCurrency($payslip['total_deductions']); ?></td>
+                                                    <td class="fw-bold amount-positive"><?php echo formatCurrency($payslip['net_salary']); ?></td>
+                                                    <td><?php echo getPayslipStatusBadge($payslip['payment_status']); ?></td>
+                                                    <td>
+                                                        <?php if ($payslip['generated_at']): ?>
+                                                            <div class="small"><?php echo date('d M Y', strtotime($payslip['generated_at'])); ?></div>
+                                                            <div class="employee-code">By: <?php echo e($payslip['generated_by_name']); ?></div>
+                                                        <?php else: ?>
+                                                            <span class="text-muted">—</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <a href="view-payslip.php?id=<?php echo $payslip['id']; ?>" class="btn-action view" title="View">
+                                                            <i class="bi bi-eye"></i>
+                                                        </a>
+                                                        
+                                                        <?php if ($isHr || $isAdmin): ?>
+                                                            <a href="edit-payslip.php?id=<?php echo $payslip['id']; ?>" class="btn-action edit" title="Edit">
+                                                                <i class="bi bi-pencil"></i>
+                                                            </a>
+                                                            
+                                                            <?php if ($payslip['payment_status'] !== 'Paid'): ?>
+                                                                <button class="btn-action paid" onclick="openPaidModal(<?php echo $payslip['id']; ?>, '<?php echo e($payslip['employee_name']); ?>')" title="Mark as Paid">
+                                                                    <i class="bi bi-cash"></i>
+                                                                </button>
+                                                            <?php endif; ?>
+                                                            
+                                                            <button class="btn-action email" onclick="sendEmail(<?php echo $payslip['id']; ?>)" title="Send Email">
+                                                                <i class="bi bi-envelope"></i>
+                                                            </button>
+                                                            
+                                                            <button class="btn-action delete" onclick="deletePayslip(<?php echo $payslip['id']; ?>)" title="Delete">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        <?php endif; ?>
+                                                        
+                                                        <a href="download-payslip.php?id=<?php echo $payslip['id']; ?>" class="btn-action pdf" title="Download PDF">
+                                                            <i class="bi bi-file-pdf"></i>
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                            <?php endwhile; ?>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                </div>
+            </div>
+
+            <?php include 'includes/footer.php'; ?>
+        </main>
+    </div>
+
+    <!-- Generate Single Payslip Modal (HR only) -->
+    <div class="modal fade" id="generateModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST">
+                    <input type="hidden" name="action" value="generate_payslip">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-plus-circle me-2" style="color: var(--blue);"></i>
+                            Generate Payslip
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label required">Employee</label>
+                            <select name="employee_id" class="form-select select2" required>
+                                <option value="">Select Employee...</option>
+                                <?php 
+                                $emp_dropdown = mysqli_query($conn, "SELECT id, full_name, employee_code FROM employees WHERE employee_status = 'active' ORDER BY full_name");
+                                while ($emp = mysqli_fetch_assoc($emp_dropdown)): 
+                                ?>
+                                    <option value="<?php echo $emp['id']; ?>">
+                                        <?php echo e($emp['full_name']); ?> (<?php echo e($emp['employee_code']); ?>)
+                                    </option>
+                                <?php endwhile; ?>
+                            </select>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label required">Month</label>
+                                <select name="month" class="form-select" required>
+                                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                                        <option value="<?php echo $m; ?>" <?php echo $m == date('m') ? 'selected' : ''; ?>>
+                                            <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label required">Year</label>
+                                <select name="year" class="form-select" required>
+                                    <?php for ($y = date('Y') - 1; $y <= date('Y'); $y++): ?>
+                                        <option value="<?php echo $y; ?>" <?php echo $y == date('Y') ? 'selected' : ''; ?>>
+                                            <?php echo $y; ?>
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Payslip will be generated using payroll data if available, or with default values.
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-primary-custom">
+                            <i class="bi bi-file-earmark"></i> Generate Payslip
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Generate Modal (HR only) -->
+    <div class="modal fade" id="bulkGenerateModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST">
+                    <input type="hidden" name="action" value="bulk_generate">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-files me-2" style="color: var(--blue);"></i>
+                            Bulk Generate Payslips
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label required">Month</label>
+                                <select name="month" class="form-select" required>
+                                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                                        <option value="<?php echo $m; ?>" <?php echo $m == date('m') ? 'selected' : ''; ?>>
+                                            <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label required">Year</label>
+                                <select name="year" class="form-select" required>
+                                    <?php for ($y = date('Y') - 1; $y <= date('Y'); $y++): ?>
+                                        <option value="<?php echo $y; ?>" <?php echo $y == date('Y') ? 'selected' : ''; ?>>
+                                            <?php echo $y; ?>
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Department (Optional)</label>
+                            <select name="department" class="form-select">
+                                <option value="">All Departments</option>
+                                <?php 
+                                mysqli_data_seek($dept_result, 0);
+                                while ($dept = mysqli_fetch_assoc($dept_result)): 
+                                ?>
+                                    <option value="<?php echo e($dept['department']); ?>">
+                                        <?php echo e($dept['department']); ?>
+                                    </option>
+                                <?php endwhile; ?>
+                            </select>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Note:</strong> This will generate payslips for all active employees in the selected department/month.
+                            Existing payslips will be skipped automatically.
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-success-custom">
+                            <i class="bi bi-files"></i> Generate Bulk
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mark as Paid Modal -->
+    <div class="modal fade" id="paidModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST">
+                    <input type="hidden" name="action" value="mark_paid">
+                    <input type="hidden" name="payslip_id" id="paid_payslip_id">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-cash me-2" style="color: #10b981;"></i>
+                            Mark Payslip as Paid
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <p class="mb-3">Mark payslip as paid for <strong id="paid_employee_name" class="text-primary"></strong></p>
+
+                        <div class="mb-3">
+                            <label class="form-label required">Payment Date</label>
+                            <input type="date" name="payment_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label required">Payment Mode</label>
+                            <select name="payment_mode" class="form-select" required>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Cheque">Cheque</option>
+                                <option value="Cash">Cash</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Transaction ID / Reference</label>
+                            <input type="text" name="transaction_id" class="form-control" placeholder="e.g., UTR Number, Cheque Number">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Payment Remarks</label>
+                            <textarea name="payment_remarks" class="form-control" rows="2" placeholder="Any additional notes..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-success-custom">
+                            <i class="bi bi-check-circle"></i> Confirm Payment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="assets/js/sidebar-toggle.js"></script>
+
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable for HR view
+            <?php if (!$isEmployee): ?>
+            $('#payslipsTable').DataTable({
+                responsive: true,
+                autoWidth: false,
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                order: [[2, 'desc']],
+                language: {
+                    zeroRecords: "No matching payslips found",
+                    info: "Showing _START_ to _END_ of _TOTAL_ payslips",
+                    infoEmpty: "No payslips to show",
+                    lengthMenu: "Show _MENU_",
+                    search: "Search:"
+                },
+                columnDefs: [
+                    { orderable: false, targets: [8] }
+                ]
+            });
+            <?php endif; ?>
+
+            // Initialize Select2
+            $('.select2').select2({
+                theme: 'bootstrap-5',
+                width: '100%',
+                dropdownParent: $('#generateModal')
+            });
+        });
+
+        function openGenerateModal() {
+            new bootstrap.Modal(document.getElementById('generateModal')).show();
+        }
+
+        function openBulkGenerateModal() {
+            new bootstrap.Modal(document.getElementById('bulkGenerateModal')).show();
+        }
+
+        function openPaidModal(id, employeeName) {
+            $('#paid_payslip_id').val(id);
+            $('#paid_employee_name').text(employeeName);
+            new bootstrap.Modal(document.getElementById('paidModal')).show();
+        }
+
+        function sendEmail(id) {
+            if (confirm('Send payslip via email to employee?')) {
+                var form = $('<form method="POST" style="display:none;">')
+                    .append($('<input type="hidden" name="action" value="send_email">'))
+                    .append($('<input type="hidden" name="payslip_id">').val(id));
+                $('body').append(form);
+                form.submit();
+            }
+        }
+
+        function deletePayslip(id) {
+            if (confirm('Are you sure you want to delete this payslip? This action cannot be undone.')) {
+                var form = $('<form method="POST" style="display:none;">')
+                    .append($('<input type="hidden" name="action" value="delete_payslip">'))
+                    .append($('<input type="hidden" name="payslip_id">').val(id));
+                $('body').append(form);
+                form.submit();
+            }
+        }
+    </script>
+</body>
+
+</html>
+<?php
+if (isset($conn) && $conn) {
+    mysqli_close($conn);
+}
+?>
