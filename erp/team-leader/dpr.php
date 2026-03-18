@@ -154,7 +154,25 @@ if ($designation === 'manager') {
     $sites = mysqli_fetch_all($res, MYSQLI_ASSOC);
     mysqli_stmt_close($st);
   }
+} elseif ($designation === 'team lead') {
+  // Team Lead sites
+  $q = "
+    SELECT s.id, s.project_name, s.project_location, c.client_name
+    FROM sites s
+    INNER JOIN clients c ON c.id = s.client_id
+    WHERE s.team_lead_employee_id = ?
+    ORDER BY s.created_at DESC
+  ";
+  $st = mysqli_prepare($conn, $q);
+  if ($st) {
+    mysqli_stmt_bind_param($st, "i", $employeeId);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+    $sites = mysqli_fetch_all($res, MYSQLI_ASSOC);
+    mysqli_stmt_close($st);
+  }
 } else {
+  // Engineer sites
   $q = "
     SELECT s.id, s.project_name, s.project_location, c.client_name
     FROM site_project_engineers spe
@@ -191,8 +209,8 @@ if ($siteId > 0) {
         s.id, s.client_id, s.manager_employee_id,
         s.project_name, s.project_type, s.project_location, s.scope_of_work,
         s.start_date, s.expected_completion_date,
-        c.client_name, c.client_type, c.company_name,
-        c.mobile_number AS client_mobile, c.email AS client_email, c.state
+        c.client_name, c.client_type, c.company_name
+        -- Client contact details excluded per requirement
       FROM sites s
       INNER JOIN clients c ON c.id = s.client_id
       WHERE s.id = ?
@@ -258,6 +276,10 @@ if ($siteId > 0) {
       $parts = array_values(array_unique(array_filter($parts, fn($x)=>trim((string)$x) !== '')));
       $defaultDistribute = implode(', ', $parts);
     }
+  } else {
+    // Site not allowed, redirect
+    header("Location: dpr.php");
+    exit;
   }
 }
 
@@ -461,20 +483,38 @@ if (isset($_GET['saved']) && $_GET['saved'] === '1') {
 
 // Recent DPRs
 $recent = [];
-$st = mysqli_prepare($conn, "
-  SELECT r.id, r.dpr_no, r.dpr_date, s.project_name
-  FROM dpr_reports r
-  INNER JOIN sites s ON s.id = r.site_id
-  WHERE r.employee_id = ?
-  ORDER BY r.created_at DESC
-  LIMIT 10
-");
-if ($st) {
-  mysqli_stmt_bind_param($st, "i", $employeeId);
-  mysqli_stmt_execute($st);
-  $res = mysqli_stmt_get_result($st);
-  $recent = mysqli_fetch_all($res, MYSQLI_ASSOC);
-  mysqli_stmt_close($st);
+if ($siteId > 0) {
+  $st = mysqli_prepare($conn, "
+    SELECT r.id, r.dpr_no, r.dpr_date, s.project_name
+    FROM dpr_reports r
+    INNER JOIN sites s ON s.id = r.site_id
+    WHERE r.employee_id = ? AND r.site_id = ?
+    ORDER BY r.created_at DESC
+    LIMIT 10
+  ");
+  if ($st) {
+    mysqli_stmt_bind_param($st, "ii", $employeeId, $siteId);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+    $recent = mysqli_fetch_all($res, MYSQLI_ASSOC);
+    mysqli_stmt_close($st);
+  }
+} else {
+  $st = mysqli_prepare($conn, "
+    SELECT r.id, r.dpr_no, r.dpr_date, s.project_name
+    FROM dpr_reports r
+    INNER JOIN sites s ON s.id = r.site_id
+    WHERE r.employee_id = ?
+    ORDER BY r.created_at DESC
+    LIMIT 10
+  ");
+  if ($st) {
+    mysqli_stmt_bind_param($st, "i", $employeeId);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+    $recent = mysqli_fetch_all($res, MYSQLI_ASSOC);
+    mysqli_stmt_close($st);
+  }
 }
 
 // ---------------- Form Defaults ----------------
@@ -495,13 +535,51 @@ if ($defaultDistribute === '' && $site) {
   $cn = trim((string)($site['client_name'] ?? ''));
   $defaultDistribute = $cn !== '' ? ('Client - '.$cn.', Manager, Director') : "Client, Manager, Director";
 }
+
+// Get existing DPR data for editing if dpr_id is provided
+$editMode = false;
+$editData = null;
+$dprId = isset($_GET['dpr_id']) ? (int)$_GET['dpr_id'] : 0;
+
+if ($dprId > 0 && $siteId > 0) {
+  $st = mysqli_prepare($conn, "
+    SELECT * FROM dpr_reports 
+    WHERE id = ? AND site_id = ? AND employee_id = ?
+  ");
+  if ($st) {
+    mysqli_stmt_bind_param($st, "iii", $dprId, $siteId, $employeeId);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+    $editData = mysqli_fetch_assoc($res);
+    mysqli_stmt_close($st);
+    
+    if ($editData) {
+      $editMode = true;
+      $formDprNo = $editData['dpr_no'];
+      $formDprDate = $editData['dpr_date'];
+      $defaultScheduleStart = $editData['schedule_start'] ?? $defaultScheduleStart;
+      $defaultScheduleEnd = $editData['schedule_end'] ?? $defaultScheduleEnd;
+      $defaultProjected = $editData['schedule_projected'] ?? $defaultProjected;
+      $weather = $editData['weather'];
+      $siteCondition = $editData['site_condition'];
+      $defaultDistribute = $editData['report_distribute_to'] ?? $defaultDistribute;
+      
+      // Decode JSON data for editing
+      $manpowerRows = json_decode($editData['manpower_json'], true) ?? [];
+      $machineryRows = json_decode($editData['machinery_json'], true) ?? [];
+      $materialRows = json_decode($editData['material_json'], true) ?? [];
+      $workProgressRows = json_decode($editData['work_progress_json'], true) ?? [];
+      $constraintsRows = json_decode($editData['constraints_json'], true) ?? [];
+    }
+  }
+}
 ?>
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DPR - TEK-C</title>
+  <title><?php echo $editMode ? 'Edit' : 'Submit'; ?> DPR - TEK-C</title>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
@@ -590,6 +668,11 @@ if ($defaultDistribute === '' && $site) {
       font-weight:900; font-size:12px;
     }
     .small-muted{ color:#6b7280; font-weight:800; font-size:12px; }
+    
+    .duration-fields input[readonly] {
+      background-color: #f8f9fa;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 
@@ -604,8 +687,8 @@ if ($defaultDistribute === '' && $site) {
 
         <div class="title-row mb-3">
           <div>
-            <h1 class="h-title">Daily Progress Report (DPR)</h1>
-            <p class="h-sub">Submit your DPR for the selected project site</p>
+            <h1 class="h-title"><?php echo $editMode ? 'Edit' : 'Daily Progress Report'; ?> (DPR)</h1>
+            <p class="h-sub"><?php echo $editMode ? 'Update' : 'Submit'; ?> your DPR for the selected project site</p>
           </div>
           <div class="d-flex gap-2 flex-wrap">
             <span class="badge-pill"><i class="bi bi-person"></i> <?php echo e($preparedBy); ?></span>
@@ -640,7 +723,7 @@ if ($defaultDistribute === '' && $site) {
           <div class="grid-2">
             <div>
               <label class="form-label">My Assigned Sites <span class="text-danger">*</span></label>
-              <select class="form-select" id="sitePicker">
+              <select class="form-select" id="sitePicker" <?php echo $editMode ? 'disabled' : ''; ?>>
                 <option value="">-- Select Site --</option>
                 <?php foreach ($sites as $s): ?>
                   <?php $sid = (int)$s['id']; ?>
@@ -649,7 +732,12 @@ if ($defaultDistribute === '' && $site) {
                   </option>
                 <?php endforeach; ?>
               </select>
-              <div class="small-muted mt-1">Selecting a site will load project & client details.</div>
+              <?php if ($editMode): ?>
+                <input type="hidden" id="sitePicker" value="<?php echo $formSiteId; ?>">
+                <div class="small-muted mt-1">Site cannot be changed while editing</div>
+              <?php else: ?>
+                <div class="small-muted mt-1">Selecting a site will load project & client details.</div>
+              <?php endif; ?>
             </div>
 
             <div class="d-flex align-items-end justify-content-end">
@@ -698,6 +786,9 @@ if ($defaultDistribute === '' && $site) {
         <form method="POST" autocomplete="off">
           <input type="hidden" name="submit_dpr" value="1">
           <input type="hidden" name="site_id" value="<?php echo (int)$formSiteId; ?>">
+          <?php if ($editMode): ?>
+            <input type="hidden" name="dpr_id" value="<?php echo $dprId; ?>">
+          <?php endif; ?>
 
           <!-- DPR HEADER -->
           <div class="panel">
@@ -712,7 +803,7 @@ if ($defaultDistribute === '' && $site) {
             <div class="grid-3">
               <div>
                 <label class="form-label">DPR No <span class="text-danger">*</span></label>
-                <input class="form-control" name="dpr_no" value="<?php echo e($formDprNo); ?>" required>
+                <input class="form-control" name="dpr_no" value="<?php echo e($formDprNo); ?>" required <?php echo $editMode ? 'readonly' : ''; ?>>
               </div>
               <div>
                 <label class="form-label">DPR Date <span class="text-danger">*</span></label>
@@ -779,16 +870,16 @@ if ($defaultDistribute === '' && $site) {
                 <label class="form-label">Weather <span class="text-danger">*</span></label>
                 <select class="form-select" name="weather" required>
                   <option value="">-- Select --</option>
-                  <option value="Normal">Normal</option>
-                  <option value="Rainy">Rainy</option>
+                  <option value="Normal" <?php echo (isset($weather) && $weather === 'Normal') ? 'selected' : ''; ?>>Normal</option>
+                  <option value="Rainy" <?php echo (isset($weather) && $weather === 'Rainy') ? 'selected' : ''; ?>>Rainy</option>
                 </select>
               </div>
               <div>
                 <label class="form-label">Site Condition <span class="text-danger">*</span></label>
                 <select class="form-select" name="site_condition" required>
                   <option value="">-- Select --</option>
-                  <option value="Normal">Normal</option>
-                  <option value="Slushy">Slushy</option>
+                  <option value="Normal" <?php echo (isset($siteCondition) && $siteCondition === 'Normal') ? 'selected' : ''; ?>>Normal</option>
+                  <option value="Slushy" <?php echo (isset($siteCondition) && $siteCondition === 'Slushy') ? 'selected' : ''; ?>>Slushy</option>
                 </select>
               </div>
             </div>
@@ -817,6 +908,18 @@ if ($defaultDistribute === '' && $site) {
                   </tr>
                 </thead>
                 <tbody id="manpowerBody">
+                  <?php if ($editMode && !empty($manpowerRows)): ?>
+                    <?php foreach ($manpowerRows as $row): ?>
+                    <tr>
+                      <td><input class="form-control" name="mp_agency[]" value="<?php echo e($row['agency'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mp_category[]" value="<?php echo e($row['category'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mp_unit[]" value="<?php echo e($row['unit'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mp_qty[]" value="<?php echo e($row['qty'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mp_remark[]" value="<?php echo e($row['remark'] ?? ''); ?>"></td>
+                      <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger delRow"><i class="bi bi-trash"></i></button></td>
+                    </tr>
+                    <?php endforeach; ?>
+                  <?php else: ?>
                   <tr>
                     <td><input class="form-control" name="mp_agency[]"></td>
                     <td><input class="form-control" name="mp_category[]"></td>
@@ -825,6 +928,7 @@ if ($defaultDistribute === '' && $site) {
                     <td><input class="form-control" name="mp_remark[]"></td>
                     <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger delRow"><i class="bi bi-trash"></i></button></td>
                   </tr>
+                  <?php endif; ?>
                 </tbody>
               </table>
             </div>
@@ -853,6 +957,17 @@ if ($defaultDistribute === '' && $site) {
                   </tr>
                 </thead>
                 <tbody id="machineryBody">
+                  <?php if ($editMode && !empty($machineryRows)): ?>
+                    <?php foreach ($machineryRows as $row): ?>
+                    <tr>
+                      <td><input class="form-control" name="mc_equipment[]" value="<?php echo e($row['equipment'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mc_unit[]" value="<?php echo e($row['unit'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mc_qty[]" value="<?php echo e($row['qty'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mc_remark[]" value="<?php echo e($row['remark'] ?? ''); ?>"></td>
+                      <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger delRow"><i class="bi bi-trash"></i></button></td>
+                    </tr>
+                    <?php endforeach; ?>
+                  <?php else: ?>
                   <tr>
                     <td><input class="form-control" name="mc_equipment[]"></td>
                     <td><input class="form-control" name="mc_unit[]"></td>
@@ -860,6 +975,7 @@ if ($defaultDistribute === '' && $site) {
                     <td><input class="form-control" name="mc_remark[]"></td>
                     <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger delRow"><i class="bi bi-trash"></i></button></td>
                   </tr>
+                  <?php endif; ?>
                 </tbody>
               </table>
             </div>
@@ -888,6 +1004,18 @@ if ($defaultDistribute === '' && $site) {
                   </tr>
                 </thead>
                 <tbody id="materialBody">
+                  <?php if ($editMode && !empty($materialRows)): ?>
+                    <?php foreach ($materialRows as $row): ?>
+                    <tr>
+                      <td><input class="form-control" name="mt_vendor[]" value="<?php echo e($row['vendor'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mt_material[]" value="<?php echo e($row['material'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mt_unit[]" value="<?php echo e($row['unit'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mt_qty[]" value="<?php echo e($row['qty'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="mt_remark[]" value="<?php echo e($row['remark'] ?? ''); ?>"></td>
+                      <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger delRow"><i class="bi bi-trash"></i></button></td>
+                    </tr>
+                    <?php endforeach; ?>
+                  <?php else: ?>
                   <tr>
                     <td><input class="form-control" name="mt_vendor[]"></td>
                     <td><input class="form-control" name="mt_material[]"></td>
@@ -896,6 +1024,7 @@ if ($defaultDistribute === '' && $site) {
                     <td><input class="form-control" name="mt_remark[]"></td>
                     <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger delRow"><i class="bi bi-trash"></i></button></td>
                   </tr>
+                  <?php endif; ?>
                 </tbody>
               </table>
             </div>
@@ -923,23 +1052,42 @@ if ($defaultDistribute === '' && $site) {
                     <th>Reasons</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <?php for ($i=0; $i<4; $i++): ?>
-                  <tr class="wp-row">
-                    <td><input class="form-control" name="wp_task[]"></td>
-                    <td><input class="form-control wp-duration" inputmode="numeric" name="wp_duration[]" placeholder="e.g. 3"></td>
-                    <td><input type="date" class="form-control wp-start" name="wp_start[]"></td>
-                    <td><input type="date" class="form-control wp-end" name="wp_end[]" readonly></td>
-                    <td>
-                      <select class="form-select" name="wp_status[]">
-                        <option value="">-- Select --</option>
-                        <option value="In Control">In Control</option>
-                        <option value="Delay">Delay</option>
-                      </select>
-                    </td>
-                    <td><input class="form-control" name="wp_reasons[]"></td>
-                  </tr>
-                  <?php endfor; ?>
+                <tbody id="workProgressBody">
+                  <?php if ($editMode && !empty($workProgressRows)): ?>
+                    <?php foreach ($workProgressRows as $row): ?>
+                    <tr class="wp-row">
+                      <td><input class="form-control" name="wp_task[]" value="<?php echo e($row['task'] ?? ''); ?>"></td>
+                      <td><input class="form-control wp-duration" inputmode="numeric" name="wp_duration[]" value="<?php echo e($row['duration'] ?? ''); ?>" placeholder="e.g. 3"></td>
+                      <td><input type="date" class="form-control wp-start" name="wp_start[]" value="<?php echo e($row['start'] ?? ''); ?>"></td>
+                      <td><input type="date" class="form-control wp-end" name="wp_end[]" value="<?php echo e($row['end'] ?? ''); ?>" readonly></td>
+                      <td>
+                        <select class="form-select" name="wp_status[]">
+                          <option value="">-- Select --</option>
+                          <option value="In Control" <?php echo (isset($row['status']) && $row['status'] === 'In Control') ? 'selected' : ''; ?>>In Control</option>
+                          <option value="Delay" <?php echo (isset($row['status']) && $row['status'] === 'Delay') ? 'selected' : ''; ?>>Delay</option>
+                        </select>
+                      </td>
+                      <td><input class="form-control" name="wp_reasons[]" value="<?php echo e($row['reasons'] ?? ''); ?>"></td>
+                    </tr>
+                    <?php endforeach; ?>
+                  <?php else: ?>
+                    <?php for ($i=0; $i<4; $i++): ?>
+                    <tr class="wp-row">
+                      <td><input class="form-control" name="wp_task[]"></td>
+                      <td><input class="form-control wp-duration" inputmode="numeric" name="wp_duration[]" placeholder="e.g. 3"></td>
+                      <td><input type="date" class="form-control wp-start" name="wp_start[]"></td>
+                      <td><input type="date" class="form-control wp-end" name="wp_end[]" readonly></td>
+                      <td>
+                        <select class="form-select" name="wp_status[]">
+                          <option value="">-- Select --</option>
+                          <option value="In Control">In Control</option>
+                          <option value="Delay">Delay</option>
+                        </select>
+                      </td>
+                      <td><input class="form-control" name="wp_reasons[]"></td>
+                    </tr>
+                    <?php endfor; ?>
+                  <?php endif; ?>
                 </tbody>
               </table>
             </div>
@@ -971,6 +1119,23 @@ if ($defaultDistribute === '' && $site) {
                   </tr>
                 </thead>
                 <tbody id="constraintBody">
+                  <?php if ($editMode && !empty($constraintsRows)): ?>
+                    <?php foreach ($constraintsRows as $row): ?>
+                    <tr>
+                      <td><input class="form-control" name="cs_issue[]" value="<?php echo e($row['issue'] ?? ''); ?>"></td>
+                      <td>
+                        <select class="form-select" name="cs_status[]">
+                          <option value="">-- Select --</option>
+                          <option value="Open" <?php echo (isset($row['status']) && $row['status'] === 'Open') ? 'selected' : ''; ?>>Open</option>
+                          <option value="Closed" <?php echo (isset($row['status']) && $row['status'] === 'Closed') ? 'selected' : ''; ?>>Closed</option>
+                        </select>
+                      </td>
+                      <td><input type="date" class="form-control" name="cs_date[]" value="<?php echo e($row['date'] ?? ''); ?>"></td>
+                      <td><input class="form-control" name="cs_remark[]" value="<?php echo e($row['remark'] ?? ''); ?>"></td>
+                      <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger delRow"><i class="bi bi-trash"></i></button></td>
+                    </tr>
+                    <?php endforeach; ?>
+                  <?php else: ?>
                   <tr>
                     <td><input class="form-control" name="cs_issue[]"></td>
                     <td>
@@ -984,6 +1149,7 @@ if ($defaultDistribute === '' && $site) {
                     <td><input class="form-control" name="cs_remark[]"></td>
                     <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger delRow"><i class="bi bi-trash"></i></button></td>
                   </tr>
+                  <?php endif; ?>
                 </tbody>
               </table>
             </div>
@@ -1013,8 +1179,13 @@ if ($defaultDistribute === '' && $site) {
 
             <div class="d-flex justify-content-end mt-3">
               <button type="submit" class="btn-primary-tek" <?php echo ($formSiteId<=0 ? 'disabled' : ''); ?>>
-                <i class="bi bi-check2-circle"></i> Submit DPR
+                <i class="bi bi-check2-circle"></i> <?php echo $editMode ? 'Update DPR' : 'Submit DPR'; ?>
               </button>
+              <?php if ($editMode): ?>
+                <a href="dpr.php?site_id=<?php echo $formSiteId; ?>" class="btn btn-outline-secondary ms-2" style="border-radius:12px; font-weight:900;">
+                  Cancel
+                </a>
+              <?php endif; ?>
             </div>
 
             <?php if ($formSiteId<=0): ?>
@@ -1039,7 +1210,7 @@ if ($defaultDistribute === '' && $site) {
             <div class="table-responsive">
               <table class="table table-bordered align-middle mb-0">
                 <thead>
-                  <tr><th>DPR No</th><th>Date</th><th>Project</th></tr>
+                  <tr><th>DPR No</th><th>Date</th><th>Project</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                   <?php foreach ($recent as $r): ?>
@@ -1047,6 +1218,11 @@ if ($defaultDistribute === '' && $site) {
                       <td style="font-weight:1000;"><?php echo e($r['dpr_no']); ?></td>
                       <td><?php echo e($r['dpr_date']); ?></td>
                       <td><?php echo e($r['project_name']); ?></td>
+                      <td>
+                        <a href="dpr.php?site_id=<?php echo $formSiteId ?: $siteId; ?>&dpr_id=<?php echo $r['id']; ?>" class="btn btn-sm btn-outline-primary">
+                          <i class="bi bi-pencil"></i> Edit
+                        </a>
+                      </td>
                     </tr>
                   <?php endforeach; ?>
                 </tbody>
@@ -1069,7 +1245,7 @@ if ($defaultDistribute === '' && $site) {
   // Site change -> reload
   document.addEventListener('DOMContentLoaded', function(){
     var picker = document.getElementById('sitePicker');
-    if (picker) {
+    if (picker && !picker.disabled) {
       picker.addEventListener('change', function(){
         var v = picker.value || '';
         window.location.href = v ? ('dpr.php?site_id=' + encodeURIComponent(v)) : 'dpr.php';
@@ -1157,12 +1333,29 @@ if ($defaultDistribute === '' && $site) {
       endEl.value = end;
     }
 
-    document.querySelectorAll('tr.wp-row').forEach(function(tr){
-      const durEl = tr.querySelector('.wp-duration');
-      const stEl  = tr.querySelector('.wp-start');
-      if (durEl) durEl.addEventListener('input', function(){ wpRecalcRow(tr); });
-      if (stEl)  stEl.addEventListener('change', function(){ wpRecalcRow(tr); });
-    });
+    // Attach event listeners to all wp-rows
+    function attachWpListeners() {
+      document.querySelectorAll('tr.wp-row').forEach(function(tr){
+        const durEl = tr.querySelector('.wp-duration');
+        const stEl  = tr.querySelector('.wp-start');
+        
+        // Remove existing listeners by cloning and replacing
+        const newDurEl = durEl.cloneNode(true);
+        const newStEl = stEl.cloneNode(true);
+        if (durEl && durEl.parentNode) durEl.parentNode.replaceChild(newDurEl, durEl);
+        if (stEl && stEl.parentNode) stEl.parentNode.replaceChild(newStEl, stEl);
+        
+        newDurEl.addEventListener('input', function(){ wpRecalcRow(tr); });
+        newStEl.addEventListener('change', function(){ wpRecalcRow(tr); });
+        
+        // Trigger initial calculation if values exist
+        if (newDurEl.value || newStEl.value) {
+          wpRecalcRow(tr);
+        }
+      });
+    }
+    
+    attachWpListeners();
 
     // Dynamic row adders
     function addRow(tbodyId, rowHtml){
@@ -1171,6 +1364,11 @@ if ($defaultDistribute === '' && $site) {
       const tr = document.createElement('tr');
       tr.innerHTML = rowHtml;
       tb.appendChild(tr);
+      
+      // If this is a work progress row, attach listeners
+      if (tbodyId === 'workProgressBody') {
+        attachWpListeners();
+      }
     }
 
     document.getElementById('addManpower')?.addEventListener('click', function(){
@@ -1229,7 +1427,11 @@ if ($defaultDistribute === '' && $site) {
       if (tr && tr.parentNode) {
         const tb = tr.parentNode;
         if (tb.querySelectorAll('tr').length <= 1) {
-          tr.querySelectorAll('input,select,textarea').forEach(el => el.value = '');
+          // Clear fields instead of deleting last row
+          tr.querySelectorAll('input,select,textarea').forEach(el => {
+            if (el.tagName === 'SELECT') el.selectedIndex = 0;
+            else el.value = '';
+          });
           return;
         }
         tr.remove();
