@@ -1833,7 +1833,7 @@ button {
 }
 
 .ul-property-filter-search-container {
-  background-color: var(--ul-primary);
+
   color: var(--white);
   border-radius: 20px;
   padding: clamp(40px, 3.15vw, 60px) clamp(15px, 4.31vw, 82px);
@@ -1863,7 +1863,7 @@ button {
   background-size: cover;
   mix-blend-mode: multiply;
   z-index: -1;
-  opacity: 50%;
+  
 }
 
 .ul-property-filter-search-title {

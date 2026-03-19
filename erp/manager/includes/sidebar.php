@@ -23,34 +23,51 @@
 </a>
 
 <!-- My Project -->
-<a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#projectMenu">
-<i class="bi bi-kanban"></i>
-<span class="label">My Project</span>
+<a class="side-link" href="my-sites.php">
+      <i class="bi bi-kanban"></i><span class="label">Projects</span>
+    </a>
+
+
+<!-- QUOTATION MANAGEMENT - NEW SECTION -->
+<a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#quotationMenu">
+<i class="bi bi-file-text"></i>
+<span class="label">Quotations</span>
 <span class="ms-auto label chevron-wrap">
 <i class="bi bi-chevron-down chevron"></i>
 </span>
 </a>
 
-<div class="collapse ps-2 side-submenu-collapse" id="projectMenu">
+<div class="collapse ps-2 side-submenu-collapse" id="quotationMenu">
 
-<a class="side-link sub-link" href="site1.php">
-<i class="bi bi-building"></i>
-<span class="label">Site 1</span>
+<a class="side-link sub-link" href="quotation-requests.php">
+<i class="bi bi-plus-circle"></i>
+<span class="label">New Request</span>
 </a>
 
-<a class="side-link sub-link" href="site2.php">
-<i class="bi bi-building"></i>
-<span class="label">Site 2</span>
+<a class="side-link sub-link" href="my-quotation-requests.php">
+<i class="bi bi-list-check"></i>
+<span class="label">My Requests</span>
 </a>
 
-<a class="side-link sub-link" href="site3.php">
-<i class="bi bi-building"></i>
-<span class="label">Site 3</span>
+<a class="side-link sub-link" href="pending-approvals.php">
+<i class="bi bi-clock-history"></i>
+<span class="label">Pending Approvals</span>
+<span class="badge bg-warning ms-1" style="font-size: 0.7rem;">3</span>
 </a>
 
-<a class="side-link sub-link" href="site4.php">
-<i class="bi bi-building"></i>
-<span class="label">Site 4</span>
+<a class="side-link sub-link" href="quotation-comparison.php">
+<i class="bi bi-bar-chart-steps"></i>
+<span class="label">Comparison</span>
+</a>
+
+<a class="side-link sub-link" href="approved-quotations.php">
+<i class="bi bi-check-circle"></i>
+<span class="label">Approved</span>
+</a>
+
+<a class="side-link sub-link" href="dealers.php">
+<i class="bi bi-shop"></i>
+<span class="label">Dealers</span>
 </a>
 
 </div>
@@ -142,7 +159,6 @@
     <i class="bi bi-person-check"></i>
     <span class="label">Onboarding</span>
   </a>
-
 
 </div>
 
@@ -242,11 +258,14 @@
     transform: rotate(180deg);
   }
 
-  /* Optional active submenu look (inherits your .side-link styles if already defined) */
-  /* #sidebar .side-submenu-collapse .side-link.active {
-    background: rgba(45,156,219,.12);
-    color: var(--blue, #2d9cdb);
-  } */
+  /* Badge styling for notification counts */
+  #sidebar .badge {
+    margin-left: auto;
+    margin-right: 5px;
+    padding: 3px 6px;
+    border-radius: 10px;
+    font-weight: normal;
+  }
 
   /* If sidebar collapsed mode exists in your layout */
   #sidebar {
