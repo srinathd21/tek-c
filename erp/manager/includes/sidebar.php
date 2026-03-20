@@ -52,7 +52,7 @@
 <a class="side-link sub-link" href="pending-approvals.php">
 <i class="bi bi-clock-history"></i>
 <span class="label">Pending Approvals</span>
-<span class="badge bg-warning ms-1" style="font-size: 0.7rem;">3</span>
+
 </a>
 
 <a class="side-link sub-link" href="quotation-comparison.php">

@@ -44,22 +44,59 @@
 
     <!-- ----------------- Team Lead Options ----------------- -->
 
+    <!-- QUOTATION MANAGEMENT - NEW SECTION FOR TEAM LEADS -->
+    <a class="side-link" data-bs-toggle="collapse" href="#quotationMenu">
+      <i class="bi bi-file-text"></i><span class="label">Quotations</span>
+      <span class="ms-auto label position-relative">
+        <i class="bi bi-chevron-down"></i>
+        <!-- Notification badge for pending assignments -->
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem; display: none;" id="pendingQuotationBadge">0</span>
+      </span>
+    </a>
+    <div class="collapse ps-2" id="quotationMenu">
+      <!-- Assigned Quotations -->
+      <a class="side-link" href="assigned-quotations.php">
+        <i class="bi bi-inbox"></i><span class="label">Assigned to Me</span>
+        <span class="ms-auto badge bg-warning" id="assignedCount" style="font-size: 0.7rem;">0</span>
+      </a>
+      
+      <!-- Quotations in Progress -->
+      <a class="side-link" href="quotations-in-progress.php">
+        <i class="bi bi-arrow-right-circle"></i><span class="label">In Progress</span>
+        <span class="ms-auto badge bg-info" id="inProgressCount" style="font-size: 0.7rem;">0</span>
+      </a>
+      
+      <!-- Quotations Received (ready to submit) -->
+      <a class="side-link" href="quotations-to-submit.php">
+        <i class="bi bi-send"></i><span class="label">Ready to Submit</span>
+        <span class="ms-auto badge bg-primary" id="toSubmitCount" style="font-size: 0.7rem;">0</span>
+      </a>
+      
+      <!-- Quotations with QS -->
+      <a class="side-link" href="quotations-with-qs.php">
+        <i class="bi bi-arrow-right-square"></i><span class="label">With QS</span>
+      </a>
+      
+      <!-- Quotations Finalized -->
+      <a class="side-link" href="finalized-quotations.php">
+        <i class="bi bi-check-circle"></i><span class="label">Finalized</span>
+      </a>
+      
+      <!-- Quotations History -->
+      <a class="side-link" href="my-quotations-history.php">
+        <i class="bi bi-clock-history"></i><span class="label">History</span>
+      </a>
+      
+      <!-- Dealers Directory -->
+      <a class="side-link" href="dealers-directory.php">
+        <i class="bi bi-shop"></i><span class="label">Dealers</span>
+      </a>
+    </div>
+
     <!-- Attendance -->
     <a class="side-link" href="attendance.php">
       <i class="bi bi-calendar-check"></i><span class="label">Attendance</span>
     </a>
-
-    <!-- My Projects -->
-    <!-- <a class="side-link" data-bs-toggle="collapse" href="#projectMenu">
-      <i class="bi bi-kanban"></i><span class="label">My Projects</span>
-      <span class="ms-auto label"><i class="bi bi-chevron-down"></i></span>
-    </a>
-    <div class="collapse ps-2" id="projectMenu">
-      <a class="side-link" href="site1.php"><i class="bi bi-geo-alt"></i><span class="label">Site 1</span></a>
-      <a class="side-link" href="site2.php"><i class="bi bi-geo-alt"></i><span class="label">Site 2</span></a>
-      <a class="side-link" href="site3.php"><i class="bi bi-geo-alt"></i><span class="label">Site 3</span></a>
-      <a class="side-link" href="site4.php"><i class="bi bi-geo-alt"></i><span class="label">Site 4</span></a>
-    </div> -->
 
     <!-- Task Approval -->
     <a class="side-link" href="task-approval.php">
@@ -143,7 +180,7 @@
     transition: transform .2s ease;
   }
   .side-toggle[aria-expanded="true"] .chevron,
-  [data-bs-toggle="collapse"].active .bi-chevron-down {
+  [data-bs-toggle="collapse"][aria-expanded="true"] .bi-chevron-down {
     transform: rotate(180deg);
   }
 
@@ -168,6 +205,17 @@
   }
   .side-sublink:hover{ background: rgba(0,0,0,.05); }
   .side-sublink.active{ background: rgba(45,156,219,.12); color: var(--blue, #2d9cdb); }
+
+  /* Badge styling */
+  .badge {
+    font-weight: 700;
+    padding: 3px 6px;
+  }
+  
+  /* Position relative for notification badge */
+  .position-relative {
+    position: relative;
+  }
 </style>
 
 <script>
@@ -175,19 +223,23 @@ document.addEventListener('DOMContentLoaded', function(){
   const currentPage = window.location.pathname.split('/').pop() || 'index.php';
 
   // Highlight top-level links
-  document.querySelectorAll('.side-link:not(.side-toggle)').forEach(link=>link.classList.remove('active'));
-  document.querySelectorAll('.side-link:not(.side-toggle)').forEach(link=>{
+  document.querySelectorAll('.side-link:not([data-bs-toggle="collapse"])').forEach(link=>link.classList.remove('active'));
+  document.querySelectorAll('.side-link:not([data-bs-toggle="collapse"])').forEach(link=>{
     if(link.getAttribute('href') === currentPage) link.classList.add('active');
   });
 
-  // Highlight sublinks
-  document.querySelectorAll('.side-sublink').forEach(link=>link.classList.remove('active'));
-  document.querySelectorAll('.side-sublink').forEach(link=>{
+  // Highlight sublinks and expand parent
+  document.querySelectorAll('.side-link[href]').forEach(link=>{
     if(link.getAttribute('href') === currentPage){
       link.classList.add('active');
-      // expand parent collapse
+      // expand parent collapse if exists
       let parent = link.closest('.collapse');
-      if(parent) new bootstrap.Collapse(parent, {toggle:true});
+      if(parent) {
+        new bootstrap.Collapse(parent, {toggle: true});
+        // Also expand any nested collapses
+        let nestedParent = parent.closest('.collapse');
+        if(nestedParent) new bootstrap.Collapse(nestedParent, {toggle: true});
+      }
     }
   });
 
@@ -198,5 +250,55 @@ document.addEventListener('DOMContentLoaded', function(){
       if(!confirm('Are you sure you want to logout?')) e.preventDefault();
     });
   }
+
+  // Load quotation counts for Team Lead
+  loadQuotationCounts();
 });
+
+// Function to load quotation counts via AJAX
+function loadQuotationCounts() {
+  if (typeof fetch === 'undefined') return;
+  
+  fetch('get-quotation-counts.php')
+    .then(response => response.json())
+    .then(data => {
+      // Update assigned count
+      const assignedEl = document.getElementById('assignedCount');
+      if (assignedEl && data.assigned > 0) {
+        assignedEl.textContent = data.assigned;
+        assignedEl.style.display = 'inline';
+      } else if (assignedEl) {
+        assignedEl.style.display = 'none';
+      }
+      
+      // Update in progress count
+      const inProgressEl = document.getElementById('inProgressCount');
+      if (inProgressEl && data.in_progress > 0) {
+        inProgressEl.textContent = data.in_progress;
+        inProgressEl.style.display = 'inline';
+      } else if (inProgressEl) {
+        inProgressEl.style.display = 'none';
+      }
+      
+      // Update ready to submit count
+      const toSubmitEl = document.getElementById('toSubmitCount');
+      if (toSubmitEl && data.to_submit > 0) {
+        toSubmitEl.textContent = data.to_submit;
+        toSubmitEl.style.display = 'inline';
+      } else if (toSubmitEl) {
+        toSubmitEl.style.display = 'none';
+      }
+      
+      // Update total pending badge on main menu if any pending
+      const totalPending = data.assigned + data.in_progress + data.to_submit;
+      const pendingBadge = document.getElementById('pendingQuotationBadge');
+      if (pendingBadge && totalPending > 0) {
+        pendingBadge.textContent = totalPending > 9 ? '9+' : totalPending;
+        pendingBadge.style.display = 'inline';
+      } else if (pendingBadge) {
+        pendingBadge.style.display = 'none';
+      }
+    })
+    .catch(error => console.error('Error loading quotation counts:', error));
+}
 </script>
