@@ -1,6 +1,6 @@
 <?php
 // manage-quotation.php (Team Lead) — manage a specific quotation request
-// Follows same UI template as assigned-quotations.php
+// Allows TL to add dealers, upload quotations, and submit to QS
 
 session_start();
 require_once 'includes/db-config.php';
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if ($action === 'add_dealer') {
         $dealer_id = intval($_POST['dealer_id'] ?? 0);
-        $expected_date = isset($_POST['expected_date']) ? $_POST['expected_date'] : null;
+        $expected_date = isset($_POST['expected_date']) && !empty($_POST['expected_date']) ? $_POST['expected_date'] : null;
         $notes = isset($_POST['notes']) ? htmlspecialchars($_POST['notes']) : '';
         
         if ($dealer_id > 0) {
@@ -66,6 +66,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_stmt_bind_param($insert_stmt, "iisiss", $request_id, $dealer_id, $empId, $empName, $expected_date, $notes);
                 if (mysqli_stmt_execute($insert_stmt)) {
                     $success = "Dealer added successfully!";
+                    // Refresh to show new dealer
+                    header("Location: manage-quotation.php?id=" . $request_id . "&status=success&message=" . urlencode($success));
+                    exit();
                 } else {
                     $error = "Failed to add dealer: " . mysqli_error($conn);
                 }
@@ -83,13 +86,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quotation_no = isset($_POST['quotation_no']) ? htmlspecialchars($_POST['quotation_no']) : '';
         $dealer_quotation_ref = isset($_POST['dealer_quotation_ref']) ? htmlspecialchars($_POST['dealer_quotation_ref']) : '';
         $quotation_date = isset($_POST['quotation_date']) ? $_POST['quotation_date'] : date('Y-m-d');
-        $valid_until = isset($_POST['valid_until']) ? $_POST['valid_until'] : null;
+        $valid_until = isset($_POST['valid_until']) && !empty($_POST['valid_until']) ? $_POST['valid_until'] : null;
         $delivery_terms = isset($_POST['delivery_terms']) ? htmlspecialchars($_POST['delivery_terms']) : '';
         $payment_terms = isset($_POST['payment_terms']) ? htmlspecialchars($_POST['payment_terms']) : '';
         $warranty = isset($_POST['warranty']) ? htmlspecialchars($_POST['warranty']) : '';
         $grand_total = isset($_POST['grand_total']) ? floatval($_POST['grand_total']) : 0;
         
         if ($request_dealer_id > 0 && !empty($quotation_no) && $grand_total > 0) {
+            // Handle file upload
             $quotation_document = null;
             if (isset($_FILES['quotation_document']) && $_FILES['quotation_document']['error'] === UPLOAD_ERR_OK) {
                 $upload_dir = 'uploads/quotation_documents/';
@@ -105,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
+            // Get dealer_id from quotation_requests_dealers
             $dealer_query = "SELECT dealer_id FROM quotation_requests_dealers WHERE id = ?";
             $dealer_stmt = mysqli_prepare($conn, $dealer_query);
             mysqli_stmt_bind_param($dealer_stmt, "i", $request_dealer_id);
@@ -114,6 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dealer_id = $dealer_row['dealer_id'];
             mysqli_stmt_close($dealer_stmt);
             
+            // Generate quotation number
             $quotation_no_full = 'QT-' . date('Ymd') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
             
             $insert_query = "INSERT INTO quotations (
@@ -136,13 +142,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             
             if (mysqli_stmt_execute($insert_stmt)) {
+                // Update the dealer status to 'Quotation Received'
                 $update_dealer_query = "UPDATE quotation_requests_dealers SET status = 'Quotation Received', updated_at = NOW() WHERE id = ?";
                 $update_stmt = mysqli_prepare($conn, $update_dealer_query);
                 mysqli_stmt_bind_param($update_stmt, "i", $request_dealer_id);
                 mysqli_stmt_execute($update_stmt);
                 mysqli_stmt_close($update_stmt);
                 
+                // Check if all assigned dealers have submitted quotations
+                $check_all_query = "SELECT COUNT(*) as total, SUM(CASE WHEN status = 'Quotation Received' THEN 1 ELSE 0 END) as received FROM quotation_requests_dealers WHERE quotation_request_id = ?";
+                $check_stmt = mysqli_prepare($conn, $check_all_query);
+                mysqli_stmt_bind_param($check_stmt, "i", $request_id);
+                mysqli_stmt_execute($check_stmt);
+                $check_result = mysqli_stmt_get_result($check_stmt);
+                $check_row = mysqli_fetch_assoc($check_result);
+                mysqli_stmt_close($check_stmt);
+                
+                // If all dealers have submitted, update main request status
+                if ($check_row['total'] > 0 && $check_row['total'] == $check_row['received']) {
+                    $update_request_query = "UPDATE quotation_requests SET status = 'Quotations Received', updated_at = NOW() WHERE id = ?";
+                    $update_request_stmt = mysqli_prepare($conn, $update_request_query);
+                    mysqli_stmt_bind_param($update_request_stmt, "i", $request_id);
+                    mysqli_stmt_execute($update_request_stmt);
+                    mysqli_stmt_close($update_request_stmt);
+                }
+                
                 $success = "Quotation uploaded successfully!";
+                header("Location: manage-quotation.php?id=" . $request_id . "&status=success&message=" . urlencode($success));
+                exit();
             } else {
                 $error = "Failed to upload quotation: " . mysqli_error($conn);
             }
@@ -151,12 +178,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "Please fill all required fields.";
         }
         
-    } elseif ($action === 'submit_to_manager') {
-        $update_query = "UPDATE quotation_requests SET status = 'Quotations Received', updated_at = NOW() WHERE id = ? AND project_engineer_id = ?";
+    } elseif ($action === 'submit_to_qs') {
+        // Submit all quotations to QS team
+        $update_query = "UPDATE quotation_requests SET status = 'With QS', updated_at = NOW() WHERE id = ? AND project_engineer_id = ?";
         $update_stmt = mysqli_prepare($conn, $update_query);
         mysqli_stmt_bind_param($update_stmt, "ii", $request_id, $empId);
         if (mysqli_stmt_execute($update_stmt)) {
-            $success = "All quotations submitted to manager successfully!";
+            $success = "All quotations submitted to QS team successfully!";
             header("Location: assigned-quotations.php?status=success&message=" . urlencode($success));
             exit();
         } else {
@@ -173,9 +201,11 @@ $request_query = "
         s.project_name,
         s.project_code,
         s.project_location,
+        s.scope_of_work,
         c.client_name,
         c.company_name,
-        m.full_name AS manager_name
+        m.full_name AS manager_name,
+        DATEDIFF(qr.required_by_date, CURDATE()) AS days_remaining
     FROM quotation_requests qr
     JOIN sites s ON qr.site_id = s.id
     LEFT JOIN clients c ON s.client_id = c.id
@@ -195,12 +225,12 @@ if (!$quotation_request) {
     exit;
 }
 
-// ---------- Fetch all dealers ----------
-$dealers_query = "SELECT id, dealer_code, dealer_name, contact_person, mobile_number, email, dealer_type, status FROM quotation_dealers WHERE status = 'Active' ORDER BY dealer_name ASC";
+// ---------- Fetch all active dealers ----------
+$dealers_query = "SELECT id, dealer_code, dealer_name, contact_person, mobile_number, email FROM quotation_dealers WHERE status = 'Active' ORDER BY dealer_name ASC";
 $dealers_result = mysqli_query($conn, $dealers_query);
 $dealers = mysqli_fetch_all($dealers_result, MYSQLI_ASSOC);
 
-// ---------- Fetch assigned dealers ----------
+// ---------- Fetch assigned dealers for this request ----------
 $assigned_dealers_query = "
     SELECT 
         qrd.*,
@@ -220,7 +250,7 @@ $assigned_dealers_result = mysqli_stmt_get_result($stmt);
 $assigned_dealers = mysqli_fetch_all($assigned_dealers_result, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
 
-// ---------- Fetch quotations ----------
+// ---------- Fetch quotations for this request ----------
 $quotations_query = "
     SELECT 
         q.*,
@@ -236,6 +266,19 @@ mysqli_stmt_execute($stmt);
 $quotations_result = mysqli_stmt_get_result($stmt);
 $quotations = mysqli_fetch_all($quotations_result, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
+
+// Check if all assigned dealers have submitted quotations
+$all_submitted = false;
+$total_dealers = count($assigned_dealers);
+$submitted_count = 0;
+foreach ($assigned_dealers as $dealer) {
+    if ($dealer['status'] === 'Quotation Received') {
+        $submitted_count++;
+    }
+}
+if ($total_dealers > 0 && $total_dealers == $submitted_count) {
+    $all_submitted = true;
+}
 
 // Helper functions
 function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
@@ -259,6 +302,10 @@ function getStatusBadge($status) {
     $badge = $badges[$status] ?? ['bg-secondary', 'bi-question'];
     return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $status . '</span>';
 }
+
+// Get status message if any
+$status = $_GET['status'] ?? '';
+$message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
 ?>
 
 <!doctype html>
@@ -301,6 +348,7 @@ function getStatusBadge($status) {
         .stat-ic.green{ background: #10b981; }
         .stat-ic.yellow{ background: #f59e0b; }
         .stat-ic.red{ background: #ef4444; }
+        .stat-ic.purple{ background: #8b5cf6; }
         .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
         .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
 
@@ -341,8 +389,6 @@ function getStatusBadge($status) {
             background: #fff;
         }
 
-        .btn-sm { padding: 4px 8px; font-size: 11px; }
-
         @media (max-width: 991.98px){
             .main{
                 margin-left: 0 !important;
@@ -375,17 +421,10 @@ function getStatusBadge($status) {
                 <div class="container-fluid maxw">
 
                     <!-- Status Messages -->
-                    <?php if ($success): ?>
-                        <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            <i class="bi bi-check-circle-fill me-2"></i>
-                            <?php echo e($success); ?>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    <?php endif; ?>
-                    <?php if ($error): ?>
-                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                            <?php echo e($error); ?>
+                    <?php if ($status && $message): ?>
+                        <div class="alert alert-<?php echo $status === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
+                            <i class="bi bi-<?php echo $status === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'; ?> me-2"></i>
+                            <?php echo htmlspecialchars($message); ?>
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
                     <?php endif; ?>
@@ -431,6 +470,9 @@ function getStatusBadge($status) {
                                 <div>
                                     <div class="stat-label">Required By</div>
                                     <div class="stat-value" style="font-size:20px;"><?php echo safeDate($quotation_request['required_by_date']); ?></div>
+                                    <?php if (!empty($quotation_request['days_remaining']) && $quotation_request['days_remaining'] > 0): ?>
+                                        <div class="proj-sub"><?php echo $quotation_request['days_remaining']; ?> days left</div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
@@ -438,7 +480,7 @@ function getStatusBadge($status) {
                             <div class="stat-card">
                                 <div class="stat-ic red"><i class="bi bi-flag"></i></div>
                                 <div>
-                                    <div class="stat-label">Priority / Status</div>
+                                    <div class="stat-label">Priority</div>
                                     <div class="stat-value" style="font-size:20px;"><?php echo e($quotation_request['priority']); ?></div>
                                 </div>
                             </div>
@@ -534,6 +576,11 @@ function getStatusBadge($status) {
                                                     <button type="button" class="btn-action" data-bs-toggle="modal" data-bs-target="#uploadModal<?php echo $dealer['id']; ?>">
                                                         <i class="bi bi-upload"></i> Upload Quotation
                                                     </button>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if (!empty($dealer['expected_quotation_date'])): ?>
+                                                <div class="mt-2 proj-sub">
+                                                    <i class="bi bi-calendar"></i> Expected: <?php echo safeDate($dealer['expected_quotation_date']); ?>
                                                 </div>
                                             <?php endif; ?>
                                         </div>
@@ -665,20 +712,27 @@ function getStatusBadge($status) {
                         </div>
                     </div>
 
-                    <!-- Submit Button Panel -->
+                    <!-- Submit to QS Button Panel -->
                     <div class="panel mt-4">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h3 class="panel-title mb-0">Ready to Submit?</h3>
-                                <p class="proj-sub mt-1 mb-0">Once submitted, the manager will review all quotations.</p>
+                                <h3 class="panel-title mb-0">Ready to Submit to QS?</h3>
+                                <p class="proj-sub mt-1 mb-0">Once submitted, QS team will review and negotiate with dealers.</p>
                             </div>
-                            <form method="POST" action="" onsubmit="return confirm('Are you sure you want to submit all quotations to the manager? You cannot make changes after submission.');">
-                                <input type="hidden" name="action" value="submit_to_manager">
+                            <form method="POST" action="" onsubmit="return confirm('Are you sure you want to submit all quotations to the QS team? You cannot make changes after submission.');">
+                                <input type="hidden" name="action" value="submit_to_qs">
                                 <button type="submit" class="btn btn-success btn-lg" <?php echo empty($quotations) ? 'disabled' : ''; ?>>
-                                    <i class="bi bi-send"></i> Submit to Manager
+                                    <i class="bi bi-send"></i> Submit to QS
                                 </button>
                             </form>
                         </div>
+                        <?php if ($total_dealers > 0 && !$all_submitted): ?>
+                            <div class="mt-3 text-warning">
+                                <i class="bi bi-info-circle"></i> 
+                                <?php echo $submitted_count; ?> out of <?php echo $total_dealers; ?> dealers have submitted quotations. 
+                                Please wait for all quotations before submitting.
+                            </div>
+                        <?php endif; ?>
                     </div>
 
                 </div>
@@ -693,10 +747,6 @@ function getStatusBadge($status) {
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-    <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
     <script src="assets/js/sidebar-toggle.js"></script>
 
     <script>
