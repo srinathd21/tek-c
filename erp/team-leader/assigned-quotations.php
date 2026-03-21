@@ -1,6 +1,6 @@
 <?php
-// assigned-quotations.php (Team Lead) — show quotation requests assigned to the logged-in project engineer
-// Follows same UI template as my-sites.php
+// assigned-quotations.php (Team Lead) — show quotation requests assigned to the logged-in team lead
+// Uses sites.team_lead_employee_id to identify which sites the TL manages
 
 session_start();
 require_once 'includes/db-config.php';
@@ -12,7 +12,7 @@ $success = '';
 $error   = '';
 $requests = [];
 
-// ---------- Auth (Project Engineer/Team Lead only) ----------
+// ---------- Auth (Team Lead only) ----------
 if (empty($_SESSION['employee_id'])) {
   header("Location: ../login.php");
   exit;
@@ -21,12 +21,12 @@ if (empty($_SESSION['employee_id'])) {
 $empId = (int)$_SESSION['employee_id'];
 $designation = strtolower(trim((string)($_SESSION['designation'] ?? '')));
 
-// Allow Project Engineers and Team Leads
+// Allow Team Leads and Project Engineers
 $allowed = [
+  'team lead',
   'project engineer grade 1',
   'project engineer grade 2',
-  'sr. engineer',
-  'team lead'
+  'sr. engineer'
 ];
 if (!in_array($designation, $allowed, true)) {
   header("Location: index.php");
@@ -113,49 +113,74 @@ function getTimeAgo($datetime) {
     return date('d M Y', $time);
 }
 
-// ---------- Fetch quotation requests assigned to this project engineer ----------
-// Show both 'Pending Assignment' (new) and 'Assigned' (accepted) requests
-$sql = "
-  SELECT 
-    qr.*,
-    s.project_name,
-    s.project_code,
-    s.project_location,
-    s.scope_of_work,
-    c.client_name,
-    c.company_name,
-    c.mobile_number AS client_mobile,
-    m.full_name AS manager_name,
-    m.employee_code AS manager_code,
-    DATEDIFF(qr.required_by_date, CURDATE()) AS days_remaining
-  FROM quotation_requests qr
-  JOIN sites s ON qr.site_id = s.id
-  LEFT JOIN clients c ON s.client_id = c.id
-  LEFT JOIN employees m ON s.manager_employee_id = m.id
-  WHERE qr.project_engineer_id = ? 
-     OR (qr.status = 'Pending Assignment' AND qr.site_id IN (
-         SELECT site_id FROM site_project_engineers WHERE employee_id = ?
-     ))
-  ORDER BY 
-    CASE 
-      WHEN qr.priority = 'Urgent' THEN 1
-      WHEN qr.priority = 'High' THEN 2
-      WHEN qr.priority = 'Medium' THEN 3
-      ELSE 4
-    END,
-    qr.required_by_date ASC,
-    qr.created_at DESC
-";
+// ---------- Fetch sites where this employee is the Team Lead ----------
+// First, get all site IDs where this employee is the team lead
+$tl_sites_query = "SELECT id, project_name FROM sites WHERE team_lead_employee_id = ? AND deleted_at IS NULL";
+$stmt = mysqli_prepare($conn, $tl_sites_query);
+mysqli_stmt_bind_param($stmt, "i", $empId);
+mysqli_stmt_execute($stmt);
+$tl_sites_result = mysqli_stmt_get_result($stmt);
+$tl_site_ids = [];
+$tl_site_names = [];
+while ($site = mysqli_fetch_assoc($tl_sites_result)) {
+    $tl_site_ids[] = $site['id'];
+    $tl_site_names[$site['id']] = $site['project_name'];
+}
+mysqli_stmt_close($stmt);
 
-$stmt = mysqli_prepare($conn, $sql);
-if (!$stmt) {
-  $error = "Database error: " . mysqli_error($conn);
+// Fetch quotation requests for sites where this employee is the Team Lead
+$sql = "";
+$params = [];
+$types = "";
+
+if (empty($tl_site_ids)) {
+    // If no sites assigned as Team Lead, show nothing
+    $requests = [];
 } else {
-  mysqli_stmt_bind_param($stmt, "ii", $empId, $empId);
-  mysqli_stmt_execute($stmt);
-  $res = mysqli_stmt_get_result($stmt);
-  $requests = mysqli_fetch_all($res, MYSQLI_ASSOC);
-  mysqli_stmt_close($stmt);
+    // Build IN clause with site IDs
+    $placeholders = implode(',', array_fill(0, count($tl_site_ids), '?'));
+    
+    $sql = "
+        SELECT 
+            qr.*,
+            s.project_name,
+            s.project_code,
+            s.project_location,
+            s.scope_of_work,
+            c.client_name,
+            c.company_name,
+            c.mobile_number AS client_mobile,
+            m.full_name AS manager_name,
+            m.employee_code AS manager_code,
+            DATEDIFF(qr.required_by_date, CURDATE()) AS days_remaining
+        FROM quotation_requests qr
+        JOIN sites s ON qr.site_id = s.id
+        LEFT JOIN clients c ON s.client_id = c.id
+        LEFT JOIN employees m ON s.manager_employee_id = m.id
+        WHERE qr.site_id IN ($placeholders)
+        AND qr.status IN ('Pending Assignment', 'Assigned')
+        ORDER BY 
+            CASE 
+                WHEN qr.priority = 'Urgent' THEN 1
+                WHEN qr.priority = 'High' THEN 2
+                WHEN qr.priority = 'Medium' THEN 3
+                ELSE 4
+            END,
+            qr.required_by_date ASC,
+            qr.created_at DESC
+    ";
+    
+    $stmt = mysqli_prepare($conn, $sql);
+    if ($stmt) {
+        // Bind site IDs
+        mysqli_stmt_bind_param($stmt, str_repeat('i', count($tl_site_ids)), ...$tl_site_ids);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        $requests = mysqli_fetch_all($res, MYSQLI_ASSOC);
+        mysqli_stmt_close($stmt);
+    } else {
+        $error = "Database error: " . mysqli_error($conn);
+    }
 }
 
 // ---------- Stats ----------
@@ -435,7 +460,12 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
         <div class="d-flex justify-content-between align-items-center mb-4">
           <div>
             <h1 class="h3 fw-bold text-dark mb-1">Assigned Quotations</h1>
-            <p class="text-muted mb-0">Quotation requests assigned to you</p>
+            <p class="text-muted mb-0">
+              Quotation requests for sites where you are Team Lead
+              <?php if (!empty($tl_site_ids)): ?>
+                <span class="badge bg-info ms-2"><?php echo count($tl_site_ids); ?> site(s)</span>
+              <?php endif; ?>
+            </p>
           </div>
           <div>
             <a href="dealers-directory.php" class="btn btn-outline-secondary me-2">
@@ -450,7 +480,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
             <div class="stat-card">
               <div class="stat-ic blue"><i class="bi bi-file-text"></i></div>
               <div>
-                <div class="stat-label">Total Assigned</div>
+                <div class="stat-label">Total Requests</div>
                 <div class="stat-value"><?php echo (int)$total_assigned; ?></div>
               </div>
             </div>
@@ -484,6 +514,15 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
           </div>
         </div>
 
+        <!-- Info Banner if no sites assigned -->
+        <?php if (empty($tl_site_ids)): ?>
+        <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+          <i class="bi bi-info-circle-fill me-2"></i>
+          You are not assigned as Team Lead to any sites. Please contact your manager to assign you to sites.
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        <?php endif; ?>
+
         <!-- Directory -->
         <div class="panel mb-4">
           <div class="panel-header">
@@ -498,7 +537,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                 <div class="text-center py-4 text-muted">
                   <i class="bi bi-inbox" style="font-size: 48px;"></i>
                   <p class="mt-2 fw-bold">No assigned quotations</p>
-                  <p class="small">When managers assign quotation requests to you, they will appear here.</p>
+                  <p class="small">When quotation requests are created for your sites, they will appear here.</p>
                 </div>
               <?php else: ?>
                 <?php foreach ($requests as $req): 
@@ -776,8 +815,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
           }
         });
 
-    
-       setTimeout(function() {
+        setTimeout(function() {
           $('.dataTables_filter input').focus();
         }, 400);
       }
