@@ -9,7 +9,6 @@
 </div>
 
 <div class="nav-section">
-
 <!-- Dashboard -->
 <a class="side-link" href="index.php">
 <i class="bi bi-speedometer2"></i>
@@ -17,7 +16,7 @@
 </a>
 
 <!-- Attendance -->
-<a class="side-link" href="attendance.php">
+<a class="side-link" href="punchin.php">
 <i class="bi bi-calendar-check"></i>
 <span class="label">Attendance</span>
 </a>
@@ -184,14 +183,14 @@
 
 <div class="collapse ps-2 side-submenu-collapse" id="hrMenu">
 
-<a class="side-link sub-link" href="profile.php">
+<a class="side-link sub-link" href="my-profile.php">
 <i class="bi bi-person"></i>
 <span class="label">Profile</span>
 </a>
 
-<a class="side-link sub-link" href="attendance-profile.php">
+<a class="side-link sub-link" href="my-punchin.php">
 <i class="bi bi-calendar2-check"></i>
-<span class="label">Attendance Profile</span>
+<span class="label">My Attendance</span>
 </a>
 
 <a class="side-link sub-link" href="leave-ledger.php">
