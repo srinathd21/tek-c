@@ -47,6 +47,7 @@ function clean_text($s){
   $s = preg_replace('/\s+/', ' ', $s);
   $s = trim($s);
 
+  // Convert to Windows-1252 for PDF compatibility
   $converted = @iconv('UTF-8', 'windows-1252//TRANSLIT//IGNORE', $s);
   return ($converted !== false) ? $converted : $s;
 }
@@ -110,20 +111,6 @@ function split_widths($total, $parts){
   return $out;
 }
 
-function draw_left_merged_fixed($pdf, $x, $y, $wL, $wS, $label, $title, $height){
-  $pdf->SetFillColor(220,220,220);
-  $pdf->SetFont($pdf->ff, 'B', 11);
-  $pdf->SetXY($x, $y);
-  $pdf->Cell($wL, $height, $label, 1, 0, 'C', true);
-  $pdf->Cell($wS, $height, $title, 1, 0, 'C', true);
-}
-
-function end_section($pdf, $yStart, $segH, $gap){
-  $endY = $yStart + $segH;
-  if ($pdf->GetY() < $endY) $pdf->SetY($endY);
-  if ($gap > 0) $pdf->Ln($gap);
-}
-
 function client_name_only($s){
   $s = clean_text($s);
   if ($s === '') return '';
@@ -148,36 +135,11 @@ function client_name_only($s){
 function get_first($arr, $keys, $default=''){
   if (!is_array($arr)) return $default;
   foreach ((array)$keys as $k) {
-    if (array_key_exists($k, $arr) && $arr[$k] !== null) return $arr[$k];
+    if (array_key_exists($k, $arr) && $arr[$k] !== null && $arr[$k] !== '') return $arr[$k];
   }
   return $default;
 }
 
-function to_number($v){
-  if ($v === null) return 0;
-  $v = trim((string)$v);
-  if ($v === '') return 0;
-  $v = preg_replace('/[^0-9\.\-]/', '', $v);
-  if ($v === '' || $v === '-' || $v === '.' || $v === '-.') return 0;
-  return (float)$v;
-}
-
-function build_numbered_remarks($rows, $key, $startIndex = 0){
-  $lines = [];
-  $n = (int)$startIndex + 1;
-  foreach ($rows as $r) {
-    $txt = '';
-    if (is_array($r) && array_key_exists($key, $r)) $txt = clean_text($r[$key]);
-    $lines[] = $n . '.' . ($txt !== '' ? ' ' . $txt : '');
-    $n++;
-  }
-  return implode("\n", $lines);
-}
-
-/**
- * Safe filename for SITE (no # needed)
- * Keep letters, numbers, space, underscore, dash, dot.
- */
 function safe_filename_site($s){
   $s = clean_text($s);
   $s = str_replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], '_', $s);
@@ -188,10 +150,6 @@ function safe_filename_site($s){
   return $s;
 }
 
-/**
- * Safe filename (KEEP #) — do NOT URL-encode.
- * Keep letters, numbers, space, underscore, dash, dot, and #
- */
 function safe_filename_keep_hash($s){
   $s = clean_text($s);
   $s = preg_replace('/[\r\n\t]+/', ' ', $s);
@@ -207,7 +165,6 @@ function safe_filename_keep_hash($s){
   return $s;
 }
 
-// RFC5987 filename* encoding (UTF-8)
 function rfc5987_encode($str){
   return "UTF-8''" . rawurlencode($str);
 }
@@ -285,42 +242,86 @@ $data['constraints'] = decode_rows($row['constraints_json'] ?? '');
 $tmp = [];
 foreach ($data['manpower'] as $r) {
   $tmp[] = [
-    'agency'   => (string)get_first($r, ['agency','vendor','firm','contractor','company','name'], ''),
-    'category' => (string)get_first($r, ['category','type','trade','designation'], ''),
-    'unit'     => (string)get_first($r, ['unit','uom'], ''),
-    'qty'      => (string)get_first($r, ['qty','quantity','count','nos'], ''),
-    'remark'   => (string)get_first($r, ['remark','remarks','note','notes'], ''),
+    'agency'   => (string)get_first($r, ['agency', 'vendor', 'firm', 'contractor', 'company', 'name'], ''),
+    'category' => (string)get_first($r, ['category', 'type', 'trade', 'designation'], ''),
+    'unit'     => (string)get_first($r, ['unit', 'uom'], ''),
+    'qty'      => (string)get_first($r, ['qty', 'quantity', 'count', 'nos'], ''),
+    'remark'   => (string)get_first($r, ['remark', 'remarks', 'note', 'notes'], ''),
   ];
 }
 $data['manpower'] = $tmp;
+
+// Calculate total manpower
+$totalManpower = 0;
+foreach ($data['manpower'] as $m) {
+  $totalManpower += (float)$m['qty'];
+}
+
+// Normalize Machinery
+$tmp = [];
+foreach ($data['machinery'] as $r) {
+  $tmp[] = [
+    'equipment' => (string)get_first($r, ['equipment', 'machinery', 'item', 'description', 'type'], ''),
+    'unit'      => (string)get_first($r, ['unit', 'uom'], ''),
+    'qty'       => (string)get_first($r, ['qty', 'quantity', 'count', 'nos'], ''),
+    'remark'    => (string)get_first($r, ['remark', 'remarks', 'note', 'notes'], ''),
+  ];
+}
+$data['machinery'] = $tmp;
 
 // Normalize Material
 $tmp = [];
 foreach ($data['material'] as $r) {
   $tmp[] = [
-    'vendor'   => (string)get_first($r, ['vendor','supplier','firm','company','name'], ''),
-    'material' => (string)get_first($r, ['material','item','material_name','description'], ''),
-    'unit'     => (string)get_first($r, ['unit','uom'], ''),
-    'qty'      => (string)get_first($r, ['qty','quantity'], ''),
-    'remark'   => (string)get_first($r, ['remark','remarks','note','notes'], ''),
+    'vendor'   => (string)get_first($r, ['vendor', 'supplier', 'firm', 'company', 'name'], ''),
+    'material' => (string)get_first($r, ['material', 'item', 'material_name', 'description'], ''),
+    'unit'     => (string)get_first($r, ['unit', 'uom'], ''),
+    'qty'      => (string)get_first($r, ['qty', 'quantity'], ''),
+    'remark'   => (string)get_first($r, ['remark', 'remarks', 'note', 'notes'], ''),
   ];
 }
 $data['material'] = $tmp;
+
+// Normalize Work Progress
+$tmp = [];
+foreach ($data['workprog'] as $r) {
+  $tmp[] = [
+    'task'     => (string)get_first($r, ['task', 'description', 'item', 'work', 'activity'], ''),
+    'duration' => (string)get_first($r, ['duration', 'planned_days'], ''),
+    'start'    => dmy_dash(get_first($r, ['start', 'start_date'], '')),
+    'end'      => dmy_dash(get_first($r, ['end', 'end_date'], '')),
+    'status'   => (string)get_first($r, ['status', 'progress_status'], ''),
+    'reasons'  => (string)get_first($r, ['reasons', 'remarks', 'note', 'notes'], ''),
+  ];
+}
+$data['workprog'] = $tmp;
+
+// Normalize Constraints
+$tmp = [];
+foreach ($data['constraints'] as $r) {
+  $tmp[] = [
+    'issue'  => (string)get_first($r, ['issue', 'constraint', 'description'], ''),
+    'status' => (string)get_first($r, ['status', 'constraint_status'], ''),
+    'date'   => dmy_dash(get_first($r, ['date', 'constraint_date'], '')),
+    'remark' => (string)get_first($r, ['remark', 'remarks', 'note', 'notes'], ''),
+  ];
+}
+$data['constraints'] = $tmp;
 
 // ---------------- PDF class ----------------
 class DPRPDF extends FPDF {
   public $meta = [];
   public $logoPath = '';
-  public $outerX = 8;
-  public $outerY = 8;
+  public $outerX = 5;
+  public $outerY = 5;
   public $outerW = 0;
 
   public $GREY  = [220,220,220];
-  public $gapAfterHeader = 8;
+  public $gapAfterHeader = 5;
 
   public $ff = 'Arial';
   public $TITLE_SIZE = 14;
-  public $CONTENT_SIZE = 11;
+  public $CONTENT_SIZE = 10;
 
   function InitFonts(){
     $fontDir = __DIR__ . '/libs/fpdf/font/';
@@ -342,32 +343,20 @@ class DPRPDF extends FPDF {
 
   function SetMeta($meta){ $this->meta = $meta; }
 
-  function Footer(){
-    $this->SetY(-20);
-    $this->SetFont($this->ff, 'I', $this->CONTENT_SIZE);
-
-    $company = (string)($this->meta['company_name'] ?? '');
-    $this->Cell(0, 12, $company, 0, 0, 'L');
-
-    $pageText = $this->PageNo() . ' / {nb}';
-    $pageTextWidth = $this->GetStringWidth($pageText);
-    $this->SetX(($this->GetPageWidth() - $pageTextWidth) / 2);
-    $this->Cell($pageTextWidth, 12, $pageText, 0, 0, 'C');
-  }
 
   function Header(){
-    $this->SetLineWidth(0.35);
-
-    $this->outerW = $this->GetPageWidth() - 16;
-    $outerH = $this->GetPageHeight() - 16;
+    $this->SetLineWidth(0.3);
+    
+    $this->outerW = $this->GetPageWidth() - 10;
+    $outerH = $this->GetPageHeight() - 10;
     $this->Rect($this->outerX, $this->outerY, $this->outerW, $outerH);
 
     $X0 = $this->outerX;
     $Y0 = $this->outerY;
 
-    $headerH = 32;
-    $logoW   = 32;
-    $rightW  = 115;
+    $headerH = 30;
+    $logoW   = 30;
+    $rightW  = 82;
     $titleW  = $this->outerW - $logoW - $rightW;
 
     $this->SetXY($X0, $Y0);
@@ -378,34 +367,32 @@ class DPRPDF extends FPDF {
     }
 
     $this->SetFillColor($this->GREY[0], $this->GREY[1], $this->GREY[2]);
-
     $this->SetFont($this->ff, 'B', $this->TITLE_SIZE);
     $this->Cell($titleW, $headerH, 'DAILY PROGRESS REPORT (DPR)', 1, 0, 'C', true);
 
     $rx = $X0 + $logoW + $titleW;
     $ry = $Y0;
-    $rH = $headerH / 5;
+    $rH = $headerH / 4;
     $labW = 28;
     $valW = $rightW - $labW;
 
     $rows = [
-      ['Project', "Mr." . ($this->meta['project_name'] ?? '')],
-      ['Client',  "Mr." . ($this->meta['client_name'] ?? '')],
-      ['PMC',     "Mr." . ($this->meta['pmc_name'] ?? '')],
-      ['DPR',     $this->meta['dpr_no'] ?? ''],
-      ['DPR Date', trim((string)($this->meta['dpr_date'] ?? ''))],
+      ['Project', $this->meta['project_name'] ?? ''],
+      ['Client',  $this->meta['client_name'] ?? ''],
+      ['PMC',     $this->meta['pmc_name'] ?? ''],
+      ['DPR No / Date', $this->meta['dpr_no'] . ' / ' . trim((string)($this->meta['dpr_date'] ?? ''))],
+      
     ];
 
-    for($i=0;$i<5;$i++){
+    for($i=0;$i<4;$i++){
       $this->SetXY($rx, $ry + $i*$rH);
-
-      $this->SetFont($this->ff,'B',$this->CONTENT_SIZE);
+      $this->SetFont($this->ff,'B',9);
       $this->Cell($labW, $rH, $rows[$i][0], 1, 0, 'L');
 
       $txt = (string)$rows[$i][1];
-      $fs = $this->CONTENT_SIZE;
+      $fs = 9;
       $this->SetFont($this->ff,'', $fs);
-      while ($fs > 8 && $this->GetStringWidth($txt) > ($valW - 2)) {
+      while ($fs > 7 && $this->GetStringWidth($txt) > ($valW - 2)) {
         $fs -= 0.5;
         $this->SetFont($this->ff,'', $fs);
       }
@@ -416,7 +403,7 @@ class DPRPDF extends FPDF {
   }
 
   function EnsureSpace($needH){
-    if ($this->GetY() + $needH > ($this->GetPageHeight() - 16)) {
+    if ($this->GetY() + $needH > ($this->GetPageHeight() - 15)) {
       $this->AddPage();
     }
   }
@@ -433,51 +420,27 @@ class DPRPDF extends FPDF {
     }
     return $ellipsis;
   }
-
-  function DrawRowFixed($x, $widths, $cells, $h, $aligns){
-    $this->EnsureSpace($h);
-    $this->SetX($x);
-    for($i=0;$i<count($cells);$i++){
-      $w = $widths[$i];
-      $txt = $this->FitText($w, $cells[$i] ?? '');
-      $al = $aligns[$i] ?? 'L';
-      $this->Cell($w, $h, $txt, 1, 0, $al);
+  
+  function MultiCellFit($w, $h, $txt, $border=1, $align='L'){
+    $txt = trim((string)$txt);
+    if ($txt === '') {
+      $this->Cell($w, $h, '', $border, 0, $align);
+      return;
     }
-    $this->Ln($h);
-  }
-
-  function DrawRowFixedFill($x, $widths, $cells, $h, $aligns, $fills){
-    $this->EnsureSpace($h);
-    $this->SetX($x);
-
-    for($i=0;$i<count($cells);$i++){
-      $w   = $widths[$i];
-      $txt = $this->FitText($w, $cells[$i] ?? '');
-      $al  = $aligns[$i] ?? 'L';
-
-      $doFill = !empty($fills[$i]) && is_array($fills[$i]);
-      if ($doFill) {
-        $rgb = $fills[$i];
-        $this->SetFillColor($rgb[0], $rgb[1], $rgb[2]);
-      }
-
-      $this->Cell($w, $h, $txt, 1, 0, $al, $doFill);
-    }
-
-    $this->Ln($h);
+    $this->MultiCell($w, $h, $txt, $border, $align);
   }
 }
 
-// ---------------- setup PDF with A3 ----------------
-$pdf = new DPRPDF('P', 'mm', 'A3');
+// ---------------- setup PDF with Portrait A4 ----------------
+$pdf = new DPRPDF('P', 'mm', 'A4');
 $pdf->InitFonts();
-$pdf->SetMargins(8, 8, 8);
+$pdf->SetMargins(5, 5, 5);
 $pdf->SetAutoPageBreak(false);
-$pdf->SetLineWidth(0.35);
-$pdf->gapAfterHeader = 8;
+$pdf->SetLineWidth(0.3);
+$pdf->gapAfterHeader = 5;
 $pdf->AliasNbPages('{nb}');
 
-// Prefer logo from DB if it resolves to a real file, else fallback candidates
+// Logo candidates
 $logoCandidates = [];
 
 if (!empty($companyLogoDb)) {
@@ -503,35 +466,42 @@ foreach ($logoCandidates as $p) {
 $pdf->SetMeta($data);
 $pdf->AddPage();
 
-// Geometry
-$X0 = 8;
-$W  = $pdf->GetPageWidth() - 16;
+// Geometry for Portrait A4 (210mm width)
+$X0 = 5;
+$W  = $pdf->GetPageWidth() - 10; // 200mm
 
-$wL  = 14;
-$wS  = 38;
-$h   = 7;
-$gap = 8;
+$wL  = 12;
+$wS  = 35;
+$h   = 6;
+$gap = 6;
 
 $avail = $W - ($wL + $wS);
 $xR = $X0 + $wL + $wS;
 
 // ========================= A. Schedule =========================
-$pdf->SetFont($pdf->ff,'B',11);
+$pdf->SetFont($pdf->ff,'B',10);
 
 $segH = $h*3;
 $pdf->EnsureSpace($segH + $gap);
 $yA = $pdf->GetY();
 
-draw_left_merged_fixed($pdf, $X0, $yA, $wL, $wS, 'A.', 'Schedule', $segH);
+// Draw left label for A
+$pdf->SetFillColor(220,220,220);
+$pdf->SetFont($pdf->ff, 'B', 11);
+$pdf->SetXY($X0, $yA);
+$pdf->Cell($wL, $segH, 'A.', 1, 0, 'C', true);
+$pdf->Cell($wS, $segH, 'Schedule', 1, 0, 'C', true);
 
 list($wDateBlock, $wDurBlock) = split_widths($avail, [0.62, 0.38]);
 list($wStart, $wEnd, $wProj) = split_widths($wDateBlock, [0.30, 0.34, 0.36]);
 list($wTotal, $wElap, $wBal) = split_widths($wDurBlock, [0.3333, 0.3333, 0.3334]);
 
 $pdf->SetXY($xR, $yA);
+$pdf->SetFont($pdf->ff, 'B', 10);
 $pdf->Cell($wDateBlock, $h, 'Date', 1, 0, 'C');
 $pdf->Cell($wDurBlock,  $h, 'Duration', 1, 1, 'C');
 
+$pdf->SetFont($pdf->ff, 'B', 9);
 $pdf->SetX($xR);
 $pdf->Cell($wStart, $h, 'Start', 1, 0, 'L');
 $pdf->Cell($wEnd,   $h, 'End', 1, 0, 'L');
@@ -540,7 +510,7 @@ $pdf->Cell($wTotal, $h, 'Total', 1, 0, 'L');
 $pdf->Cell($wElap,  $h, 'Elapsed', 1, 0, 'L');
 $pdf->Cell($wBal,   $h, 'Balance', 1, 1, 'L');
 
-$pdf->SetFont($pdf->ff,'',11);
+$pdf->SetFont($pdf->ff,'',9);
 $pdf->SetX($xR);
 $pdf->Cell($wStart, $h, $pdf->FitText($wStart, $data['schedule_start']), 1, 0, 'L');
 $pdf->Cell($wEnd,   $h, $pdf->FitText($wEnd,   $data['schedule_end']),   1, 0, 'L');
@@ -549,15 +519,20 @@ $pdf->Cell($wTotal, $h, $pdf->FitText($wTotal, $data['dur_total']),      1, 0, '
 $pdf->Cell($wElap,  $h, $pdf->FitText($wElap,  $data['dur_elapsed']),    1, 0, 'L');
 $pdf->Cell($wBal,   $h, $pdf->FitText($wBal,   $data['dur_balance']),    1, 1, 'L');
 
-end_section($pdf, $yA, $segH, $gap);
+$pdf->SetY($yA + $segH + $gap);
 
 // ========================= B. Site =========================
-$pdf->SetFont($pdf->ff,'B',11);
+$pdf->SetFont($pdf->ff,'B',10);
 $segH = $h*2;
 $pdf->EnsureSpace($segH + $gap);
 $yB = $pdf->GetY();
 
-draw_left_merged_fixed($pdf, $X0, $yB, $wL, $wS, 'B.', 'Site', $segH);
+// Draw left label for B
+$pdf->SetFillColor(220,220,220);
+$pdf->SetFont($pdf->ff, 'B', 11);
+$pdf->SetXY($X0, $yB);
+$pdf->Cell($wL, $segH, 'B.', 1, 0, 'C', true);
+$pdf->Cell($wS, $segH, 'Site', 1, 0, 'C', true);
 
 $half = $avail / 2;
 
@@ -567,10 +542,11 @@ $opt2 = 56.5;
 $opt3 = $avail - ($opt + $opt1 + $opt2);
 
 $pdf->SetXY($xR, $yB);
+$pdf->SetFont($pdf->ff, 'B', 10);
 $pdf->Cell($half, $h, 'Weather', 1, 0, 'C');
 $pdf->Cell($half, $h, 'Site Conditions', 1, 1, 'C');
 
-$pdf->SetFont($pdf->ff,'',11);
+$pdf->SetFont($pdf->ff,'',9);
 
 $wVal = strtolower(trim((string)$data['weather']));
 $sVal = strtolower(trim((string)$data['site_condition']));
@@ -580,25 +556,334 @@ $wRain = ($wVal === 'rainy');
 $cNorm = ($sVal === 'normal');
 $cSl   = ($sVal === 'slushy');
 
+// total available width
+$colWidth = $avail / 4;
+
 $pdf->SetX($xR);
 $pdf->SetFillColor(255,255,102);
-$pdf->Cell($opt,  $h, 'Normal', 1, 0, 'L', $wNorm);
-$pdf->Cell($opt1, $h, 'Rainy',  1, 0, 'L', $wRain);
-$pdf->Cell($opt2, $h, 'Normal', 1, 0, 'L', $cNorm);
-$pdf->Cell($opt3, $h, 'Slushy', 1, 1, 'L', $cSl);
 
-end_section($pdf, $yB, $segH, $gap);
+$pdf->Cell($colWidth, $h, 'Normal', 1, 0, 'C', $wNorm);
+$pdf->Cell($colWidth, $h, 'Rainy',  1, 0, 'C', $wRain);
+$pdf->Cell($colWidth, $h, 'Normal', 1, 0, 'C', $cNorm);
+$pdf->Cell($colWidth, $h, 'Slushy', 1, 1, 'C', $cSl);
 
-// ========================= (Your remaining sections C..H are unchanged) =========================
-// IMPORTANT: keep your existing code for C..H exactly as you already have.
-// For brevity, I’m not repeating your entire C..H blocks here because nothing changes in them.
-// If you want, paste your full file and I’ll return it fully expanded again.
+$pdf->SetY($yB + $segH + $gap);
 
+// ========================= C. Manpower =========================
+$pdf->SetFont($pdf->ff,'B',10);
+$rowCount = count($data['manpower']);
+$totalRows = $rowCount + 2; // +2 for header row and total row
+$segH = $h * $totalRows;
+$pdf->EnsureSpace($segH + $gap);
+$yC = $pdf->GetY();
 
-// ---------------- output (FILENAME FIXED + SITE NAME KEPT + NO %23) ----------------
-// Desired example: Mr.Anandhamayam_DPR_#01_Dated_24-02-2026.pdf
-// %23 appears when client URL-encodes '#'. We mitigate by sending filename* also.
+// Draw left label for C (spanning full height)
+$pdf->SetFillColor(220,220,220);
+$pdf->SetFont($pdf->ff, 'B', 11);
+$pdf->SetXY($X0, $yC);
+$pdf->Cell($wL, $segH, 'C.', 1, 0, 'C', true);
+$pdf->Cell($wS, $segH, 'Manpower', 1, 0, 'C', true);
 
+$widths = split_widths($avail, [0.25, 0.25, 0.10, 0.10, 0.30]);
+list($wAgency, $wCategory, $wUnit, $wQty, $wRemark) = $widths;
+
+$pdf->SetXY($xR, $yC);
+$pdf->SetFont($pdf->ff, 'B', 9);
+$pdf->Cell($wAgency,   $h, 'Agency', 1, 0, 'C');
+$pdf->Cell($wCategory, $h, 'Category', 1, 0, 'C');
+$pdf->Cell($wUnit,     $h, 'Unit', 1, 0, 'C');
+$pdf->Cell($wQty,      $h, 'Qty', 1, 0, 'C');
+$pdf->Cell($wRemark,   $h, 'Remark', 1, 1, 'C');
+
+$pdf->SetFont($pdf->ff, '', 9);
+if (empty($data['manpower'])) {
+  $pdf->SetX($xR);
+  $pdf->Cell($avail, $h, 'No manpower data available', 1, 1, 'L');
+} else {
+  foreach ($data['manpower'] as $row) {
+    $pdf->SetX($xR);
+    $pdf->Cell($wAgency,   $h, $pdf->FitText($wAgency,   $row['agency']),   1, 0, 'L');
+    $pdf->Cell($wCategory, $h, $pdf->FitText($wCategory, $row['category']), 1, 0, 'L');
+    $pdf->Cell($wUnit,     $h, $pdf->FitText($wUnit,     $row['unit']),     1, 0, 'C');
+    $pdf->Cell($wQty,      $h, $pdf->FitText($wQty,      $row['qty']),      1, 0, 'C');
+    $pdf->Cell($wRemark,   $h, $pdf->FitText($wRemark,   $row['remark']),   1, 1, 'L');
+  }
+  
+  // Total Manpower row
+  $pdf->SetFont($pdf->ff, 'B', 9);
+  $pdf->SetX($xR);
+  $pdf->Cell($wAgency + $wCategory, $h, 'Total Manpower', 1, 0, 'R');
+  $pdf->Cell($wUnit, $h, 'Nos', 1, 0, 'C');
+  $pdf->Cell($wQty, $h, $totalManpower, 1, 0, 'C');
+  $pdf->Cell($wRemark, $h, '', 1, 1, 'L');
+  $pdf->SetFont($pdf->ff, '', 9);
+}
+
+$pdf->SetY($yC + $segH + $gap);
+
+// ========================= D. Machinery =========================
+$pdf->SetFont($pdf->ff,'B',10);
+$rowCount = count($data['machinery']);
+$totalRows = $rowCount + 1; // +1 for header row
+$segH = $h * $totalRows;
+$pdf->EnsureSpace($segH + $gap);
+$yD = $pdf->GetY();
+
+// Draw left label for D (spanning full height)
+$pdf->SetFillColor(220,220,220);
+$pdf->SetFont($pdf->ff, 'B', 11);
+$pdf->SetXY($X0, $yD);
+$pdf->Cell($wL, $segH, 'D.', 1, 0, 'C', true);
+$pdf->Cell($wS, $segH, 'Machinery', 1, 0, 'C', true);
+
+$widths = split_widths($avail, [0.50, 0.15, 0.15, 0.20]);
+list($wEquipment, $wUnit, $wQty, $wRemark) = $widths;
+
+$pdf->SetXY($xR, $yD);
+$pdf->SetFont($pdf->ff, 'B', 9);
+$pdf->Cell($wEquipment, $h, 'Type of Equipment', 1, 0, 'C');
+$pdf->Cell($wUnit,      $h, 'Unit', 1, 0, 'C');
+$pdf->Cell($wQty,       $h, 'Qty', 1, 0, 'C');
+$pdf->Cell($wRemark,    $h, 'Remark', 1, 1, 'C');
+
+$pdf->SetFont($pdf->ff, '', 9);
+if (empty($data['machinery'])) {
+  $pdf->SetX($xR);
+  $pdf->Cell($avail, $h, 'No machinery data available', 1, 1, 'L');
+} else {
+  foreach ($data['machinery'] as $row) {
+    $pdf->SetX($xR);
+    $pdf->Cell($wEquipment, $h, $pdf->FitText($wEquipment, $row['equipment']), 1, 0, 'L');
+    $pdf->Cell($wUnit,      $h, $pdf->FitText($wUnit,      $row['unit']),      1, 0, 'C');
+    $pdf->Cell($wQty,       $h, $pdf->FitText($wQty,       $row['qty']),       1, 0, 'C');
+    $pdf->Cell($wRemark,    $h, $pdf->FitText($wRemark,    $row['remark']),    1, 1, 'L');
+  }
+}
+
+$pdf->SetY($yD + $segH + $gap);
+
+// ========================= E. Material =========================
+$pdf->SetFont($pdf->ff,'B',10);
+$rowCount = count($data['material']);
+$totalRows = $rowCount + 1; // +1 for header row
+$segH = $h * $totalRows;
+$pdf->EnsureSpace($segH + $gap);
+$yE = $pdf->GetY();
+
+// Draw left label for E (spanning full height)
+$pdf->SetFillColor(220,220,220);
+$pdf->SetFont($pdf->ff, 'B', 11);
+$pdf->SetXY($X0, $yE);
+$pdf->Cell($wL, $segH, 'E.', 1, 0, 'C', true);
+$pdf->Cell($wS, $segH, 'Material', 1, 0, 'C', true);
+
+$widths = split_widths($avail, [0.25, 0.35, 0.10, 0.10, 0.20]);
+list($wVendor, $wMaterial, $wUnit, $wQty, $wRemark) = $widths;
+
+$pdf->SetXY($xR, $yE);
+$pdf->SetFont($pdf->ff, 'B', 9);
+$pdf->Cell($wVendor,   $h, 'Vendor', 1, 0, 'C');
+$pdf->Cell($wMaterial, $h, 'Material', 1, 0, 'C');
+$pdf->Cell($wUnit,     $h, 'Unit', 1, 0, 'C');
+$pdf->Cell($wQty,      $h, 'Qty', 1, 0, 'C');
+$pdf->Cell($wRemark,   $h, 'Remark', 1, 1, 'C');
+
+$pdf->SetFont($pdf->ff, '', 9);
+if (empty($data['material'])) {
+  $pdf->SetX($xR);
+  $pdf->Cell($avail, $h, 'No material data available', 1, 1, 'L');
+} else {
+  foreach ($data['material'] as $row) {
+    $pdf->SetX($xR);
+    $pdf->Cell($wVendor,   $h, $pdf->FitText($wVendor,   $row['vendor']),   1, 0, 'L');
+    $pdf->Cell($wMaterial, $h, $pdf->FitText($wMaterial, $row['material']), 1, 0, 'L');
+    $pdf->Cell($wUnit,     $h, $pdf->FitText($wUnit,     $row['unit']),     1, 0, 'C');
+    $pdf->Cell($wQty,      $h, $pdf->FitText($wQty,      $row['qty']),      1, 0, 'C');
+    $pdf->Cell($wRemark,   $h, $pdf->FitText($wRemark,   $row['remark']),   1, 1, 'L');
+  }
+}
+
+$pdf->SetY($yE + $segH + $gap);
+
+// ========================= F. Work Progress =========================
+$pdf->SetFont($pdf->ff,'B',10);
+
+$yF = $pdf->GetY(); // start position
+
+// WIDTHS
+list($wTask, $wDuration, $wStart, $wEnd, $wIn, $wDelay, $wReasons)
+    = split_widths($avail, [0.28, 0.10, 0.12, 0.12, 0.08, 0.08, 0.22]);
+
+$pdf->SetXY($xR, $yF);
+$pdf->SetFont($pdf->ff, 'B', 9);
+
+// ================= HEADER ROW 1 =================
+$pdf->Cell($wTask, $h*2, 'Task', 1, 0, 'C');
+$pdf->Cell($wDuration + $wStart + $wEnd, $h, 'Weekly Schedule', 1, 0, 'C');
+$pdf->Cell($wIn + $wDelay, $h, 'Status', 1, 0, 'C');
+$pdf->Cell($wReasons, $h*2, 'Reasons', 1, 1, 'C');
+
+// ================= HEADER ROW 2 =================
+$pdf->SetX($xR + $wTask);
+$pdf->Cell($wDuration, $h, 'Duration', 1, 0, 'C');
+$pdf->Cell($wStart,    $h, 'Start', 1, 0, 'C');
+$pdf->Cell($wEnd,      $h, 'End', 1, 0, 'C');
+$pdf->Cell($wIn,       $h, 'In', 1, 0, 'C');
+$pdf->Cell($wDelay,    $h, 'Delay', 1, 1, 'C');
+
+// ================= DATA =================
+$pdf->SetFont($pdf->ff, '', 9);
+
+if (empty($data['workprog'])) {
+    $pdf->SetX($xR);
+    $pdf->Cell($avail, $h, 'No work progress data available', 1, 1, 'L');
+} else {
+    foreach ($data['workprog'] as $row) {
+
+        $pdf->SetX($xR);
+
+        $pdf->Cell($wTask, $h, $pdf->FitText($wTask, $row['task']), 1);
+        $pdf->Cell($wDuration, $h, $row['duration'], 1, 0, 'C');
+        $pdf->Cell($wStart, $h, $row['start'], 1, 0, 'C');
+        $pdf->Cell($wEnd, $h, $row['end'], 1, 0, 'C');
+
+        $status = strtolower(trim($row['status'] ?? ''));
+        $isDelay = in_array($status, ['delay','delayed']);
+
+        // IN
+        if (!$isDelay) {
+            $pdf->SetFillColor(200,255,200);
+            $pdf->Cell($wIn, $h, 'X', 1, 0, 'C', true);
+        } else {
+            $pdf->Cell($wIn, $h, '', 1);
+        }
+
+        // DELAY
+        if ($isDelay) {
+            $pdf->SetFillColor(255,200,200);
+            $pdf->Cell($wDelay, $h, 'X', 1, 0, 'C', true);
+        } else {
+            $pdf->Cell($wDelay, $h, '', 1);
+        }
+
+        $pdf->Cell($wReasons, $h, $pdf->FitText($wReasons, $row['reasons']), 1, 1);
+    }
+}
+
+// ================= GET ACTUAL HEIGHT =================
+$yEnd = $pdf->GetY();
+$actualHeight = $yEnd - $yF;
+
+// ================= DRAW LEFT LABEL AFTER =================
+$pdf->SetXY($X0, $yF);
+$pdf->SetFillColor(220,220,220);
+$pdf->SetFont($pdf->ff, 'B', 11);
+
+$pdf->Cell($wL, $actualHeight, 'F.', 1, 0, 'C', true);
+$pdf->Cell($wS, $actualHeight, 'Work Progress', 1, 0, 'C', true);
+
+// move cursor
+$pdf->SetY($yEnd + $gap);
+// ========================= G. Constraints =========================
+$pdf->SetFont($pdf->ff,'B',10);
+$rowCount = count($data['constraints']);
+$totalRows = $rowCount + 2; // +2 for header rows
+$segH = $h * $totalRows;
+$pdf->EnsureSpace($segH + $gap);
+$yG = $pdf->GetY();
+
+// Draw left label for G (spanning full height)
+$pdf->SetFillColor(220,220,220);
+$pdf->SetFont($pdf->ff, 'B', 11);
+$pdf->SetXY($X0, $yG);
+$pdf->Cell($wL, $segH, 'G.', 1, 0, 'C', true);
+$pdf->Cell($wS, $segH, 'Constraints', 1, 0, 'C', true);
+
+// Define column widths for Constraints in Portrait
+$wIssue = 70;
+$wStatusOpen = 18;
+$wStatusClosed = 18;
+$wDate = 30;
+$wRemark = $avail - ($wIssue + $wStatusOpen + $wStatusClosed + $wDate);
+
+$pdf->SetXY($xR, $yG);
+$pdf->SetFont($pdf->ff, 'B', 9);
+
+// First header row
+$pdf->Cell($wIssue, $h, 'Issues', 1, 0, 'C');
+$pdf->Cell($wStatusOpen + $wStatusClosed, $h, 'Status', 1, 0, 'C');
+$pdf->Cell($wDate, $h, 'Date', 1, 0, 'C');
+$pdf->Cell($wRemark, $h, 'Remark', 1, 1, 'C');
+
+// Second header row
+$pdf->SetX($xR + $wIssue);
+$pdf->Cell($wStatusOpen, $h, 'Open', 1, 0, 'C');
+$pdf->Cell($wStatusClosed, $h, 'Closed', 1, 0, 'C');
+$pdf->Cell($wDate, $h, '', 1, 0, 'C');
+$pdf->Cell($wRemark, $h, '', 1, 1, 'C');
+
+$pdf->SetFont($pdf->ff, '', 9);
+if (empty($data['constraints'])) {
+  $pdf->SetX($xR);
+  $pdf->Cell($avail, $h, 'No constraints or issues reported', 1, 1, 'L');
+} else {
+  foreach ($data['constraints'] as $row) {
+    $pdf->SetX($xR);
+    $pdf->Cell($wIssue,  $h, $pdf->FitText($wIssue,  $row['issue']),  1, 0, 'L');
+    
+    $status = strtolower($row['status']);
+    $isOpen = ($status === 'open');
+    $isClosed = ($status === 'closed');
+    
+    // Open column - using 'V' for check (ASCII compatible)
+    if ($isOpen) {
+      $pdf->SetFillColor(255, 200, 200);
+      $pdf->Cell($wStatusOpen, $h, 'X', 1, 0, 'C', true);
+    } else {
+      $pdf->Cell($wStatusOpen, $h, '', 1, 0, 'C', false);
+    }
+    
+    // Closed column - using 'V' for check (ASCII compatible)
+    if ($isClosed) {
+      $pdf->SetFillColor(200, 255, 200);
+      $pdf->Cell($wStatusClosed, $h, 'X', 1, 0, 'C', true);
+    } else {
+      $pdf->Cell($wStatusClosed, $h, '', 1, 0, 'C', false);
+    }
+    
+    $pdf->Cell($wDate,   $h, $pdf->FitText($wDate,   $row['date']),   1, 0, 'C');
+    $pdf->Cell($wRemark, $h, $pdf->FitText($wRemark, $row['remark']), 1, 1, 'L');
+  }
+}
+
+$pdf->SetY($yG + $segH + $gap);
+
+// ========================= H. Signatures =========================
+$pdf->SetFont($pdf->ff,'B',10);
+$segH = $h * 3;
+$pdf->EnsureSpace($segH + $gap);
+$yH = $pdf->GetY();
+
+// Draw left label for H (spanning full height)
+$pdf->SetFillColor(220,220,220);
+$pdf->SetFont($pdf->ff, 'B', 11);
+$pdf->SetXY($X0, $yH);
+$pdf->Cell($wL, $segH, 'H.', 1, 0, 'C', true);
+$pdf->Cell($wS, $segH, 'Signatures', 1, 0, 'C', true);
+
+$pdf->SetXY($xR, $yH);
+$pdf->SetFont($pdf->ff, 'B', 9);
+$pdf->Cell($avail/2, $h, 'Report Distribute To', 1, 0, 'C');
+$pdf->Cell($avail/2, $h, 'Prepared By', 1, 1, 'C');
+
+$pdf->SetFont($pdf->ff, '', 9);
+$pdf->SetX($xR);
+$pdf->Cell($avail/2, $h*2, $pdf->FitText($avail/2, $data['report_to_raw']), 1, 0, 'L');
+$pdf->Cell($avail/2, $h*2, $pdf->FitText($avail/2, $data['prepared_by'] . "\n(" . $data['designation'] . ")"), 1, 1, 'L');
+
+$pdf->SetY($yH + $segH + $gap);
+
+// ---------------- output ----------------
 $sitePart = safe_filename_site($data['project_name'] ?? '');
 $dprPart  = safe_filename_keep_hash($data['dpr_no'] ?? '');
 $datePart = safe_filename_site($data['dpr_date'] ?? '');
@@ -607,7 +892,7 @@ if ($sitePart === '') $sitePart = 'SITE';
 if ($dprPart === '')  $dprPart  = 'ID_' . $viewId;
 if ($datePart === '') $datePart = date('d-m-Y');
 
-$filename = 'Mr.' . $sitePart . '_DPR_' . $dprPart . '_Dated_' . $datePart . '.pdf';
+$filename = $sitePart . '_DPR_' . $dprPart . '_Dated_' . $datePart . '.pdf';
 
 if ($MODE_STRING) {
   $pdfBytes = $pdf->Output('S');

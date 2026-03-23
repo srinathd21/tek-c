@@ -22,6 +22,11 @@
 <span class="label">Attendance</span>
 </a>
 
+<a class="side-link" href="emp-regulation.php">
+<i class="bi bi-calendar-check"></i>
+<span class="label">Emp Regulations</span>
+</a>
+
 <!-- My Project -->
 <a class="side-link" href="my-sites.php">
       <i class="bi bi-kanban"></i><span class="label">Projects</span>

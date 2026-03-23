@@ -1,11 +1,7 @@
 <?php
 // apply-leave.php
-// ✅ Updated:
-//   - Mobile cards for "Recent Leave Requests" (table shown only on md+)
-//   - Better status pills (Pending/Approved/Rejected)
-//   - Config flags: exclude Sundays + block past dates
-//   - Cleaner JS: range select inside current month, auto from/to, half-day per selected date
-//   - TEK-C responsive styling
+// Enhanced version with better UI, validation, and calendar functionality
+// ✅ Updated to match my-leave-history.php design system
 
 session_start();
 require_once 'includes/db-config.php';
@@ -28,6 +24,7 @@ $employeeName  = (string)($_SESSION['employee_name'] ?? '');
 // ---------------- CONFIG ----------------
 $EXCLUDE_SUNDAYS = true;   // set false if Sundays allowed
 $BLOCK_PAST_DAYS = true;   // set false if past dates allowed
+$MAX_LEAVE_DAYS = 30;      // maximum consecutive leave days
 
 // ---------------- HELPERS ----------------
 function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
@@ -60,6 +57,11 @@ function isSunday(string $ymd): bool {
   return $ts ? (date('w', $ts) == '0') : false;
 }
 
+function isHoliday(string $ymd): bool {
+  // You can add holiday checking logic here
+  return false;
+}
+
 function safeDate($v, $dash='—'){
   $v = trim((string)$v);
   if ($v === '' || $v === '0000-00-00') return $dash;
@@ -84,7 +86,7 @@ function statusMeta($status){
 
 // ---------------- EMPLOYEE INFO ----------------
 $empRow = null;
-$st = mysqli_prepare($conn, "SELECT id, full_name, email, designation FROM employees WHERE id=? LIMIT 1");
+$st = mysqli_prepare($conn, "SELECT id, full_name, email, designation, department FROM employees WHERE id=? LIMIT 1");
 if ($st) {
   mysqli_stmt_bind_param($st, "i", $employeeId);
   mysqli_stmt_execute($st);
@@ -93,6 +95,27 @@ if ($st) {
   mysqli_stmt_close($st);
 }
 $preparedBy = $empRow['full_name'] ?? $employeeName;
+$department = $empRow['department'] ?? '';
+
+// ---------------- GET LEAVE BALANCE ----------------
+$leaveBalance = ['CL' => 12, 'SL' => 12, 'EL' => 15, 'LOP' => 0, 'OD' => 0, 'WFH' => 5];
+$st = mysqli_prepare($conn, "SELECT leave_type, SUM(total_days) as used 
+                               FROM leave_requests 
+                               WHERE employee_id = ? AND status = 'Approved' 
+                               AND YEAR(created_at) = YEAR(CURDATE())
+                               GROUP BY leave_type");
+if ($st) {
+  mysqli_stmt_bind_param($st, "i", $employeeId);
+  mysqli_stmt_execute($st);
+  $res = mysqli_stmt_get_result($st);
+  while ($row = mysqli_fetch_assoc($res)) {
+    $type = $row['leave_type'];
+    if (isset($leaveBalance[$type])) {
+      $leaveBalance[$type] = max(0, $leaveBalance[$type] - (float)$row['used']);
+    }
+  }
+  mysqli_stmt_close($st);
+}
 
 // ---------------- STATE ----------------
 $success = '';
@@ -105,7 +128,7 @@ $handoverTo = '';
 $fromDate = '';
 $toDate = '';
 $selectedDates = [];
-$halfDayMap = []; // ['YYYY-MM-DD' => 'FH'|'SH']
+$halfDayMap = [];
 
 // Calendar month view
 $today = new DateTime();
@@ -163,10 +186,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_leave'])) {
     $error = "Please select at least one leave date on the calendar.";
   }
 
+  // Check leave balance
+  if ($error === '') {
+    $totalRequested = 0;
+    foreach ($selectedDates as $d) {
+      $totalRequested += isset($halfDayMap[$d]) ? 0.5 : 1.0;
+    }
+    
+    if ($leaveType !== 'LOP' && $leaveType !== 'OD' && $leaveType !== 'WFH') {
+      $available = $leaveBalance[$leaveType] ?? 0;
+      if ($totalRequested > $available) {
+        $error = "Insufficient leave balance. Available: {$available} days, Requested: {$totalRequested} days";
+      }
+    }
+  }
+
   // Derive from/to from selected dates
   if ($error === '') {
     $fromDate = $selectedDates[0];
     $toDate   = $selectedDates[count($selectedDates)-1];
+    
+    // Check maximum consecutive days
+    $consecutiveDays = count($selectedDates);
+    if ($consecutiveDays > $MAX_LEAVE_DAYS) {
+      $error = "Maximum {$MAX_LEAVE_DAYS} consecutive leave days allowed.";
+    }
   }
 
   // Exclude Sundays (if enabled)
@@ -189,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_leave'])) {
   // Prevent overlap with pending/approved
   if ($error === '') {
     $st = mysqli_prepare($conn, "
-      SELECT id
+      SELECT id, from_date, to_date, status
       FROM leave_requests
       WHERE employee_id = ?
         AND status IN ('Pending','Approved')
@@ -203,7 +247,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_leave'])) {
       $dup = mysqli_fetch_assoc($res);
       mysqli_stmt_close($st);
       if ($dup) {
-        $error = "You already have a pending/approved leave overlapping the selected date(s).";
+        $error = "You already have a {$dup['status']} leave request from {$dup['from_date']} to {$dup['to_date']} that overlaps with the selected date(s).";
       }
     }
   }
@@ -223,7 +267,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_leave'])) {
     foreach ($selectedDates as $d) {
       $payload[] = [
         'date' => $d,
-        'half_day' => $halfDayMap[$d] ?? null, // FH/SH/null
+        'half_day' => $halfDayMap[$d] ?? null,
+        'day_name' => date('l', strtotime($d))
       ];
     }
     $selectedDatesJson = json_encode($payload, JSON_UNESCAPED_UNICODE);
@@ -269,17 +314,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_leave'])) {
 }
 
 if (isset($_GET['saved']) && $_GET['saved'] === '1') {
-  $success = "Leave applied successfully. Waiting for approval.";
+  $success = "✓ Leave applied successfully. Waiting for approval.";
 }
 
 // ---------------- RECENT LEAVE REQUESTS ----------------
 $recentLeaves = [];
 $st = mysqli_prepare($conn, "
-  SELECT id, leave_type, from_date, to_date, total_days, status, applied_at, reason
+  SELECT id, leave_type, from_date, to_date, total_days, status, applied_at, reason, created_at
   FROM leave_requests
   WHERE employee_id = ?
   ORDER BY id DESC
-  LIMIT 8
+  LIMIT 5
 ");
 if ($st) {
   mysqli_stmt_bind_param($st, "i", $employeeId);
@@ -292,7 +337,7 @@ if ($st) {
 // ---------------- CALENDAR PREP ----------------
 $firstDay = DateTime::createFromFormat('Y-n-j', $viewYear . '-' . $viewMonth . '-1');
 $daysInMonth = (int)$firstDay->format('t');
-$startWeekday = (int)$firstDay->format('w'); // 0 Sun - 6 Sat
+$startWeekday = (int)$firstDay->format('w');
 
 $prev = clone $firstDay; $prev->modify('-1 month');
 $next = clone $firstDay; $next->modify('+1 month');
@@ -314,200 +359,210 @@ $todayYmd = date('Y-m-d');
   <link href="assets/css/footer.css" rel="stylesheet" />
 
   <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px 12px 14px; }
+    .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px 12px 14px; background: #f9fafb; }
     .panel{
       background:#fff;
       border:1px solid #e5e7eb;
       border-radius:16px;
       box-shadow:0 10px 30px rgba(17,24,39,.05);
-      padding:12px;
-      margin-bottom:12px;
+      padding:20px;
+      margin-bottom:20px;
     }
 
-    .title-row{ display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-    .h-title{ margin:0; font-weight:1000; color:#111827; line-height:1.1; }
+    .title-row{ display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+    .h-title{ margin:0; font-weight:1000; color:#111827; line-height:1.1; font-size:28px; }
     .h-sub{ margin:4px 0 0; color:#6b7280; font-weight:800; font-size:13px; }
-
-    .badge-pill{
-      display:inline-flex; align-items:center; gap:8px;
-      padding:6px 10px; border-radius:999px;
-      border:1px solid #e5e7eb; background:#fff;
-      font-weight:900; font-size:12px;
-    }
 
     .sec-head{
       display:flex; align-items:center; gap:10px;
-      padding:10px 12px;
+      padding:12px 16px;
       border-radius:14px;
       background:#f9fafb;
       border:1px solid #eef2f7;
-      margin-bottom:10px;
+      margin-bottom:20px;
     }
     .sec-ic{
-      width:34px; height:34px; border-radius:12px;
+      width:38px; height:38px; border-radius:12px;
       display:grid; place-items:center;
       background: rgba(45,156,219,.12);
       color: var(--blue, #2d9cdb);
       flex:0 0 auto;
     }
-    .sec-title{ margin:0; font-weight:1000; color:#111827; font-size:14px; }
+    .sec-title{ margin:0; font-weight:1000; color:#111827; font-size:15px; }
     .sec-sub{ margin:2px 0 0; color:#6b7280; font-weight:800; font-size:12px; }
 
-    .form-label{ font-weight:900; color:#374151; font-size:13px; }
-    .form-control, .form-select{
-      border:2px solid #e5e7eb;
-      border-radius:12px;
-      padding:10px 12px;
-      font-weight:750;
-      font-size:14px;
-    }
-
-    .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    .grid-3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
-    @media (max-width: 992px){
-      .grid-2, .grid-3{ grid-template-columns:1fr; }
-    }
-
-    .btn-primary-tek{
-      background: var(--blue, #2d9cdb);
-      border:none;
-      border-radius:12px;
-      padding:10px 16px;
-      font-weight:1000;
-      display:inline-flex; align-items:center; gap:8px;
-      box-shadow:0 12px 26px rgba(45,156,219,.18);
-      color:#fff;
-    }
-    .btn-primary-tek:hover{ background:#2a8bc9; color:#fff; }
-
-    /* -------- Calendar -------- */
-    .cal-wrap{
+    /* Stats cards matching history page */
+    .stat-card{
+      background:#fff;
       border:1px solid #e5e7eb;
+      border-radius:16px;
+      box-shadow:0 10px 30px rgba(17,24,39,.05);
+      padding:14px 16px;
+      height:90px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      transition: all 0.2s;
+    }
+    .stat-card:hover{
+      transform: translateY(-2px);
+      box-shadow:0 15px 35px rgba(17,24,39,.1);
+    }
+    .stat-ic{
+      width:48px; height:48px;
       border-radius:14px;
-      overflow:hidden;
-      background:#fff;
+      display:grid; place-items:center;
+      color:#fff; font-size:20px;
+      flex:0 0 auto;
     }
-    .cal-head{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:8px;
-      padding:10px 12px;
-      border-bottom:1px solid #eef2f7;
-      background:#fbfcfe;
+    .stat-ic.blue{ background: #2d9cdb; }
+    .stat-ic.green{ background: #10b981; }
+    .stat-ic.yellow{ background: #f59e0b; }
+    .stat-ic.red{ background: #ef4444; }
+    .stat-ic.gray{ background: #64748b; }
+    .stat-label{ color:#4b5563; font-weight:850; font-size:12px; letter-spacing:0.3px; }
+    .stat-value{ font-size:24px; font-weight:1000; line-height:1; margin-top:4px; }
+
+    /* Form Elements */
+    .form-label {
+      font-weight: 800;
+      color: #4b5563;
+      font-size: 12px;
+      margin-bottom: 6px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
     }
-    .cal-title{
-      font-weight:1000;
-      color:#111827;
-      margin:0;
+    .form-control, .form-select {
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      transition: all 0.2s;
     }
-    .cal-grid{
-      display:grid;
+    .form-control:focus, .form-select:focus {
+      border-color: #2d9cdb;
+      box-shadow: 0 0 0 3px rgba(45,156,219,0.1);
+    }
+
+    /* Calendar */
+    .calendar-container {
+      background: #fff;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+    }
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .calendar-title {
+      font-weight: 1000;
+      font-size: 15px;
+      color: #111827;
+      margin: 0;
+    }
+    .calendar-nav-btn {
+      background: #fff;
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 800;
+      transition: all 0.2s;
+    }
+    .calendar-nav-btn:hover {
+      background: #2d9cdb;
+      color: #fff;
+      border-color: #2d9cdb;
+    }
+    .calendar-grid {
+      display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap:0;
-      border-top:1px solid #eef2f7;
-      border-left:1px solid #eef2f7;
     }
-    .cal-dow, .cal-cell{
-      border-right:1px solid #eef2f7;
-      border-bottom:1px solid #eef2f7;
-      min-height:64px;
-      position:relative;
-      background:#fff;
+    .calendar-weekday {
+      background: #f9fafb;
+      padding: 12px 8px;
+      text-align: center;
+      font-weight: 900;
+      font-size: 11px;
+      color: #6b7280;
+      border-bottom: 1px solid #e5e7eb;
     }
-    .cal-dow{
-      min-height:38px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:12px;
-      font-weight:900;
-      color:#6b7280;
-      background:#f9fafb;
+    .calendar-day {
+      min-height: 80px;
+      border-right: 1px solid #e5e7eb;
+      border-bottom: 1px solid #e5e7eb;
+      position: relative;
+      transition: all 0.2s;
+      cursor: pointer;
     }
-    .cal-cell.empty{ background:#fafafa; }
-    .cal-cell button{
-      width:100%;
-      height:100%;
-      border:none;
-      background:transparent;
-      text-align:left;
-      padding:8px;
-      cursor:pointer;
+    .calendar-day:hover {
+      background: #f9fafb;
     }
-    .cal-day-num{
-      font-weight:900;
-      color:#111827;
-      font-size:13px;
+    .calendar-day.disabled {
+      background: #fafafc;
+      opacity: 0.6;
+      cursor: not-allowed;
     }
-    .cal-cell.today .cal-day-num{ color: var(--blue, #2d9cdb); }
+    .calendar-day.disabled .day-number {
+      color: #cbd5e1;
+    }
+    .calendar-day.selected {
+      background: rgba(45,156,219,0.08);
+    }
+    .calendar-day.range-start,
+    .calendar-day.range-end {
+      background: rgba(45,156,219,0.15);
+      position: relative;
+    }
+    .calendar-day.range-start::before,
+    .calendar-day.range-end::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: #2d9cdb;
+    }
+    .calendar-day.range-start::before {
+      left: 0;
+    }
+    .calendar-day.range-end::before {
+      right: 0;
+    }
+    .day-number {
+      display: inline-block;
+      padding: 6px 10px;
+      font-weight: 800;
+      font-size: 13px;
+      color: #111827;
+    }
+    .calendar-day.today .day-number {
+      background: #2d9cdb;
+      color: #fff;
+      border-radius: 8px;
+    }
+    .calendar-day.sunday .day-number {
+      color: #ef4444;
+    }
+    .day-badge {
+      position: absolute;
+      bottom: 6px;
+      right: 6px;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 12px;
+      background: #f0f2f5;
+      color: #6b7280;
+      font-weight: 800;
+    }
 
-    .cal-cell.sunday{ background:#fff8f8; }
-    .cal-cell.past{ background:#f8fafc; }
-    .cal-cell.disabled button{ cursor:not-allowed; opacity:.55; }
-
-    .cal-cell.selected{ background: rgba(45,156,219,.09); }
-    .cal-cell.range-start,
-    .cal-cell.range-end{
-      background: rgba(45,156,219,.18);
-      box-shadow: inset 0 0 0 2px rgba(45,156,219,.55);
-    }
-
-    .cal-pill{
-      position:absolute;
-      right:6px; bottom:6px;
-      font-size:10px;
-      font-weight:900;
-      padding:2px 6px;
-      border-radius:999px;
-      background:#eaf6ff;
-      color:#1d6fa5;
-    }
-
-    .legend{
-      display:flex; flex-wrap:wrap; gap:8px;
-      margin-top:10px;
-      font-size:12px;
-      font-weight:800;
-      color:#4b5563;
-    }
-    .legend .item{
-      display:flex; align-items:center; gap:6px;
-      border:1px solid #e5e7eb;
-      border-radius:999px;
-      padding:4px 8px;
-      background:#fff;
-    }
-    .swatch{
-      width:14px; height:14px; border-radius:4px; border:1px solid #d1d5db;
-      display:inline-block;
-    }
-    .swatch.sel{ background: rgba(45,156,219,.09); }
-    .swatch.edge{ background: rgba(45,156,219,.18); border-color: rgba(45,156,219,.55);}
-    .swatch.sun{ background:#fff8f8; }
-    .swatch.past{ background:#f8fafc; }
-
-    .selected-list{
-      border:1px solid #e5e7eb;
-      border-radius:12px;
-      padding:10px;
-      background:#fff;
-      max-height:250px;
-      overflow:auto;
-    }
-    .selected-item{
-      display:grid;
-      grid-template-columns: 1fr 130px;
-      gap:8px;
-      align-items:center;
-      padding:6px 0;
-      border-bottom:1px dashed #eef2f7;
-    }
-    .selected-item:last-child{ border-bottom:none; }
-
-    .small-muted{ color:#6b7280; font-weight:800; font-size:12px; }
-
-    /* Status pill */
+    /* Status Badge matching history page */
     .status-badge{
       padding: 4px 10px;
       border-radius: 999px;
@@ -526,44 +581,106 @@ $todayYmd = date('Y-m-d');
     .status-red{ background: rgba(239,68,68,.12); color:#ef4444; border-color: rgba(239,68,68,.22); }
     .status-gray{ background: rgba(100,116,139,.12); color:#64748b; border-color: rgba(100,116,139,.22); }
 
-    /* Recent leaves: mobile cards */
-    .leave-card{
-      border:1px solid #e5e7eb;
-      border-radius:16px;
-      background:#fff;
-      box-shadow:0 10px 30px rgba(17,24,39,.05);
-      padding:12px;
+    /* Selected Dates List */
+    .selected-dates-list {
+      max-height: 350px;
+      overflow-y: auto;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      background: #fff;
     }
-    .leave-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
-    .leave-title{ font-weight:1000; color:#111827; font-size:14px; line-height:1.2; margin:0; }
-    .leave-sub{ margin-top:6px; color:#6b7280; font-weight:800; font-size:12px; line-height:1.2; }
-    .leave-kv{ margin-top:10px; display:grid; gap:8px; }
-    .leave-row{ display:flex; gap:10px; align-items:flex-start; }
-    .leave-key{ flex:0 0 88px; color:#6b7280; font-weight:1000; font-size:12px; }
-    .leave-val{ flex:1 1 auto; font-weight:900; color:#111827; font-size:13px; line-height:1.25; }
-
-    /* Recent table */
-    .table thead th{
-      font-size: 11px; color:#6b7280; font-weight:900;
-      border-bottom:1px solid #e5e7eb!important;
-      white-space: nowrap;
-      background:#f9fafb;
+    .selected-date-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e5e7eb;
+      transition: all 0.2s;
     }
-    .table td{ font-weight:800; color:#111827; vertical-align: top; word-break: break-word; }
-
-    @media (max-width: 576px){
-      .content-scroll{ padding:12px 8px 14px; }
-      .panel{ padding:10px; border-radius:14px; }
-      .cal-cell, .cal-cell button{ min-height:52px; }
-      .cal-cell button{ padding:6px; }
-      .cal-day-num{ font-size:12px; }
-      .selected-item{ grid-template-columns:1fr; }
+    .selected-date-item:last-child {
+      border-bottom: none;
+    }
+    .selected-date-item:hover {
+      background: #f9fafb;
+    }
+    .date-info {
+      flex: 1;
+    }
+    .date {
+      font-weight: 1000;
+      color: #111827;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+    .day-name {
+      font-size: 11px;
+      color: #6b7280;
+      font-weight: 800;
+    }
+    .half-day-select {
+      width: 130px;
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 800;
     }
 
-    @media (max-width: 991.98px){
-      .main{ margin-left:0 !important; width:100% !important; max-width:100% !important; }
-      .sidebar{ position:fixed !important; transform:translateX(-100%); z-index:1040 !important; }
-      .sidebar.open, .sidebar.active, .sidebar.show{ transform:translateX(0) !important; }
+    /* Buttons matching history page */
+    .btn-primary-custom {
+      background: #2d9cdb;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 24px;
+      font-weight: 900;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+      color: #fff;
+    }
+    .btn-primary-custom:hover {
+      background: #2a8bc9;
+      transform: translateY(-2px);
+    }
+    .btn-outline-secondary-custom {
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 8px 16px;
+      font-weight: 800;
+      font-size: 12px;
+      transition: all 0.2s;
+      background: #fff;
+    }
+    .btn-outline-secondary-custom:hover {
+      background: #f9fafb;
+      border-color: #2d9cdb;
+    }
+
+    /* Badge pill */
+    .badge-pill {
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #4b5563;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .content-scroll { padding: 12px 10px !important; }
+      .panel { padding: 16px !important; }
+      .calendar-day { min-height: 60px; }
+      .day-number { font-size: 11px; padding: 4px 8px; }
+      .selected-date-item { flex-direction: column; gap: 8px; }
+      .half-day-select { width: 100%; }
+      .stat-card { height: auto; padding: 12px; }
     }
   </style>
 </head>
@@ -577,292 +694,267 @@ $todayYmd = date('Y-m-d');
     <div id="contentScroll" class="content-scroll">
       <div class="container-fluid maxw">
 
-        <div class="title-row mb-3">
+        <!-- Page Header matching history page -->
+        <div class="title-row">
           <div>
             <h1 class="h-title">Apply Leave</h1>
-            <p class="h-sub">Select dates from calendar and submit leave request</p>
+            <p class="h-sub">Submit a new leave request</p>
           </div>
           <div class="d-flex gap-2 flex-wrap">
-            <span class="badge-pill"><i class="bi bi-person"></i> <?php echo e($preparedBy); ?></span>
-            <span class="badge-pill"><i class="bi bi-award"></i> <?php echo e($empRow['designation'] ?? ($_SESSION['designation'] ?? '')); ?></span>
+            <span class="badge-pill"><i class="bi bi-person"></i> <?php echo e($employeeName); ?></span>
+            <a href="my-leave-history.php" class="badge-pill text-decoration-none" style="background: #f3f4f6;">
+              <i class="bi bi-clock-history"></i> View History
+            </a>
           </div>
         </div>
 
+        <!-- Alerts -->
         <?php if ($error): ?>
-          <div class="alert alert-danger alert-dismissible fade show" role="alert" style="border-radius:14px;">
+          <div class="alert alert-danger border-0 rounded-3 shadow-sm mb-4" role="alert">
             <i class="bi bi-exclamation-triangle-fill me-2"></i><?php echo e($error); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
           </div>
         <?php endif; ?>
 
         <?php if ($success): ?>
-          <div class="alert alert-success alert-dismissible fade show" role="alert" style="border-radius:14px;">
+          <div class="alert alert-success border-0 rounded-3 shadow-sm mb-4" role="alert">
             <i class="bi bi-check-circle-fill me-2"></i><?php echo e($success); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
           </div>
         <?php endif; ?>
 
-        <form method="POST" id="leaveForm" autocomplete="off">
-          <input type="hidden" name="submit_leave" value="1">
-          <input type="hidden" name="selected_dates" id="selected_dates_input" value="<?php echo e(json_encode($selectedDates)); ?>">
-          <input type="hidden" name="half_day_map" id="half_day_map_input" value="<?php echo e(json_encode($halfDayMap)); ?>">
-          <input type="hidden" name="from_date" id="from_date_input" value="<?php echo e($fromDate); ?>">
-          <input type="hidden" name="to_date" id="to_date_input" value="<?php echo e($toDate); ?>">
-
-          <!-- Leave Details -->
-          <div class="panel">
-            <div class="sec-head">
-              <div class="sec-ic"><i class="bi bi-calendar-plus"></i></div>
+        <!-- Stats Cards matching history page style -->
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="stat-card">
+              <div class="stat-ic blue"><i class="bi bi-calendar-check"></i></div>
               <div>
-                <p class="sec-title mb-0">Leave Details</p>
-                <p class="sec-sub mb-0">Choose leave type and reason</p>
+                <div class="stat-label">Available CL</div>
+                <div class="stat-value"><?php echo e($leaveBalance['CL']); ?></div>
               </div>
-            </div>
-
-            <div class="grid-3">
-              <div>
-                <label class="form-label">Leave Type <span class="text-danger">*</span></label>
-                <select class="form-select" name="leave_type" required>
-                  <option value="CL"  <?php echo ($leaveType==='CL'?'selected':''); ?>>CL (Casual Leave)</option>
-                  <option value="SL"  <?php echo ($leaveType==='SL'?'selected':''); ?>>SL (Sick Leave)</option>
-                  <option value="EL"  <?php echo ($leaveType==='EL'?'selected':''); ?>>EL (Earned Leave)</option>
-                  <option value="LOP" <?php echo ($leaveType==='LOP'?'selected':''); ?>>LOP (Loss of Pay)</option>
-                  <option value="OD"  <?php echo ($leaveType==='OD'?'selected':''); ?>>OD (On Duty)</option>
-                  <option value="WFH" <?php echo ($leaveType==='WFH'?'selected':''); ?>>WFH</option>
-                </select>
-              </div>
-              <div>
-                <label class="form-label">Selected From</label>
-                <input class="form-control" id="from_date_view" readonly value="<?php echo e($fromDate); ?>">
-              </div>
-              <div>
-                <label class="form-label">Selected To</label>
-                <input class="form-control" id="to_date_view" readonly value="<?php echo e($toDate); ?>">
-              </div>
-            </div>
-
-            <div class="grid-2 mt-2">
-              <div>
-                <label class="form-label">Contact During Leave</label>
-                <input class="form-control" name="contact_during_leave" value="<?php echo e($contactDuringLeave); ?>" placeholder="Mobile number / alternate contact">
-              </div>
-              <div>
-                <label class="form-label">Handover To</label>
-                <input class="form-control" name="handover_to" value="<?php echo e($handoverTo); ?>" placeholder="Employee name / team member">
-              </div>
-            </div>
-
-            <div class="mt-2">
-              <label class="form-label">Reason <span class="text-danger">*</span></label>
-              <textarea class="form-control" name="reason" rows="3" required placeholder="Enter reason for leave"><?php echo e($reason); ?></textarea>
             </div>
           </div>
-
-          <!-- Calendar -->
-          <div class="panel">
-            <div class="sec-head">
-              <div class="sec-ic"><i class="bi bi-calendar3"></i></div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="stat-card">
+              <div class="stat-ic green"><i class="bi bi-heart-pulse"></i></div>
               <div>
-                <p class="sec-title mb-0">Calendar View</p>
-                <p class="sec-sub mb-0">
-                  Click start date and end date to select range
-                  <?php if ($EXCLUDE_SUNDAYS): ?> (Sundays disabled)<?php endif; ?>
-                  <?php if ($BLOCK_PAST_DAYS): ?> • (Past disabled)<?php endif; ?>
-                </p>
+                <div class="stat-label">Available SL</div>
+                <div class="stat-value"><?php echo e($leaveBalance['SL']); ?></div>
               </div>
-            </div>
-
-            <div class="cal-wrap">
-              <div class="cal-head">
-                <a class="btn btn-sm btn-outline-secondary" style="border-radius:10px;font-weight:900;"
-                   href="?m=<?php echo (int)$prev->format('n'); ?>&y=<?php echo (int)$prev->format('Y'); ?>">
-                  <i class="bi bi-chevron-left"></i>
-                </a>
-
-                <p class="cal-title mb-0"><?php echo e($firstDay->format('F Y')); ?></p>
-
-                <a class="btn btn-sm btn-outline-secondary" style="border-radius:10px;font-weight:900;"
-                   href="?m=<?php echo (int)$next->format('n'); ?>&y=<?php echo (int)$next->format('Y'); ?>">
-                  <i class="bi bi-chevron-right"></i>
-                </a>
-              </div>
-
-              <div class="cal-grid" id="calendarGrid">
-                <?php
-                  $dows = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-                  foreach ($dows as $dw) echo '<div class="cal-dow">'.e($dw).'</div>';
-
-                  for ($i=0; $i<$startWeekday; $i++) echo '<div class="cal-cell empty"></div>';
-
-                  for ($day=1; $day <= $daysInMonth; $day++) {
-                    $d = DateTime::createFromFormat('Y-n-j', $viewYear.'-'.$viewMonth.'-'.$day);
-                    $ymdDay = $d->format('Y-m-d');
-                    $weekday = (int)$d->format('w');
-
-                    $isSun = ($weekday === 0);
-                    $isPast = ($BLOCK_PAST_DAYS && $ymdDay < $todayYmd);
-
-                    $disabled = ($isPast || ($EXCLUDE_SUNDAYS && $isSun));
-
-                    $classes = ['cal-cell'];
-                    if ($ymdDay === $todayYmd) $classes[] = 'today';
-                    if ($isSun) $classes[] = 'sunday';
-                    if ($isPast) $classes[] = 'past';
-                    if ($disabled) $classes[] = 'disabled';
-
-                    echo '<div class="'.e(implode(' ', $classes)).'" data-date="'.e($ymdDay).'" data-disabled="'.($disabled?'1':'0').'">';
-                    echo '  <button type="button" class="cal-btn" '.($disabled?'disabled':'').' data-date="'.e($ymdDay).'">';
-                    echo '    <div class="cal-day-num">'.(int)$day.'</div>';
-                    if ($isSun && $EXCLUDE_SUNDAYS) echo '    <span class="cal-pill">Sun</span>';
-                    elseif ($isPast) echo '    <span class="cal-pill">Past</span>';
-                    echo '  </button>';
-                    echo '</div>';
-                  }
-
-                  $totalCells = $startWeekday + $daysInMonth;
-                  $remaining = (7 - ($totalCells % 7)) % 7;
-                  for ($i=0; $i<$remaining; $i++) echo '<div class="cal-cell empty"></div>';
-                ?>
-              </div>
-            </div>
-
-            <div class="legend">
-              <div class="item"><span class="swatch sel"></span> Selected range</div>
-              <div class="item"><span class="swatch edge"></span> Start / End</div>
-              <?php if ($EXCLUDE_SUNDAYS): ?><div class="item"><span class="swatch sun"></span> Sunday (disabled)</div><?php endif; ?>
-              <?php if ($BLOCK_PAST_DAYS): ?><div class="item"><span class="swatch past"></span> Past (disabled)</div><?php endif; ?>
-            </div>
-
-            <div class="d-flex flex-wrap gap-2 mt-3">
-              <button type="button" class="btn btn-outline-secondary" id="clearSelection" style="border-radius:12px;font-weight:900;">
-                <i class="bi bi-eraser"></i> Clear Selection
-              </button>
-              <span class="badge-pill"><i class="bi bi-calendar-range"></i> Total Selected Days: <span id="selected_count">0</span></span>
-              <span class="badge-pill"><i class="bi bi-calculator"></i> Total Leave Days: <span id="total_leave_days">0</span></span>
             </div>
           </div>
-
-          <!-- Selected Dates + Half Day -->
-          <div class="panel">
-            <div class="sec-head">
-              <div class="sec-ic"><i class="bi bi-list-check"></i></div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="stat-card">
+              <div class="stat-ic yellow"><i class="bi bi-star"></i></div>
               <div>
-                <p class="sec-title mb-0">Selected Dates</p>
-                <p class="sec-sub mb-0">Optionally mark individual date as half-day (FH/SH)</p>
+                <div class="stat-label">Available EL</div>
+                <div class="stat-value"><?php echo e($leaveBalance['EL']); ?></div>
               </div>
             </div>
-
-            <div id="selectedList" class="selected-list">
-              <div class="small-muted">No dates selected.</div>
-            </div>
-
-            <div class="small-muted mt-2">
-              FH = First Half, SH = Second Half. If not selected, date is considered full day.
-            </div>
-
-            <div class="d-flex justify-content-end mt-3">
-              <button type="submit" class="btn-primary-tek">
-                <i class="bi bi-send-check"></i> Submit Leave Request
-              </button>
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="stat-card">
+              <div class="stat-ic gray"><i class="bi bi-laptop"></i></div>
+              <div>
+                <div class="stat-label">Available WFH</div>
+                <div class="stat-value"><?php echo e($leaveBalance['WFH']); ?></div>
+              </div>
             </div>
           </div>
-        </form>
+        </div>
 
-        <!-- Recent Requests -->
-        <div class="panel">
-          <div class="sec-head">
-            <div class="sec-ic"><i class="bi bi-clock-history"></i></div>
-            <div>
-              <p class="sec-title mb-0">Recent Leave Requests</p>
-              <p class="sec-sub mb-0">Your latest leave applications</p>
-            </div>
-          </div>
+        <div class="row g-4">
+          <!-- Leave Form Column -->
+          <div class="col-lg-8">
+            <form method="POST" id="leaveForm" autocomplete="off">
+              <input type="hidden" name="submit_leave" value="1">
+              <input type="hidden" name="selected_dates" id="selected_dates_input" value="">
+              <input type="hidden" name="half_day_map" id="half_day_map_input" value="">
+              <input type="hidden" name="from_date" id="from_date_input" value="">
+              <input type="hidden" name="to_date" id="to_date_input" value="">
 
-          <?php if (empty($recentLeaves)): ?>
-            <div class="text-muted" style="font-weight:800;">No leave requests found.</div>
-          <?php else: ?>
+              <!-- Leave Details Panel -->
+              <div class="panel">
+                <div class="sec-head">
+                  <div class="sec-ic"><i class="bi bi-calendar-plus"></i></div>
+                  <div>
+                    <p class="sec-title mb-0">Leave Details</p>
+                    <p class="sec-sub mb-0">Fill in the leave information</p>
+                  </div>
+                </div>
 
-            <!-- ✅ Mobile Cards -->
-            <div class="d-block d-md-none">
-              <div class="d-grid gap-3">
-                <?php foreach ($recentLeaves as $r): ?>
-                  <?php
-                    [$stLabel, $stClass, $stIcon] = statusMeta($r['status'] ?? '');
-                    $id = (int)($r['id'] ?? 0);
-                    $type = (string)($r['leave_type'] ?? '');
-                    $from = safeDate($r['from_date'] ?? '');
-                    $to   = safeDate($r['to_date'] ?? '');
-                    $days = $r['total_days'] ?? '—';
-                    $applied = safeDateTime($r['applied_at'] ?? '');
-                    $rsn = trim((string)($r['reason'] ?? ''));
-                  ?>
-                  <div class="leave-card">
-                    <div class="leave-top">
-                      <div style="flex:1 1 auto;">
-                        <div class="leave-title"><?php echo e($type); ?> <span class="small text-muted" style="font-weight:1000;">#<?php echo $id; ?></span></div>
-                        <div class="leave-sub">
-                          <i class="bi bi-calendar-event"></i> <?php echo e($from); ?> → <?php echo e($to); ?>
-                          &nbsp;•&nbsp; <b style="color:#111827;"><?php echo e($days); ?></b> day(s)
-                        </div>
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Leave Type <span class="text-danger">*</span></label>
+                    <select class="form-select" name="leave_type" id="leave_type" required>
+                      <option value="CL" <?php echo ($leaveType==='CL'?'selected':''); ?>>Casual Leave (CL) - <?php echo $leaveBalance['CL']; ?> days left</option>
+                      <option value="SL" <?php echo ($leaveType==='SL'?'selected':''); ?>>Sick Leave (SL) - <?php echo $leaveBalance['SL']; ?> days left</option>
+                      <option value="EL" <?php echo ($leaveType==='EL'?'selected':''); ?>>Earned Leave (EL) - <?php echo $leaveBalance['EL']; ?> days left</option>
+                      <option value="LOP" <?php echo ($leaveType==='LOP'?'selected':''); ?>>Loss of Pay (LOP)</option>
+                      <option value="OD" <?php echo ($leaveType==='OD'?'selected':''); ?>>On Duty (OD)</option>
+                      <option value="WFH" <?php echo ($leaveType==='WFH'?'selected':''); ?>>Work From Home (WFH) - <?php echo $leaveBalance['WFH']; ?> days left</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Date Range</label>
+                    <div class="row g-2">
+                      <div class="col-6">
+                        <input class="form-control" id="from_date_view" readonly placeholder="From Date" style="background:#f9fafb;">
                       </div>
-                      <span class="status-badge <?php echo e($stClass); ?>"><i class="bi <?php echo e($stIcon); ?>"></i> <?php echo e($stLabel); ?></span>
-                    </div>
-
-                    <div class="leave-kv">
-                      <div class="leave-row">
-                        <div class="leave-key">Applied</div>
-                        <div class="leave-val"><?php echo e($applied); ?></div>
-                      </div>
-                      <div class="leave-row">
-                        <div class="leave-key">Reason</div>
-                        <div class="leave-val"><?php echo $rsn !== '' ? e($rsn) : '—'; ?></div>
+                      <div class="col-6">
+                        <input class="form-control" id="to_date_view" readonly placeholder="To Date" style="background:#f9fafb;">
                       </div>
                     </div>
                   </div>
-                <?php endforeach; ?>
+                  <div class="col-12">
+                    <label class="form-label">Reason <span class="text-danger">*</span></label>
+                    <textarea class="form-control" name="reason" rows="3" required placeholder="Enter detailed reason for leave"><?php echo e($reason); ?></textarea>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Contact During Leave</label>
+                    <input class="form-control" name="contact_during_leave" value="<?php echo e($contactDuringLeave); ?>" placeholder="Mobile number / email">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Handover To</label>
+                    <input class="form-control" name="handover_to" value="<?php echo e($handoverTo); ?>" placeholder="Employee name">
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <!-- ✅ Desktop Table -->
-            <div class="d-none d-md-block">
-              <div class="table-responsive">
-                <table class="table table-bordered align-middle mb-0">
-                  <thead>
-                    <tr>
-                      <th style="width:90px;">ID</th>
-                      <th style="width:90px;">Type</th>
-                      <th>From</th>
-                      <th>To</th>
-                      <th style="width:110px;">Days</th>
-                      <th style="width:140px;">Status</th>
-                      <th style="width:190px;">Applied</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <?php foreach ($recentLeaves as $r): ?>
-                      <?php [$stLabel, $stClass, $stIcon] = statusMeta($r['status'] ?? ''); ?>
-                      <tr>
-                        <td style="font-weight:1000;">#<?php echo (int)$r['id']; ?></td>
-                        <td><?php echo e($r['leave_type']); ?></td>
-                        <td><?php echo e(safeDate($r['from_date'])); ?></td>
-                        <td><?php echo e(safeDate($r['to_date'])); ?></td>
-                        <td><?php echo e($r['total_days']); ?></td>
-                        <td>
-                          <span class="status-badge <?php echo e($stClass); ?>">
-                            <i class="bi <?php echo e($stIcon); ?>"></i> <?php echo e($stLabel); ?>
-                          </span>
-                        </td>
-                        <td><?php echo e(safeDateTime($r['applied_at'])); ?></td>
-                      </tr>
-                    <?php endforeach; ?>
-                  </tbody>
-                </table>
+              <!-- Calendar Panel -->
+              <div class="panel">
+                <div class="sec-head">
+                  <div class="sec-ic"><i class="bi bi-calendar3"></i></div>
+                  <div>
+                    <p class="sec-title mb-0">Select Dates</p>
+                    <p class="sec-sub mb-0">Click on dates to select leave days</p>
+                  </div>
+                </div>
+
+                <div class="calendar-container">
+                  <div class="calendar-header">
+                    <button type="button" class="calendar-nav-btn" onclick="changeMonth(-1)">
+                      <i class="bi bi-chevron-left"></i> Prev
+                    </button>
+                    <h6 class="calendar-title" id="calendarTitle"><?php echo e($firstDay->format('F Y')); ?></h6>
+                    <button type="button" class="calendar-nav-btn" onclick="changeMonth(1)">
+                      Next <i class="bi bi-chevron-right"></i>
+                    </button>
+                  </div>
+                  <div class="calendar-grid" id="calendarGrid">
+                    <!-- Calendar will be populated by JavaScript -->
+                  </div>
+                </div>
+
+                <div class="d-flex gap-3 mt-3 flex-wrap">
+                  <div class="d-flex align-items-center gap-2">
+                    <span style="width: 20px; height: 20px; background: rgba(45,156,219,0.08); border-radius: 4px;"></span>
+                    <span class="small fw-bold">Selected</span>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    <span style="width: 20px; height: 20px; background: rgba(45,156,219,0.15); border-radius: 4px;"></span>
+                    <span class="small fw-bold">Range Start/End</span>
+                  </div>
+                  <?php if ($EXCLUDE_SUNDAYS): ?>
+                  <div class="d-flex align-items-center gap-2">
+                    <span style="width: 20px; height: 20px; background: #fafafc; border: 1px solid #e5e7eb;"></span>
+                    <span class="small text-danger fw-bold">Sunday (Disabled)</span>
+                  </div>
+                  <?php endif; ?>
+                  <?php if ($BLOCK_PAST_DAYS): ?>
+                  <div class="d-flex align-items-center gap-2">
+                    <span style="width: 20px; height: 20px; background: #fafafc;"></span>
+                    <span class="small text-muted fw-bold">Past Dates (Disabled)</span>
+                  </div>
+                  <?php endif; ?>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                  <div class="d-flex gap-3">
+                    <span class="badge-pill">
+                      <i class="bi bi-calendar-range me-1"></i> Selected: <strong id="selected_count">0</strong>
+                    </span>
+                    <span class="badge-pill">
+                      <i class="bi bi-calculator me-1"></i> Total Days: <strong id="total_leave_days">0</strong>
+                    </span>
+                  </div>
+                  <button type="button" class="btn-outline-secondary-custom" id="clearSelection">
+                    <i class="bi bi-eraser"></i> Clear All
+                  </button>
+                </div>
               </div>
-            </div>
 
-          <?php endif; ?>
+              <!-- Selected Dates Panel -->
+              <div class="panel">
+                <div class="sec-head">
+                  <div class="sec-ic"><i class="bi bi-list-check"></i></div>
+                  <div>
+                    <p class="sec-title mb-0">Selected Dates & Half-Day Options</p>
+                    <p class="sec-sub mb-0">Configure half-day for specific dates if needed</p>
+                  </div>
+                </div>
+
+                <div id="selectedList" class="selected-dates-list">
+                  <div class="text-center text-muted py-4">No dates selected. Click on calendar dates to select.</div>
+                </div>
+
+                <div class="mt-4">
+                  <button type="submit" class="btn-primary-custom w-100">
+                    <i class="bi bi-send-check"></i> Submit Leave Request
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <!-- Sidebar Column -->
+          <div class="col-lg-4">
+            <!-- Recent Requests Panel matching history page style -->
+            <div class="panel">
+              <div class="sec-head">
+                <div class="sec-ic"><i class="bi bi-clock-history"></i></div>
+                <div>
+                  <p class="sec-title mb-0">Recent Requests</p>
+                  <p class="sec-sub mb-0">Your latest leave applications</p>
+                </div>
+              </div>
+
+              <?php if (empty($recentLeaves)): ?>
+                <div class="text-center text-muted py-4" style="font-weight:800;">
+                  <i class="bi bi-inbox" style="font-size: 32px; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
+                  No leave requests found.
+                </div>
+              <?php else: ?>
+                <div class="d-grid gap-2">
+                  <?php foreach ($recentLeaves as $r): ?>
+                    <?php
+                      [$stLabel, $stClass, $stIcon] = statusMeta($r['status'] ?? '');
+                      $from = safeDate($r['from_date'] ?? '');
+                      $to   = safeDate($r['to_date'] ?? '');
+                    ?>
+                    <div class="p-3 border rounded-3" style="background:#f9fafb;">
+                      <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="fw-bold" style="font-size:13px;"><?php echo e($r['leave_type']); ?></span>
+                        <span class="status-badge <?php echo $stClass; ?>">
+                          <i class="bi <?php echo $stIcon; ?>"></i> <?php echo e($stLabel); ?>
+                        </span>
+                      </div>
+                      <div class="small text-muted mb-1">
+                        <i class="bi bi-calendar-range"></i> <?php echo e($from); ?> → <?php echo e($to); ?>
+                      </div>
+                      <div class="small text-muted">
+                        <i class="bi bi-calculator"></i> <?php echo e($r['total_days']); ?> day(s)
+                      </div>
+                      <div class="small text-muted mt-1">
+                        <i class="bi bi-clock"></i> <?php echo e(safeDate($r['applied_at'])); ?>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
         </div>
-
       </div>
     </div>
 
@@ -874,237 +966,321 @@ $todayYmd = date('Y-m-d');
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function(){
-  const selectedDatesInput = document.getElementById('selected_dates_input');
-  const halfDayMapInput = document.getElementById('half_day_map_input');
-  const fromDateInput = document.getElementById('from_date_input');
-  const toDateInput = document.getElementById('to_date_input');
-  const fromDateView = document.getElementById('from_date_view');
-  const toDateView = document.getElementById('to_date_view');
+// Calendar configuration
+const EXCLUDE_SUNDAYS = <?php echo $EXCLUDE_SUNDAYS ? 'true' : 'false'; ?>;
+const BLOCK_PAST_DAYS = <?php echo $BLOCK_PAST_DAYS ? 'true' : 'false'; ?>;
+const TODAY = '<?php echo $todayYmd; ?>';
 
-  const selectedCountEl = document.getElementById('selected_count');
-  const totalLeaveDaysEl = document.getElementById('total_leave_days');
-  const selectedList = document.getElementById('selectedList');
-  const clearBtn = document.getElementById('clearSelection');
+let currentMonth = <?php echo $viewMonth; ?>;
+let currentYear = <?php echo $viewYear; ?>;
+let rangeStart = null;
+let rangeEnd = null;
+let selectedDates = [];
+let halfDayMap = {};
 
-  const EXCLUDE_SUNDAYS = <?php echo $EXCLUDE_SUNDAYS ? 'true' : 'false'; ?>;
+// DOM Elements
+const calendarGrid = document.getElementById('calendarGrid');
+const calendarTitle = document.getElementById('calendarTitle');
+const selectedDatesInput = document.getElementById('selected_dates_input');
+const halfDayMapInput = document.getElementById('half_day_map_input');
+const fromDateInput = document.getElementById('from_date_input');
+const toDateInput = document.getElementById('to_date_input');
+const fromDateView = document.getElementById('from_date_view');
+const toDateView = document.getElementById('to_date_view');
+const selectedCountEl = document.getElementById('selected_count');
+const totalLeaveDaysEl = document.getElementById('total_leave_days');
+const selectedList = document.getElementById('selectedList');
+const clearBtn = document.getElementById('clearSelection');
 
-  let rangeStart = null;
-  let rangeEnd = null;
-  let selectedDates = [];
-  let halfDayMap = {};
+// Helper Functions
+function formatYmd(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
-  function parseYmd(v){
-    const p = (v || '').split('-');
-    if (p.length !== 3) return null;
-    const d = new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
-    d.setHours(0,0,0,0);
-    return d;
+function parseYmd(ymd) {
+  const parts = ymd.split('-');
+  if (parts.length !== 3) return null;
+  return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+}
+
+function isSunday(ymd) {
+  const date = parseYmd(ymd);
+  return date ? date.getDay() === 0 : false;
+}
+
+function isPast(ymd) {
+  return ymd < TODAY;
+}
+
+function isDisabled(ymd) {
+  if (BLOCK_PAST_DAYS && isPast(ymd)) return true;
+  if (EXCLUDE_SUNDAYS && isSunday(ymd)) return true;
+  return false;
+}
+
+function getMonthDays(year, month) {
+  const firstDay = new Date(year, month - 1, 1);
+  const lastDay = new Date(year, month, 0);
+  const daysInMonth = lastDay.getDate();
+  const startWeekday = firstDay.getDay();
+  
+  return { daysInMonth, startWeekday };
+}
+
+function calcTotalLeaveDays() {
+  let total = 0;
+  selectedDates.forEach(d => {
+    total += halfDayMap[d] ? 0.5 : 1;
+  });
+  return total;
+}
+
+function updateCounters() {
+  selectedCountEl.textContent = selectedDates.length;
+  totalLeaveDaysEl.textContent = calcTotalLeaveDays().toFixed(1);
+}
+
+function updateHiddenInputs() {
+  selectedDatesInput.value = JSON.stringify(selectedDates);
+  halfDayMapInput.value = JSON.stringify(halfDayMap);
+  
+  const from = selectedDates.length ? selectedDates[0] : '';
+  const to = selectedDates.length ? selectedDates[selectedDates.length - 1] : '';
+  
+  fromDateInput.value = from;
+  toDateInput.value = to;
+  if (fromDateView) fromDateView.value = from ? formatDisplayDate(from) : '';
+  if (toDateView) toDateView.value = to ? formatDisplayDate(to) : '';
+}
+
+function formatDisplayDate(ymd) {
+  const date = parseYmd(ymd);
+  return date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+}
+
+function renderSelectedList() {
+  if (!selectedList) return;
+  
+  if (selectedDates.length === 0) {
+    selectedList.innerHTML = '<div class="text-center text-muted py-4">No dates selected. Click on calendar dates to select.</div>';
+    return;
   }
-  function fmtYmd(d){
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth()+1).padStart(2,'0');
-    const dd = String(d.getDate()).padStart(2,'0');
-    return `${yyyy}-${mm}-${dd}`;
-  }
-  function dateRangeInclusive(a,b){
-    const out = [];
-    let start = parseYmd(a), end = parseYmd(b);
-    if (!start || !end) return out;
-    if (end < start) { const t = start; start = end; end = t; }
-    const cur = new Date(start);
-    while (cur <= end){
-      out.push(fmtYmd(cur));
-      cur.setDate(cur.getDate()+1);
-    }
-    return out;
-  }
-  function isSunday(ymd){
-    const d = parseYmd(ymd);
-    return d ? d.getDay() === 0 : false;
-  }
-  function isDisabled(ymd){
-    const cell = document.querySelector(`.cal-cell[data-date="${ymd}"]`);
-    if (!cell) return true;
-    return cell.dataset.disabled === '1';
-  }
-
-  function calcTotalLeaveDays(){
-    let total = 0;
-    selectedDates.forEach(d => total += (halfDayMap[d] ? 0.5 : 1));
-    return total;
-  }
-
-  function refreshCalendarStyles(){
-    document.querySelectorAll('.cal-cell[data-date]').forEach(cell => {
-      cell.classList.remove('selected','range-start','range-end');
-    });
-    selectedDates.forEach(d => {
-      const cell = document.querySelector(`.cal-cell[data-date="${d}"]`);
-      if (cell) cell.classList.add('selected');
-    });
-    if (rangeStart){
-      const c = document.querySelector(`.cal-cell[data-date="${rangeStart}"]`);
-      if (c) c.classList.add('range-start');
-    }
-    if (rangeEnd){
-      const c = document.querySelector(`.cal-cell[data-date="${rangeEnd}"]`);
-      if (c) c.classList.add('range-end');
-    }
-  }
-
-  function syncHiddenInputs(){
-    selectedDatesInput.value = JSON.stringify(selectedDates);
-    halfDayMapInput.value = JSON.stringify(halfDayMap);
-
-    const from = selectedDates.length ? selectedDates[0] : '';
-    const to   = selectedDates.length ? selectedDates[selectedDates.length - 1] : '';
-
-    fromDateInput.value = from;
-    toDateInput.value = to;
-    if (fromDateView) fromDateView.value = from;
-    if (toDateView) toDateView.value = to;
-  }
-
-  function refreshCounters(){
-    selectedCountEl.textContent = String(selectedDates.length);
-    totalLeaveDaysEl.textContent = String(calcTotalLeaveDays());
-  }
-
-  function refreshSelectedList(){
-    if (!selectedList) return;
-
-    if (!selectedDates.length){
-      selectedList.innerHTML = '<div class="small-muted">No dates selected.</div>';
-      return;
-    }
-
-    let html = '';
-    selectedDates.forEach(d => {
-      const half = halfDayMap[d] || '';
-      html += `
-        <div class="selected-item">
-          <div>
-            <div style="font-weight:900;color:#111827;">${d}</div>
-            <div class="small-muted">${half ? ('Half Day: ' + (half === 'FH' ? 'First Half' : 'Second Half')) : 'Full Day'}</div>
-          </div>
-          <div>
-            <select class="form-select form-select-sm halfday-select" data-date="${d}">
-              <option value="" ${half==='' ? 'selected' : ''}>Full Day</option>
-              <option value="FH" ${half==='FH' ? 'selected' : ''}>First Half</option>
-              <option value="SH" ${half==='SH' ? 'selected' : ''}>Second Half</option>
-            </select>
-          </div>
+  
+  let html = '';
+  selectedDates.forEach(date => {
+    const half = halfDayMap[date] || '';
+    const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'long' });
+    
+    html += `
+      <div class="selected-date-item">
+        <div class="date-info">
+          <div class="date">${formatDisplayDate(date)}</div>
+          <div class="day-name">${dayName}</div>
         </div>
-      `;
-    });
-
-    selectedList.innerHTML = html;
-
-    selectedList.querySelectorAll('.halfday-select').forEach(sel => {
-      sel.addEventListener('change', function(){
-        const d = this.dataset.date;
-        const v = (this.value || '').trim();
-        if (!v) delete halfDayMap[d];
-        else halfDayMap[d] = v;
-        syncHiddenInputs();
-        refreshCounters();
-        refreshSelectedList();
-      });
-    });
-  }
-
-  function applyRange(start, end){
-    let all = dateRangeInclusive(start, end);
-
-    // keep only visible (current month page) + enabled cells
-    all = all.filter(d => !isDisabled(d));
-
-    // exclude Sundays if enabled
-    if (EXCLUDE_SUNDAYS) all = all.filter(d => !isSunday(d));
-
-    selectedDates = all.sort();
-
-    // cleanup half-days for removed dates
-    Object.keys(halfDayMap).forEach(k => { if (!selectedDates.includes(k)) delete halfDayMap[k]; });
-
-    rangeStart = selectedDates[0] || null;
-    rangeEnd   = selectedDates[selectedDates.length - 1] || null;
-
-    syncHiddenInputs();
-    refreshCounters();
-    refreshSelectedList();
-    refreshCalendarStyles();
-  }
-
-  function resetSelection(){
-    rangeStart = null;
-    rangeEnd = null;
-    selectedDates = [];
-    halfDayMap = {};
-    syncHiddenInputs();
-    refreshCounters();
-    refreshSelectedList();
-    refreshCalendarStyles();
-  }
-
-  // clicks
-  document.querySelectorAll('.cal-btn[data-date]').forEach(btn => {
-    btn.addEventListener('click', function(){
-      const d = this.dataset.date;
-      if (!d) return;
-      if (isDisabled(d)) return;
-
-      if (!rangeStart || (rangeStart && rangeEnd)) {
-        rangeStart = d;
-        rangeEnd = null;
-        selectedDates = [d];
-        if (EXCLUDE_SUNDAYS && isSunday(d)) selectedDates = [];
-        syncHiddenInputs();
-        refreshCounters();
-        refreshSelectedList();
-        refreshCalendarStyles();
-        return;
+        <select class="half-day-select" data-date="${date}">
+          <option value="" ${half === '' ? 'selected' : ''}>Full Day</option>
+          <option value="FH" ${half === 'FH' ? 'selected' : ''}>First Half (AM)</option>
+          <option value="SH" ${half === 'SH' ? 'selected' : ''}>Second Half (PM)</option>
+        </select>
+      </div>
+    `;
+  });
+  
+  selectedList.innerHTML = html;
+  
+  // Add event listeners to half-day selects
+  document.querySelectorAll('.half-day-select').forEach(select => {
+    select.addEventListener('change', function() {
+      const date = this.dataset.date;
+      const value = this.value;
+      if (value) {
+        halfDayMap[date] = value;
+      } else {
+        delete halfDayMap[date];
       }
+      updateHiddenInputs();
+      updateCounters();
+      renderSelectedList();
+      renderCalendar();
+    });
+  });
+}
 
-      if (rangeStart && !rangeEnd) {
-        rangeEnd = d;
+function applyRange(start, end) {
+  if (!start || !end) return;
+  
+  const startDate = parseYmd(start);
+  const endDate = parseYmd(end);
+  if (!startDate || !endDate) return;
+  
+  const dates = [];
+  const current = new Date(startDate);
+  while (current <= endDate) {
+    const ymd = formatYmd(current);
+    if (!isDisabled(ymd)) {
+      dates.push(ymd);
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  
+  selectedDates = dates.sort();
+  
+  // Clean up half-day map
+  Object.keys(halfDayMap).forEach(key => {
+    if (!selectedDates.includes(key)) delete halfDayMap[key];
+  });
+  
+  rangeStart = selectedDates[0] || null;
+  rangeEnd = selectedDates[selectedDates.length - 1] || null;
+  
+  updateHiddenInputs();
+  updateCounters();
+  renderSelectedList();
+  renderCalendar();
+}
+
+function resetSelection() {
+  rangeStart = null;
+  rangeEnd = null;
+  selectedDates = [];
+  halfDayMap = {};
+  updateHiddenInputs();
+  updateCounters();
+  renderSelectedList();
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const { daysInMonth, startWeekday } = getMonthDays(currentYear, currentMonth);
+  const firstDay = new Date(currentYear, currentMonth - 1, 1);
+  calendarTitle.textContent = firstDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  let html = weekdays.map(day => `<div class="calendar-weekday">${day}</div>`).join('');
+  
+  // Empty cells for days before month start
+  for (let i = 0; i < startWeekday; i++) {
+    html += `<div class="calendar-day disabled"></div>`;
+  }
+  
+  // Days of the month
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(currentYear, currentMonth - 1, day);
+    const ymd = formatYmd(date);
+    const isToday = ymd === TODAY;
+    const disabled = isDisabled(ymd);
+    const isSelected = selectedDates.includes(ymd);
+    const isStart = ymd === rangeStart;
+    const isEnd = ymd === rangeEnd;
+    const isSundayCheck = date.getDay() === 0;
+    const halfDay = halfDayMap[ymd];
+    
+    let classes = ['calendar-day'];
+    if (disabled) classes.push('disabled');
+    if (isSelected) classes.push('selected');
+    if (isStart) classes.push('range-start');
+    if (isEnd) classes.push('range-end');
+    if (isToday) classes.push('today');
+    if (isSundayCheck) classes.push('sunday');
+    
+    let badge = '';
+    if (halfDay === 'FH') badge = '<span class="day-badge">FH</span>';
+    if (halfDay === 'SH') badge = '<span class="day-badge">SH</span>';
+    if (disabled && EXCLUDE_SUNDAYS && isSundayCheck) badge = '<span class="day-badge">Sun</span>';
+    if (disabled && BLOCK_PAST_DAYS && isPast(ymd)) badge = '<span class="day-badge">Past</span>';
+    
+    html += `
+      <div class="${classes.join(' ')}" data-date="${ymd}" data-disabled="${disabled}">
+        <div class="day-number">${day}</div>
+        ${badge}
+      </div>
+    `;
+  }
+  
+  calendarGrid.innerHTML = html;
+  
+  // Add click handlers
+  document.querySelectorAll('.calendar-day:not(.disabled)').forEach(day => {
+    day.addEventListener('click', function(e) {
+      const date = this.dataset.date;
+      if (!date || this.dataset.disabled === 'true') return;
+      
+      if (!rangeStart || (rangeStart && rangeEnd)) {
+        // Start new selection
+        rangeStart = date;
+        rangeEnd = null;
+        selectedDates = [date];
+        if (EXCLUDE_SUNDAYS && isSunday(date)) selectedDates = [];
+        updateHiddenInputs();
+        updateCounters();
+        renderSelectedList();
+        renderCalendar();
+      } else if (rangeStart && !rangeEnd) {
+        // Complete the range
+        rangeEnd = date;
         applyRange(rangeStart, rangeEnd);
       }
     });
   });
+}
 
+function changeMonth(delta) {
+  let newMonth = currentMonth + delta;
+  let newYear = currentYear;
+  
+  if (newMonth < 1) {
+    newMonth = 12;
+    newYear--;
+  } else if (newMonth > 12) {
+    newMonth = 1;
+    newYear++;
+  }
+  
+  currentMonth = newMonth;
+  currentYear = newYear;
+  
+  // Update URL without reload
+  const url = new URL(window.location.href);
+  url.searchParams.set('m', currentMonth);
+  url.searchParams.set('y', currentYear);
+  window.history.pushState({}, '', url);
+  
+  renderCalendar();
+}
+
+// Add animation to stat cards on load
+document.addEventListener('DOMContentLoaded', function() {
+  renderCalendar();
+  
+  const statCards = document.querySelectorAll('.stat-card');
+  statCards.forEach((card, index) => {
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(20px)';
+    setTimeout(() => {
+      card.style.transition = 'all 0.3s ease';
+      card.style.opacity = '1';
+      card.style.transform = 'translateY(0)';
+    }, index * 100);
+  });
+  
   clearBtn?.addEventListener('click', resetSelection);
-
-  // restore (server-side validation failure)
-  try {
-    const postedDates = JSON.parse(selectedDatesInput.value || '[]');
-    const postedHalf  = JSON.parse(halfDayMapInput.value || '{}');
-
-    if (Array.isArray(postedDates) && postedDates.length) {
-      selectedDates = postedDates.filter(Boolean).filter(d => !isDisabled(d));
-      if (EXCLUDE_SUNDAYS) selectedDates = selectedDates.filter(d => !isSunday(d));
-      selectedDates.sort();
-
-      halfDayMap = (postedHalf && typeof postedHalf === 'object') ? postedHalf : {};
-      Object.keys(halfDayMap).forEach(k => { if (!selectedDates.includes(k)) delete halfDayMap[k]; });
-
-      rangeStart = selectedDates[0] || null;
-      rangeEnd   = selectedDates[selectedDates.length - 1] || null;
-
-      syncHiddenInputs();
-    }
-  } catch (e) {}
-
-  refreshCounters();
-  refreshSelectedList();
-  refreshCalendarStyles();
-
-  // submit check
-  document.getElementById('leaveForm')?.addEventListener('submit', function(e){
-    if (!selectedDates.length) {
+  
+  // Form validation
+  document.getElementById('leaveForm')?.addEventListener('submit', function(e) {
+    if (selectedDates.length === 0) {
       e.preventDefault();
-      alert('Please select at least one date in the calendar.');
+      alert('Please select at least one date from the calendar.');
+      return false;
+    }
+    
+    const reason = document.querySelector('textarea[name="reason"]').value.trim();
+    if (!reason) {
+      e.preventDefault();
+      alert('Please enter a reason for leave.');
+      return false;
     }
   });
 });

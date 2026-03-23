@@ -21,7 +21,7 @@
 
     <!-- Projects -->
     <a class="side-link" href="my-sites.php">
-      <i class="bi bi-geo-alt"></i><span class="label">Projects</span>
+      <i class="bi bi-geo-alt"></i><span class="label">My Projects</span>
     </a>
 
     <!-- Today's Reports -->
@@ -113,8 +113,8 @@
       <a class="side-sublink" href="my-profile.php">
         <i class="bi bi-person-circle"></i><span class="label">Profile</span>
       </a>
-      <a class="side-sublink" href="attendance-profile.php">
-        <i class="bi bi-fingerprint"></i><span class="label">Attendance Profile</span>
+      <a class="side-sublink" href="my-attendance.php">
+        <i class="bi bi-fingerprint"></i><span class="label">My Attendance</span>
       </a>
       <a class="side-sublink" href="leave-ledger.php">
         <i class="bi bi-clock-history"></i><span class="label">Leave Ledger</span>
