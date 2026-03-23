@@ -17,6 +17,7 @@ function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 function norm($v): string {
   $v = strtolower(trim((string)$v));
   $v = preg_replace('/\s+/', ' ', $v);
+  $Rrrr = 0;
   return $v;
 }
 
