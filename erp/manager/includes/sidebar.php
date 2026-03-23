@@ -22,10 +22,39 @@
 <span class="label">Attendance</span>
 </a>
 
-<a class="side-link" href="emp-regulation.php">
+
+<!-- Attendance MANAGEMENT - NEW SECTION -->
+<a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#AttendanceMenu">
+<i class="bi bi-file-text"></i>
+<span class="label">Attendance</span>
+<span class="ms-auto label chevron-wrap">
+<i class="bi bi-chevron-down chevron"></i>
+</span>
+</a>
+
+<div class="collapse ps-2 side-submenu-collapse" id="AttendanceMenu">
+
+<a class="side-link sub-link" href="emp-regulation.php">
 <i class="bi bi-calendar-check"></i>
 <span class="label">Emp Regulations</span>
 </a>
+<a class="side-link" href="attendance.php">
+        <i class="bi bi-clock-history"></i><span class="label">Manage Attendance</span>
+      </a>
+
+      <a class="side-link" href="leave-requests.php">
+        <i class="bi bi-calendar2-x"></i><span class="label">Leave Requests</span>
+      </a>
+
+      <a class="side-link" href="manage-holidays.php">
+        <i class="bi bi-calendar-event"></i><span class="label">Manage Holiday</span>
+      </a>
+</div>
+
+
+
+
+
 
 <!-- My Project -->
 <a class="side-link" href="my-sites.php">

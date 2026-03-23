@@ -1,5 +1,5 @@
 <?php
-// hr/offer-approval.php - Offer Approval Management
+// hr/offer-approval.php - Offer Approval Management with Automatic Onboarding
 session_start();
 require_once 'includes/db-config.php';
 require_once 'includes/activity-logger.php';
@@ -53,17 +53,110 @@ $messageType = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
-    // Approve Offer
+    // Approve Single Offer
     if (isset($_POST['action']) && $_POST['action'] === 'approve_offer') {
         $offer_id = (int)$_POST['offer_id'];
         $remarks = mysqli_real_escape_string($conn, $_POST['remarks'] ?? '');
+        $joining_date = $_POST['joining_date'] ?? date('Y-m-d', strtotime('+15 days'));
+        $reporting_time = $_POST['reporting_time'] ?? '09:00:00';
+        $reporting_to = isset($_POST['reporting_to']) && !empty($_POST['reporting_to']) ? (int)$_POST['reporting_to'] : null;
         
         // Begin transaction
         mysqli_begin_transaction($conn);
         
         try {
+            // Get offer details
+            $offer_query = "SELECT * FROM offers WHERE id = ?";
+            $offer_stmt = mysqli_prepare($conn, $offer_query);
+            mysqli_stmt_bind_param($offer_stmt, "i", $offer_id);
+            mysqli_stmt_execute($offer_stmt);
+            $offer_res = mysqli_stmt_get_result($offer_stmt);
+            $offer = mysqli_fetch_assoc($offer_res);
+            
+            if (!$offer) {
+                throw new Exception("Offer not found.");
+            }
+            
+            if ($offer['status'] !== 'Draft') {
+                throw new Exception("Offer already processed.");
+            }
+            
+            // Get candidate details
+            $cand_query = "SELECT * FROM candidates WHERE id = ?";
+            $cand_stmt = mysqli_prepare($conn, $cand_query);
+            mysqli_stmt_bind_param($cand_stmt, "i", $offer['candidate_id']);
+            mysqli_stmt_execute($cand_stmt);
+            $cand_res = mysqli_stmt_get_result($cand_stmt);
+            $candidate = mysqli_fetch_assoc($cand_res);
+            
+            if (!$candidate) {
+                throw new Exception("Candidate not found.");
+            }
+            
+            // Get hiring request details
+            $hiring_query = "SELECT * FROM hiring_requests WHERE id = ?";
+            $hiring_stmt = mysqli_prepare($conn, $hiring_query);
+            mysqli_stmt_bind_param($hiring_stmt, "i", $offer['hiring_request_id']);
+            mysqli_stmt_execute($hiring_stmt);
+            $hiring_res = mysqli_stmt_get_result($hiring_stmt);
+            $hiring = mysqli_fetch_assoc($hiring_res);
+            
+            // Get reporting manager name if specified
+            $reporting_to_name = null;
+            if ($reporting_to) {
+                $rep_stmt = mysqli_prepare($conn, "SELECT full_name FROM employees WHERE id = ?");
+                mysqli_stmt_bind_param($rep_stmt, "i", $reporting_to);
+                mysqli_stmt_execute($rep_stmt);
+                $rep_res = mysqli_stmt_get_result($rep_stmt);
+                $reporter = mysqli_fetch_assoc($rep_res);
+                if ($reporter) {
+                    $reporting_to_name = $reporter['full_name'];
+                }
+            }
+            
+            // Generate employee code
+            $employee_code = generateEmployeeCode($conn, $hiring['department'] ?? 'EMP');
+            
+            // Generate onboarding number
+            $onboarding_no = 'ONB-' . date('Ymd') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+            
+            // Create onboarding record
+            $onboarding_query = "
+                INSERT INTO onboarding (
+                    onboarding_no, candidate_id, offer_id, hiring_request_id,
+                    joining_date, reporting_time, reporting_to, reporting_to_name,
+                    department, designation, employee_code, status,
+                    created_by, created_by_name, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, NOW())
+            ";
+            
+            $onboarding_stmt = mysqli_prepare($conn, $onboarding_query);
+            mysqli_stmt_bind_param(
+    $onboarding_stmt,
+    "siiisssisssii",
+    $onboarding_no,
+    $offer['candidate_id'],
+    $offer_id,
+    $offer['hiring_request_id'],
+    $joining_date,
+    $reporting_time,
+    $reporting_to,
+    $reporting_to_name,
+    $department_val, // ✅ fixed
+    $offer['designation'],
+    $employee_code,
+    $current_employee_id,
+    $current_employee['full_name']
+);
+            
+            if (!mysqli_stmt_execute($onboarding_stmt)) {
+                throw new Exception("Failed to create onboarding record: " . mysqli_error($conn));
+            }
+            
+            $onboarding_id = mysqli_insert_id($conn);
+            
             // Update offer status
-            $update_stmt = mysqli_prepare($conn, "
+            $update_offer_stmt = mysqli_prepare($conn, "
                 UPDATE offers 
                 SET status = 'Approved',
                     approved_by = ?,
@@ -74,50 +167,166 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             
             $approver_name = $current_employee['full_name'];
-            mysqli_stmt_bind_param($update_stmt, "issi", $current_employee_id, $approver_name, $remarks, $offer_id);
+            mysqli_stmt_bind_param($update_offer_stmt, "issi", $current_employee_id, $approver_name, $remarks, $offer_id);
             
-            if (!mysqli_stmt_execute($update_stmt)) {
-                throw new Exception("Failed to approve offer: " . mysqli_error($conn));
+            if (!mysqli_stmt_execute($update_offer_stmt)) {
+                throw new Exception("Failed to update offer: " . mysqli_error($conn));
             }
             
-            if (mysqli_affected_rows($conn) === 0) {
-                throw new Exception("Offer not found or already processed.");
-            }
-            
-            // Get offer details for logging and candidate update
-            $offer_query = "SELECT candidate_id, offer_no FROM offers WHERE id = ?";
-            $offer_stmt = mysqli_prepare($conn, $offer_query);
-            mysqli_stmt_bind_param($offer_stmt, "i", $offer_id);
-            mysqli_stmt_execute($offer_stmt);
-            $offer_res = mysqli_stmt_get_result($offer_stmt);
-            $offer_data = mysqli_fetch_assoc($offer_res);
-            
-            // Update candidate status to 'Offered'
-            $candidate_stmt = mysqli_prepare($conn, "UPDATE candidates SET status = 'Offered' WHERE id = ?");
-            mysqli_stmt_bind_param($candidate_stmt, "i", $offer_data['candidate_id']);
-            mysqli_stmt_execute($candidate_stmt);
+            // Update candidate status
+            $update_cand_stmt = mysqli_prepare($conn, "UPDATE candidates SET status = 'Offered' WHERE id = ?");
+            mysqli_stmt_bind_param($update_cand_stmt, "i", $offer['candidate_id']);
+            mysqli_stmt_execute($update_cand_stmt);
             
             // Log activity
             logActivity(
                 $conn,
+                'CREATE',
+                'onboarding',
+                "Onboarding created for candidate: {$candidate['first_name']} {$candidate['last_name']}",
+                $onboarding_id,
+                $onboarding_no
+            );
+            
+            logActivity(
+                $conn,
                 'UPDATE',
                 'offer',
-                "Approved offer: {$offer_data['offer_no']}",
+                "Offer approved: {$offer['offer_no']}",
                 $offer_id,
-                null,
-                null,
-                json_encode(['remarks' => $remarks])
+                $offer['offer_no']
             );
             
             mysqli_commit($conn);
             
-            $message = "Offer approved successfully!";
+            $message = "Offer approved successfully! Onboarding record created with ID: {$onboarding_no}";
             $messageType = "success";
             
         } catch (Exception $e) {
             mysqli_rollback($conn);
             $message = "Error: " . $e->getMessage();
             $messageType = "danger";
+        }
+    }
+    
+    // Bulk Approve Offers
+    elseif (isset($_POST['action']) && $_POST['action'] === 'bulk_approve') {
+        if (isset($_POST['offer_ids']) && is_array($_POST['offer_ids'])) {
+            $offer_ids = array_map('intval', $_POST['offer_ids']);
+            $remarks = mysqli_real_escape_string($conn, $_POST['bulk_remarks'] ?? '');
+            $joining_date = $_POST['bulk_joining_date'] ?? date('Y-m-d', strtotime('+15 days'));
+            $reporting_time = $_POST['bulk_reporting_time'] ?? '09:00:00';
+            $success_count = 0;
+            $error_count = 0;
+            $errors = [];
+            
+            mysqli_begin_transaction($conn);
+            
+            try {
+                foreach ($offer_ids as $offer_id) {
+                    // Get offer details
+                    $offer_query = "SELECT * FROM offers WHERE id = ? AND status = 'Draft'";
+                    $offer_stmt = mysqli_prepare($conn, $offer_query);
+                    mysqli_stmt_bind_param($offer_stmt, "i", $offer_id);
+                    mysqli_stmt_execute($offer_stmt);
+                    $offer_res = mysqli_stmt_get_result($offer_stmt);
+                    $offer = mysqli_fetch_assoc($offer_res);
+                    
+                    if (!$offer) {
+                        $error_count++;
+                        $errors[] = "Offer ID {$offer_id} not found or already processed.";
+                        continue;
+                    }
+                    
+                    // Get candidate details
+                    $cand_query = "SELECT * FROM candidates WHERE id = ?";
+                    $cand_stmt = mysqli_prepare($conn, $cand_query);
+                    mysqli_stmt_bind_param($cand_stmt, "i", $offer['candidate_id']);
+                    mysqli_stmt_execute($cand_stmt);
+                    $cand_res = mysqli_stmt_get_result($cand_stmt);
+                    $candidate = mysqli_fetch_assoc($cand_res);
+                    
+                    // Get hiring request details
+                    $hiring_query = "SELECT * FROM hiring_requests WHERE id = ?";
+                    $hiring_stmt = mysqli_prepare($conn, $hiring_query);
+                    mysqli_stmt_bind_param($hiring_stmt, "i", $offer['hiring_request_id']);
+                    mysqli_stmt_execute($hiring_stmt);
+                    $hiring_res = mysqli_stmt_get_result($hiring_stmt);
+                    $hiring = mysqli_fetch_assoc($hiring_res);
+                    
+                    // Generate employee code
+                    $employee_code = generateEmployeeCode($conn, $hiring['department'] ?? 'EMP');
+                    
+                    // Generate onboarding number
+                    $onboarding_no = 'ONB-' . date('Ymd') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
+                    
+                    // Create onboarding record
+                    $onboarding_query = "
+                        INSERT INTO onboarding (
+                            onboarding_no, candidate_id, offer_id, hiring_request_id,
+                            joining_date, reporting_time, department, designation, 
+                            employee_code, status, created_by, created_by_name, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, NOW())
+                    ";
+                    
+                    $onboarding_stmt = mysqli_prepare($conn, $onboarding_query);
+                    mysqli_stmt_bind_param($onboarding_stmt, "siiisssssii", 
+                        $onboarding_no, 
+                        $offer['candidate_id'], 
+                        $offer_id, 
+                        $offer['hiring_request_id'],
+                        $joining_date, 
+                        $reporting_time, 
+                        $hiring['department'] ?? 'General', 
+                        $offer['designation'], 
+                        $employee_code,
+                        $current_employee_id, 
+                        $current_employee['full_name']
+                    );
+                    
+                    if (!mysqli_stmt_execute($onboarding_stmt)) {
+                        throw new Exception("Failed to create onboarding for offer {$offer_id}");
+                    }
+                    
+                    // Update offer status
+                    $update_offer_stmt = mysqli_prepare($conn, "
+                        UPDATE offers 
+                        SET status = 'Approved',
+                            approved_by = ?,
+                            approved_by_name = ?,
+                            approved_at = NOW(),
+                            approver_remarks = ?
+                        WHERE id = ?
+                    ");
+                    
+                    $approver_name = $current_employee['full_name'];
+                    mysqli_stmt_bind_param($update_offer_stmt, "issi", $current_employee_id, $approver_name, $remarks, $offer_id);
+                    mysqli_stmt_execute($update_offer_stmt);
+                    
+                    // Update candidate status
+                    $update_cand_stmt = mysqli_prepare($conn, "UPDATE candidates SET status = 'Offered' WHERE id = ?");
+                    mysqli_stmt_bind_param($update_cand_stmt, "i", $offer['candidate_id']);
+                    mysqli_stmt_execute($update_cand_stmt);
+                    
+                    $success_count++;
+                }
+                
+                mysqli_commit($conn);
+                
+                $message = "Successfully approved {$success_count} offers.";
+                if ($error_count > 0) {
+                    $message .= " Failed: " . implode(", ", $errors);
+                }
+                $messageType = "success";
+                
+            } catch (Exception $e) {
+                mysqli_rollback($conn);
+                $message = "Error during bulk approval: " . $e->getMessage();
+                $messageType = "danger";
+            }
+        } else {
+            $message = "No offers selected for bulk approval.";
+            $messageType = "warning";
         }
     }
     
@@ -164,6 +373,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $offer_res = mysqli_stmt_get_result($offer_stmt);
                 $offer_data = mysqli_fetch_assoc($offer_res);
                 
+                // Update candidate status to Rejected
+                $cand_query = "SELECT candidate_id FROM offers WHERE id = ?";
+                $cand_stmt = mysqli_prepare($conn, $cand_query);
+                mysqli_stmt_bind_param($cand_stmt, "i", $offer_id);
+                mysqli_stmt_execute($cand_stmt);
+                $cand_res = mysqli_stmt_get_result($cand_stmt);
+                $cand_data = mysqli_fetch_assoc($cand_res);
+                
+                if ($cand_data) {
+                    $update_cand_stmt = mysqli_prepare($conn, "UPDATE candidates SET status = 'Rejected' WHERE id = ?");
+                    mysqli_stmt_bind_param($update_cand_stmt, "i", $cand_data['candidate_id']);
+                    mysqli_stmt_execute($update_cand_stmt);
+                }
+                
                 // Log activity
                 logActivity(
                     $conn,
@@ -188,86 +411,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+}
+
+// Function to generate employee code
+function generateEmployeeCode($conn, $department) {
+    $prefix = strtoupper(substr($department, 0, 2));
+    $year = date('Y');
     
-    // Bulk Approve Offers
-    elseif (isset($_POST['action']) && $_POST['action'] === 'bulk_approve') {
-        if (isset($_POST['offer_ids']) && is_array($_POST['offer_ids'])) {
-            $offer_ids = array_map('intval', $_POST['offer_ids']);
-            $remarks = mysqli_real_escape_string($conn, $_POST['bulk_remarks'] ?? '');
-            $success_count = 0;
-            $error_count = 0;
-            
-            mysqli_begin_transaction($conn);
-            
-            try {
-                foreach ($offer_ids as $offer_id) {
-                    // Update offer status
-                    $update_stmt = mysqli_prepare($conn, "
-                        UPDATE offers 
-                        SET status = 'Approved',
-                            approved_by = ?,
-                            approved_by_name = ?,
-                            approved_at = NOW(),
-                            approver_remarks = ?
-                        WHERE id = ? AND status = 'Draft'
-                    ");
-                    
-                    $approver_name = $current_employee['full_name'];
-                    mysqli_stmt_bind_param($update_stmt, "issi", $current_employee_id, $approver_name, $remarks, $offer_id);
-                    mysqli_stmt_execute($update_stmt);
-                    
-                    if (mysqli_affected_rows($conn) > 0) {
-                        // Get candidate_id
-                        $cand_query = "SELECT candidate_id, offer_no FROM offers WHERE id = ?";
-                        $cand_stmt = mysqli_prepare($conn, $cand_query);
-                        mysqli_stmt_bind_param($cand_stmt, "i", $offer_id);
-                        mysqli_stmt_execute($cand_stmt);
-                        $cand_res = mysqli_stmt_get_result($cand_stmt);
-                        $cand_data = mysqli_fetch_assoc($cand_res);
-                        
-                        if ($cand_data) {
-                            // Update candidate status
-                            $candidate_stmt = mysqli_prepare($conn, "UPDATE candidates SET status = 'Offered' WHERE id = ?");
-                            mysqli_stmt_bind_param($candidate_stmt, "i", $cand_data['candidate_id']);
-                            mysqli_stmt_execute($candidate_stmt);
-                            
-                            // Log activity
-                            logActivity(
-                                $conn,
-                                'UPDATE',
-                                'offer',
-                                "Bulk approved offer: {$cand_data['offer_no']}",
-                                $offer_id,
-                                null,
-                                null,
-                                json_encode(['remarks' => $remarks])
-                            );
-                        }
-                        
-                        $success_count++;
-                    } else {
-                        $error_count++;
-                    }
-                }
-                
-                mysqli_commit($conn);
-                
-                $message = "Successfully approved {$success_count} offers.";
-                if ($error_count > 0) {
-                    $message .= " {$error_count} offers could not be processed.";
-                }
-                $messageType = "success";
-                
-            } catch (Exception $e) {
-                mysqli_rollback($conn);
-                $message = "Error during bulk approval: " . $e->getMessage();
-                $messageType = "danger";
-            }
-        } else {
-            $message = "No offers selected for bulk approval.";
-            $messageType = "warning";
-        }
-    }
+    $query = "SELECT COUNT(*) as count FROM onboarding WHERE YEAR(created_at) = ?";
+    $stmt = mysqli_prepare($conn, $query);
+    mysqli_stmt_bind_param($stmt, "i", $year);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = mysqli_fetch_assoc($res);
+    $count = $row['count'] + 1;
+    
+    return $prefix . $year . str_pad($count, 4, '0', STR_PAD_LEFT);
 }
 
 // ---------------- FILTERS ----------------
@@ -277,7 +436,7 @@ $date_from = $_GET['date_from'] ?? '';
 $date_to = $_GET['date_to'] ?? '';
 $department_filter = $_GET['department'] ?? '';
 
-// Build query for pending offers
+// Build query for offers
 $query = "
     SELECT 
         o.*,
@@ -290,6 +449,7 @@ $query = "
         c.phone as candidate_phone,
         c.total_experience,
         c.notice_period,
+        c.expected_ctc,
         c.current_company,
         CONCAT(c.first_name, ' ', c.last_name) as candidate_name,
         h.id as hiring_request_id,
@@ -374,6 +534,10 @@ $stats = mysqli_fetch_assoc($stats_result);
 $dept_query = "SELECT DISTINCT department FROM hiring_requests ORDER BY department";
 $dept_result = mysqli_query($conn, $dept_query);
 
+// Get employees for reporting to dropdown
+$employees_query = "SELECT id, full_name, designation FROM employees WHERE employee_status = 'active' ORDER BY full_name";
+$employees_result = mysqli_query($conn, $employees_query);
+
 // ---------------- HELPER FUNCTIONS ----------------
 function e($v)
 {
@@ -440,14 +604,8 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
     <title>Offer Approval - TEK-C Hiring</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <!-- Favicon -->
-    <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
-
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 
     <!-- DataTables -->
@@ -494,17 +652,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             margin: 0;
         }
 
-        .panel-menu {
-            width: 36px;
-            height: 36px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            background: #fff;
-            display: grid;
-            place-items: center;
-            color: #6b7280;
-        }
-
         /* Stats Cards */
         .stat-card {
             background: var(--surface);
@@ -529,38 +676,14 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             flex: 0 0 auto;
         }
 
-        .stat-ic.pending {
-            background: #f59e0b;
-        }
+        .stat-ic.pending { background: #f59e0b; }
+        .stat-ic.approved { background: #10b981; }
+        .stat-ic.rejected { background: #ef4444; }
+        .stat-ic.sent { background: #3b82f6; }
+        .stat-ic.accepted { background: #8b5cf6; }
 
-        .stat-ic.approved {
-            background: #10b981;
-        }
-
-        .stat-ic.rejected {
-            background: #ef4444;
-        }
-
-        .stat-ic.sent {
-            background: #3b82f6;
-        }
-
-        .stat-ic.accepted {
-            background: #8b5cf6;
-        }
-
-        .stat-label {
-            color: #4b5563;
-            font-weight: 750;
-            font-size: 13px;
-        }
-
-        .stat-value {
-            font-size: 30px;
-            font-weight: 900;
-            line-height: 1;
-            margin-top: 2px;
-        }
+        .stat-label { color: #4b5563; font-weight: 750; font-size: 13px; }
+        .stat-value { font-size: 30px; font-weight: 900; line-height: 1; margin-top: 2px; }
 
         /* Filter Card */
         .filter-card {
@@ -584,14 +707,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             display: flex;
             align-items: center;
             gap: 8px;
-            box-shadow: 0 8px 18px rgba(45, 156, 219, 0.18);
             text-decoration: none;
-            white-space: nowrap;
-        }
-
-        .btn-primary-custom:hover {
-            background: #2a8bc9;
-            color: #fff;
         }
 
         .btn-success-custom {
@@ -605,13 +721,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             display: flex;
             align-items: center;
             gap: 8px;
-            box-shadow: 0 8px 18px rgba(16, 185, 129, 0.18);
-            white-space: nowrap;
-        }
-
-        .btn-success-custom:hover {
-            background: #0da271;
-            color: #fff;
         }
 
         .btn-danger-custom {
@@ -625,13 +734,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             display: flex;
             align-items: center;
             gap: 8px;
-            box-shadow: 0 8px 18px rgba(239, 68, 68, 0.18);
-            white-space: nowrap;
-        }
-
-        .btn-danger-custom:hover {
-            background: #dc2626;
-            color: #fff;
         }
 
         .btn-reset {
@@ -645,41 +747,30 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             display: flex;
             align-items: center;
             gap: 8px;
-            white-space: nowrap;
             text-decoration: none;
         }
 
-        .btn-reset:hover {
-            background: #4b5563;
-            color: #fff;
+        .btn-reset:hover, .btn-primary-custom:hover, .btn-success-custom:hover, .btn-danger-custom:hover {
+            opacity: 0.9;
+            color: white;
         }
 
         /* Table Styles */
-        .table-responsive {
-            overflow-x: hidden !important;
-        }
-
-        table.dataTable {
-            width: 100% !important;
-        }
-
+        .table-responsive { overflow-x: hidden !important; }
+        table.dataTable { width: 100% !important; }
         .table thead th {
             font-size: 11px;
             color: #6b7280;
             font-weight: 800;
             border-bottom: 1px solid var(--border) !important;
             padding: 10px 10px !important;
-            white-space: normal !important;
         }
-
         .table td {
             vertical-align: middle;
             border-color: var(--border);
             font-weight: 650;
             color: #374151;
             padding: 10px 10px !important;
-            white-space: normal !important;
-            word-break: break-word;
         }
 
         /* Candidate Avatar */
@@ -698,97 +789,23 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             flex: 0 0 auto;
         }
 
-        .candidate-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
         .candidate-name {
             font-weight: 900;
             font-size: 13px;
             color: #1f2937;
             margin-bottom: 2px;
-            line-height: 1.2;
         }
 
         .candidate-code {
             font-size: 11px;
             color: #6b7280;
             font-weight: 650;
-            line-height: 1.2;
         }
 
         /* Offer Details */
-        .offer-no {
-            font-weight: 900;
-            font-size: 13px;
-            color: #1f2937;
-        }
-
-        .offer-date {
-            font-size: 11px;
-            color: #6b7280;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .offer-amount {
-            font-weight: 900;
-            font-size: 14px;
-            color: #059669;
-        }
-
-        /* Position Info */
-        .position-info {
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-        }
-
-        .position-text {
-            font-size: 12px;
-            font-weight: 800;
-            color: #2d3748;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            line-height: 1.2;
-        }
-
-        .position-text i {
-            color: var(--blue);
-            font-size: 13px;
-        }
-
-        .department-badge {
-            background: rgba(45, 156, 219, .1);
-            color: var(--blue);
-            padding: 3px 8px;
-            border-radius: 8px;
-            font-size: 10px;
-            font-weight: 900;
-            border: 1px solid rgba(45, 156, 219, .2);
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            width: fit-content;
-        }
-
-        /* Requester Info */
-        .requester-name {
-            font-weight: 800;
-            font-size: 12px;
-            color: #1f2937;
-        }
-
-        .requester-designation {
-            font-size: 10px;
-            color: #6b7280;
-            font-weight: 600;
-        }
+        .offer-no { font-weight: 900; font-size: 13px; color: #1f2937; }
+        .offer-date { font-size: 11px; color: #6b7280; font-weight: 600; }
+        .offer-amount { font-weight: 900; font-size: 14px; color: #059669; }
 
         /* Action Buttons */
         .btn-action {
@@ -804,29 +821,9 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             align-items: center;
             justify-content: center;
         }
-
-        .btn-action:hover {
-            background: var(--bg);
-            color: var(--blue);
-        }
-
-        .btn-action.approve:hover {
-            background: #d1fae5;
-            color: #065f46;
-            border-color: #065f46;
-        }
-
-        .btn-action.reject:hover {
-            background: #fee2e2;
-            color: #991b1b;
-            border-color: #991b1b;
-        }
-
-        .btn-action.view:hover {
-            background: #dbeafe;
-            color: #1e40af;
-            border-color: #1e40af;
-        }
+        .btn-action.approve:hover { background: #d1fae5; color: #065f46; border-color: #065f46; }
+        .btn-action.reject:hover { background: #fee2e2; color: #991b1b; border-color: #991b1b; }
+        .btn-action.view:hover { background: #dbeafe; color: #1e40af; border-color: #1e40af; }
 
         /* Bulk Actions */
         .bulk-actions {
@@ -840,106 +837,22 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             border: 1px solid var(--border);
         }
 
-        .checkbox-col {
-            width: 40px;
-            text-align: center;
-        }
-
-        /* Approval Timeline */
-        .approval-timeline {
-            font-size: 11px;
-            color: #6b7280;
-        }
-
-        .approval-timeline i {
-            font-size: 12px;
-            margin-right: 4px;
-        }
+        .checkbox-col { width: 40px; text-align: center; }
 
         /* Modal Styles */
-        .modal-content {
-            border-radius: var(--radius);
-            border: none;
-            box-shadow: var(--shadow);
-        }
+        .modal-content { border-radius: var(--radius); border: none; box-shadow: var(--shadow); }
+        .modal-header { border-bottom: 1px solid var(--border); padding: 16px 20px; }
+        .modal-title { font-weight: 900; font-size: 18px; color: #1f2937; }
+        .modal-body { padding: 20px; }
+        .modal-footer { border-top: 1px solid var(--border); padding: 16px 20px; }
 
-        .modal-header {
-            border-bottom: 1px solid var(--border);
-            padding: 16px 20px;
-        }
+        .form-label { font-weight: 800; font-size: 12px; color: #4b5563; margin-bottom: 4px; }
+        .required:after { content: " *"; color: #ef4444; }
 
-        .modal-title {
-            font-weight: 900;
-            font-size: 18px;
-            color: #1f2937;
-        }
-
-        .modal-body {
-            padding: 20px;
-        }
-
-        .modal-footer {
-            border-top: 1px solid var(--border);
-            padding: 16px 20px;
-        }
-
-        /* Form Labels */
-        .form-label {
-            font-weight: 800;
-            font-size: 12px;
-            color: #4b5563;
-            margin-bottom: 4px;
-        }
-
-        .required:after {
-            content: " *";
-            color: #ef4444;
-        }
-
-        /* Alert Styles */
-        .alert {
-            border-radius: var(--radius);
-            border: none;
-            box-shadow: var(--shadow);
-            margin-bottom: 20px;
-        }
-
-        /* Summary Card */
-        .summary-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: var(--radius);
-            padding: 20px;
-            color: white;
-            margin-bottom: 20px;
-        }
-
-        .summary-stat {
-            text-align: center;
-        }
-
-        .summary-stat-value {
-            font-size: 32px;
-            font-weight: 900;
-            line-height: 1;
-        }
-
-        .summary-stat-label {
-            font-size: 12px;
-            opacity: 0.9;
-            font-weight: 700;
-            margin-top: 5px;
-        }
-
-        /* Actions Column Width */
-        th.actions-col,
-        td.actions-col {
-            width: 120px !important;
-            white-space: nowrap !important;
-        }
-
-        th.select-col,
-        td.select-col {
-            width: 40px !important;
+        @media (max-width: 991.98px) {
+            .main { margin-left: 0 !important; width: 100% !important; }
+            .sidebar { position: fixed !important; transform: translateX(-100%); z-index: 1040 !important; }
+            .sidebar.open { transform: translateX(0) !important; }
         }
     </style>
 </head>
@@ -967,7 +880,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div>
                             <h1 class="h3 fw-bold text-dark mb-1">Offer Approval</h1>
-                            <p class="text-muted mb-0">Review and approve employment offers</p>
+                            <p class="text-muted mb-0">Review and approve employment offers - creates onboarding record automatically</p>
                         </div>
                         <div class="d-flex gap-2">
                             <a href="offers.php" class="btn-primary-custom">
@@ -1087,7 +1000,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                         </form>
                     </div>
 
-                    <!-- Bulk Actions (visible only for pending offers) -->
+                    <!-- Bulk Actions -->
                     <?php if ($status_filter === 'pending' && mysqli_num_rows($offers) > 0): ?>
                         <div class="bulk-actions">
                             <div class="form-check">
@@ -1141,7 +1054,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 </thead>
                                 <tbody>
                                     <?php if (mysqli_num_rows($offers) === 0): ?>
-                                       
+                                        <tr><td colspan="<?php echo $status_filter === 'pending' ? '8' : '7'; ?>" class="text-center text-muted py-4">No offers found.</td></tr>
                                     <?php else: ?>
                                         <?php while ($offer = mysqli_fetch_assoc($offers)): ?>
                                             <tr>
@@ -1152,9 +1065,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                         </div>
                                                     </td>
                                                 <?php elseif ($status_filter === 'pending'): ?>
-                                                    <td class="select-col">
-                                                        <span class="text-muted">—</span>
-                                                    </td>
+                                                    <td class="select-col"><span class="text-muted">—</span></td>
                                                 <?php endif; ?>
 
                                                 <td>
@@ -1196,14 +1107,9 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
                                                 <td>
                                                     <div class="position-info">
-                                                        <div class="position-text">
-                                                            <i class="bi bi-briefcase"></i>
-                                                            <?php echo e($offer['position_title']); ?>
-                                                        </div>
+                                                        <div class="fw-bold"><?php echo e($offer['position_title']); ?></div>
                                                         <?php if (!empty($offer['department'])): ?>
-                                                            <div class="department-badge">
-                                                                <i class="bi bi-building"></i> <?php echo e($offer['department']); ?>
-                                                            </div>
+                                                            <div class="badge bg-light text-dark"><?php echo e($offer['department']); ?></div>
                                                         <?php endif; ?>
                                                     </div>
                                                 </td>
@@ -1211,30 +1117,21 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                 <td>
                                                     <div class="offer-amount"><?php echo formatCurrency($offer['ctc']); ?></div>
                                                     <?php if ($offer['expected_ctc']): ?>
-                                                        <div class="offer-date">
-                                                            Expected: <?php echo formatCurrency($offer['expected_ctc']); ?>
-                                                        </div>
+                                                        <div class="offer-date">Expected: <?php echo formatCurrency($offer['expected_ctc']); ?></div>
                                                     <?php endif; ?>
                                                 </td>
 
                                                 <td>
-                                                    <div>
-                                                        <div class="requester-name"><?php echo e($offer['requester_name'] ?: '—'); ?></div>
-                                                        <div class="requester-designation"><?php echo e($offer['requester_designation'] ?: ''); ?></div>
-                                                    </div>
+                                                    <div class="fw-bold"><?php echo e($offer['requester_name'] ?: '—'); ?></div>
+                                                    <div class="small text-muted"><?php echo e($offer['requester_designation'] ?: ''); ?></div>
                                                 </td>
 
                                                 <td>
                                                     <?php echo getOfferStatusBadge($offer['status']); ?>
-                                                    
                                                     <?php if ($offer['status'] === 'Approved' && !empty($offer['approved_at'])): ?>
-                                                        <div class="approval-timeline mt-1">
+                                                        <div class="small text-muted mt-1">
                                                             <i class="bi bi-check-circle text-success"></i>
                                                             <?php echo date('d M', strtotime($offer['approved_at'])); ?>
-                                                        </div>
-                                                    <?php elseif ($offer['status'] === 'Rejected' && !empty($offer['rejection_reason'])): ?>
-                                                        <div class="approval-timeline mt-1 text-danger" title="<?php echo e($offer['rejection_reason']); ?>">
-                                                            <i class="bi bi-exclamation-circle"></i> Rejected
                                                         </div>
                                                     <?php endif; ?>
                                                 </td>
@@ -1252,10 +1149,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                             <i class="bi bi-x-lg"></i>
                                                         </button>
                                                     <?php endif; ?>
-
-                                                    <?php if ($offer['status'] === 'Approved'): ?>
-                                                        <span class="text-muted small">Ready to send</span>
-                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endwhile; ?>
@@ -1264,26 +1157,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             </table>
                         </div>
                     </div>
-
-                    <!-- Summary Section -->
-                    <?php if ($stats['avg_offer_ctc'] > 0): ?>
-                        <div class="summary-card mt-4">
-                            <div class="row">
-                                <div class="col-md-4 summary-stat">
-                                    <div class="summary-stat-value"><?php echo formatCurrency($stats['avg_offer_ctc']); ?></div>
-                                    <div class="summary-stat-label">Average Offer CTC</div>
-                                </div>
-                                <div class="col-md-4 summary-stat">
-                                    <div class="summary-stat-value"><?php echo (int) ($stats['pending_count'] ?? 0); ?></div>
-                                    <div class="summary-stat-label">Pending Approval</div>
-                                </div>
-                                <div class="col-md-4 summary-stat">
-                                    <div class="summary-stat-value"><?php echo (int) ($stats['approved_count'] ?? 0); ?></div>
-                                    <div class="summary-stat-label">Approved This Month</div>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endif; ?>
 
                 </div>
             </div>
@@ -1294,34 +1167,54 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
     <!-- Approve Single Offer Modal -->
     <div class="modal fade" id="approveModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <form method="POST">
                     <input type="hidden" name="action" value="approve_offer">
                     <input type="hidden" name="offer_id" id="approve_offer_id">
 
                     <div class="modal-header">
-                        <h5 class="modal-title">Approve Offer</h5>
+                        <h5 class="modal-title">Approve Offer & Create Onboarding</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
 
                     <div class="modal-body">
-                        <p>Are you sure you want to approve the offer for <strong id="approve_candidate_name"></strong>?</p>
+                        <p>Approve offer for <strong id="approve_candidate_name"></strong>. This will automatically create an onboarding record.</p>
                         
-                        <p class="text-info small">
-                            <i class="bi bi-info-circle"></i> 
-                            Upon approval, the candidate status will be updated to 'Offered' and the offer will be ready to send.
-                        </p>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Upon approval, the candidate will be moved to onboarding process.
+                        </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Remarks (Optional)</label>
-                            <textarea name="remarks" class="form-control" rows="2" placeholder="Add any approval notes..."></textarea>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label required">Joining Date</label>
+                                <input type="date" name="joining_date" class="form-control" value="<?php echo date('Y-m-d', strtotime('+15 days')); ?>" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Reporting Time</label>
+                                <input type="time" name="reporting_time" class="form-control" value="09:00">
+                            </div>
+                            <div class="col-md-12 mb-3">
+                                <label class="form-label">Reporting To</label>
+                                <select name="reporting_to" class="form-select">
+                                    <option value="">-- Select Reporting Manager --</option>
+                                    <?php while ($emp = mysqli_fetch_assoc($employees_result)): ?>
+                                        <option value="<?php echo $emp['id']; ?>">
+                                            <?php echo e($emp['full_name']); ?> (<?php echo e($emp['designation']); ?>)
+                                        </option>
+                                    <?php endwhile; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-12 mb-3">
+                                <label class="form-label">Remarks (Optional)</label>
+                                <textarea name="remarks" class="form-control" rows="2" placeholder="Add any approval notes..."></textarea>
+                            </div>
                         </div>
                     </div>
 
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn-success-custom">Approve Offer</button>
+                        <button type="submit" class="btn-success-custom">Approve & Create Onboarding</button>
                     </div>
                 </form>
             </div>
@@ -1346,7 +1239,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
                         <div class="mb-3">
                             <label class="form-label required">Reason for Rejection</label>
-                            <textarea name="rejection_reason" class="form-control" rows="3" required></textarea>
+                            <textarea name="rejection_reason" class="form-control" rows="3" required placeholder="Please provide reason for rejection..."></textarea>
                         </div>
                     </div>
 
@@ -1361,7 +1254,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
     <!-- Bulk Approve Modal -->
     <div class="modal fade" id="bulkApproveModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <form method="POST">
                     <input type="hidden" name="action" value="bulk_approve">
@@ -1374,10 +1267,24 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
                     <div class="modal-body">
                         <p>Are you sure you want to approve <strong id="bulkCount"></strong> selected offer(s)?</p>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> This will create onboarding records for all selected candidates.
+                        </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Common Remarks (Optional)</label>
-                            <textarea name="bulk_remarks" class="form-control" rows="2" placeholder="Add notes for all selected offers..."></textarea>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label required">Joining Date</label>
+                                <input type="date" name="bulk_joining_date" class="form-control" value="<?php echo date('Y-m-d', strtotime('+15 days')); ?>" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Reporting Time</label>
+                                <input type="time" name="bulk_reporting_time" class="form-control" value="09:00">
+                            </div>
+                            <div class="col-md-12 mb-3">
+                                <label class="form-label">Common Remarks (Optional)</label>
+                                <textarea name="bulk_remarks" class="form-control" rows="2" placeholder="Add notes for all selected offers..."></textarea>
+                            </div>
                         </div>
                     </div>
 
@@ -1396,12 +1303,10 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
     <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-    <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
     <script src="assets/js/sidebar-toggle.js"></script>
 
     <script>
         $(document).ready(function() {
-            // Initialize DataTable
             var table = $('#offersTable').DataTable({
                 responsive: true,
                 autoWidth: false,
@@ -1426,17 +1331,14 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                 ]
             });
 
-            // Handle Select All checkbox
             $('#selectAll, #selectAllHeader').change(function() {
                 var isChecked = $(this).prop('checked');
                 $('.offer-select').prop('checked', isChecked);
                 updateSelectedCount();
             });
 
-            // Handle individual checkboxes
             $(document).on('change', '.offer-select', function() {
                 updateSelectedCount();
-                
                 var allChecked = $('.offer-select:checked').length === $('.offer-select').length;
                 $('#selectAll, #selectAllHeader').prop('checked', allChecked);
             });
@@ -1444,18 +1346,8 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             function updateSelectedCount() {
                 var count = $('.offer-select:checked').length;
                 $('#selectedCount').text(count + ' selected');
-                
-                if (count > 0) {
-                    $('#bulkApproveBtn').prop('disabled', false);
-                } else {
-                    $('#bulkApproveBtn').prop('disabled', true);
-                }
+                $('#bulkApproveBtn').prop('disabled', count === 0);
             }
-
-            // Auto-focus search
-            setTimeout(function() {
-                $('.dataTables_filter input').focus();
-            }, 400);
         });
 
         function openApproveModal(id, candidateName) {
@@ -1481,20 +1373,13 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                 return;
             }
 
-            // Create hidden inputs for selected IDs
             var html = '';
             selectedIds.forEach(function(id) {
                 html += '<input type="hidden" name="offer_ids[]" value="' + id + '">';
             });
             $('#bulkOfferIds').html(html);
-            
             $('#bulkCount').text(selectedIds.length);
             new bootstrap.Modal(document.getElementById('bulkApproveModal')).show();
-        }
-
-        // Export to Excel function
-        function exportToExcel() {
-            window.location.href = 'export-offers.php?' + window.location.search.substring(1);
         }
     </script>
 </body>

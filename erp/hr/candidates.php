@@ -1042,7 +1042,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 
-                <div class="modal-body">
+                <div class="modal-body"  style="max-height: 75vh; overflow-y: auto;">
                     <div class="row g-3">
                         <div class="col-12">
                             <label class="form-label required">Hiring Request</label>

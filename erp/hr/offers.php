@@ -110,30 +110,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ");
         
         mysqli_stmt_bind_param(
-            $insert_stmt,
-            "siissssssddddddddsssis",
-            $offer_no,
-            $candidate_id,
-            $hiring_request_id,
-            $offer_date,
-            $offer_valid_till,
-            $expected_joining_date,
-            $designation,
-            $department,
-            $employment_type,
-            $ctc,
-            $basic_salary,
-            $hra,
-            $conveyance,
-            $medical,
-            $special_allowance,
-            $bonus,
-            $other_benefits,
-            $terms_conditions,
-            $offer_document,
-            $current_employee_id,
-            $current_employee['full_name']
-        );
+    $insert_stmt,
+    "siissssssdddddddsssis",
+    $offer_no,
+    $candidate_id,
+    $hiring_request_id,
+    $offer_date,
+    $offer_valid_till,
+    $expected_joining_date,
+    $designation,
+    $department,
+    $employment_type,
+    $ctc,
+    $basic_salary,
+    $hra,
+    $conveyance,
+    $medical,
+    $special_allowance,
+    $bonus,
+    $other_benefits,
+    $terms_conditions,
+    $offer_document,
+    $current_employee_id,
+    $current_employee['full_name']
+);
         
         if (mysqli_stmt_execute($insert_stmt)) {
             $offer_id = mysqli_insert_id($conn);
