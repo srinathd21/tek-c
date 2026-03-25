@@ -93,7 +93,7 @@ $sql = "
  FROM mom_reports m
  JOIN sites s ON s.id = m.site_id
  JOIN clients c ON c.id = s.client_id
- LEFT JOIN employees e ON e.id = m.prepared_by
+ LEFT JOIN employees e ON e.id = m.employee_id
  WHERE m.id = ? AND m.employee_id = ?
  LIMIT 1
 ";
@@ -106,7 +106,7 @@ $row = mysqli_fetch_assoc($res);
 mysqli_stmt_close($st);
 if (!$row) die("MOM not found or not allowed");
 
-// Map data
+// Map data with correct column names
 $data = [];
 $data['project_name']   = clean_text($row['project_name'] ?? 'Project');
 $data['client_name']    = clean_text($row['client_name'] ?? 'Client');
@@ -117,21 +117,24 @@ $data['mom_date']       = dmy_dash($row['mom_date'] ?? date('Y-m-d'));
 $data['meeting_conducted'] = clean_text($row['meeting_conducted_by'] ?? '');
 $data['meeting_held_at']   = clean_text($row['meeting_held_at'] ?? '');
 $data['meeting_time']    = time_format($row['meeting_time'] ?? '');
-$data['agenda']          = decode_rows($row['meeting_agenda_json'] ?? '');
-$data['attendees']       = decode_rows($row['attendees_json'] ?? []);
-$data['discussions']     = decode_rows($row['discussions_json'] ?? []);
-$data['mom_shared_to']   = decode_rows($row['mom_shared_to_json'] ?? []);
-$data['shared_by']       = clean_text($row['shared_by'] ?? ($row['prepared_name'] ?? ''));
-$data['shared_on']       = dmy_dash($row['shared_on'] ?? '');
+$data['agenda']          = decode_rows($row['agenda_json'] ?? ''); // Fixed: was meeting_agenda_json
+$data['attendees']       = decode_rows($row['attendees_json'] ?? []); // Correct
+$data['discussions']     = decode_rows($row['minutes_json'] ?? []); // Fixed: was discussions_json
+$data['mom_shared_to']   = !empty($row['mom_shared_to']) ? [['attendees' => $row['mom_shared_to'], 'copy_to' => $row['mom_copy_to'] ?? '']] : []; // Fixed: mom_shared_to is text, not JSON
+$data['shared_by']       = clean_text($row['mom_shared_by'] ?? ($row['prepared_name'] ?? '')); // Fixed: was shared_by
+$data['shared_on']       = dmy_dash($row['mom_shared_on'] ?? ''); // Fixed: was shared_on
 $data['short_forms']     = [
   ['INFO','Information'],
   ['IMM','Immediately'],
   ['ASAP','As Soon As Possible'],
   ['TBF','To be Followed'],
 ];
-$data['amended_points']  = decode_rows($row['amended_points_json'] ?? []);
+$data['amended_points']  = decode_rows($row['amended_json'] ?? []); // Fixed: was amended_points_json
 $data['next_meeting_date']  = clean_text(!empty($row['next_meeting_date']) ? dmy_dash($row['next_meeting_date']) : '');
 $data['next_meeting_place'] = clean_text($row['next_meeting_place'] ?? '');
+
+// Remove the debug line that's stopping execution
+// print_r($data['discussions']);die;
 
 // sensible defaults
 if (count($data['agenda']) === 0) {
@@ -145,10 +148,10 @@ if (count($data['attendees']) === 0) {
 }
 if (count($data['discussions']) === 0) {
   for ($i=1;$i<=12;$i++){
-    $data['discussions'][] = ['slno'=>$i,'discussion'=>'','responsible'=>'','deadline'=>''];
+    $data['discussions'][] = ['discussion' => '', 'responsible' => '', 'deadline' => ''];
   }
 }
-if (count($data['mom_shared_to']) === 0) {
+if (empty($data['mom_shared_to']) || count($data['mom_shared_to']) === 0) {
   $data['mom_shared_to'] = [['attendees'=>'All Attendees','copy_to'=>'']];
 }
 
