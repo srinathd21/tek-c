@@ -14,9 +14,15 @@
       <i class="bi bi-grid-1x2"></i><span class="label">Dashboard</span>
     </a>
 
+
     <!-- My Sites -->
     <a class="side-link" href="my-sites.php">
       <i class="bi bi-geo-alt"></i><span class="label">My Projects</span>
+    </a>
+
+    <!-- Attendance -->
+    <a class="side-link" href="punchin.php">
+      <i class="bi bi-calendar-check"></i><span class="label">Attendance</span>
     </a>
 
     <!-- Today Task -->
@@ -88,15 +94,10 @@
       </a>
       
       <!-- Dealers Directory -->
-      <a class="side-link" href="dealers-directory.php">
+      <a class="side-link" href="dealers.php">
         <i class="bi bi-shop"></i><span class="label">Dealers</span>
       </a>
     </div>
-
-    <!-- Attendance -->
-    <a class="side-link" href="attendance.php">
-      <i class="bi bi-calendar-check"></i><span class="label">Attendance</span>
-    </a>
 
     <!-- Task Approval -->
     <a class="side-link" href="task-approval.php">
@@ -129,8 +130,8 @@
       <span class="ms-auto label"><i class="bi bi-chevron-down"></i></span>
     </a>
     <div class="collapse ps-2" id="hrMenu">
-      <a class="side-link" href="profile.php"><i class="bi bi-person-circle"></i><span class="label">Profile</span></a>
-      <a class="side-link" href="attendance-profile.php"><i class="bi bi-person-badge"></i><span class="label">Attendance Profile</span></a>
+      <a class="side-link" href="my-profile.php"><i class="bi bi-person-circle"></i><span class="label">Profile</span></a>
+      <a class="side-link" href="my-attendance.php"><i class="bi bi-person-badge"></i><span class="label">Attendance Profile</span></a>
       <a class="side-link" href="leave-ledger.php"><i class="bi bi-journal-bookmark"></i><span class="label">Leave Ledger</span></a>
       <a class="side-link" href="payslips.php"><i class="bi bi-receipt"></i><span class="label">Payslips</span></a>
       <a class="side-link" href="hr-policy.php"><i class="bi bi-file-earmark-medical"></i><span class="label">HR Policy</span></a>
@@ -139,11 +140,6 @@
       <a class="side-link" href="apply-leave.php"><i class="bi bi-calendar-plus"></i><span class="label">Apply Leave</span></a>
       <a class="side-link" href="my-leave-history.php"><i class="bi bi-clock-history"></i><span class="label">My Leave History</span></a>
     </div>
-
-    <!-- My Profile -->
-    <a class="side-link" href="my-profile.php">
-      <i class="bi bi-person-circle"></i><span class="label">My Profile</span>
-    </a>
 
     <!-- Report -->
     <a class="side-link" href="report.php">

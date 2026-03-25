@@ -66,7 +66,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_stmt_bind_param($insert_stmt, "iisiss", $request_id, $dealer_id, $empId, $empName, $expected_date, $notes);
                 if (mysqli_stmt_execute($insert_stmt)) {
                     $success = "Dealer added successfully!";
-                    // Refresh to show new dealer
                     header("Location: manage-quotation.php?id=" . $request_id . "&status=success&message=" . urlencode($success));
                     exit();
                 } else {
@@ -294,13 +293,13 @@ function formatCurrency($amount) {
 }
 function getStatusBadge($status) {
     $badges = [
-        'Pending' => ['bg-warning', 'bi-clock'],
-        'Quotation Received' => ['bg-primary', 'bi-file-text'],
-        'Rejected' => ['bg-danger', 'bi-x-circle'],
-        'Withdrawn' => ['bg-secondary', 'bi-x']
+        'Pending' => ['warning', 'bi-clock'],
+        'Quotation Received' => ['primary', 'bi-file-text'],
+        'Rejected' => ['danger', 'bi-x-circle'],
+        'Withdrawn' => ['secondary', 'bi-x']
     ];
-    $badge = $badges[$status] ?? ['bg-secondary', 'bi-question'];
-    return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $status . '</span>';
+    $badge = $badges[$status] ?? ['secondary', 'bi-question'];
+    return '<span class="badge bg-' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $status . '</span>';
 }
 
 // Get status message if any
@@ -324,9 +323,6 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
     <!-- Flatpickr -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
-    <!-- DataTables -->
-    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
 
     <!-- TEK-C Custom Styles -->
     <link href="assets/css/layout-styles.css" rel="stylesheet" />
@@ -335,79 +331,49 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
 
     <style>
         .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-
-        .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px 16px 12px; height:100%; }
-        .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-        .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
-        .panel-menu{ width:36px; height:36px; border-radius:12px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:#6b7280; }
-
-        .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-            padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; }
+        
+        .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px; margin-bottom:20px; }
+        .panel-title{ font-weight:900; font-size:18px; margin:0; color:#111827; }
+        .muted{ color:#6b7280; font-weight:650; }
+        
+        .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:14px 16px; display:flex; align-items:center; gap:14px; transition:all 0.2s; }
         .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
         .stat-ic.blue{ background: var(--blue); }
         .stat-ic.green{ background: #10b981; }
         .stat-ic.yellow{ background: #f59e0b; }
         .stat-ic.red{ background: #ef4444; }
-        .stat-ic.purple{ background: #8b5cf6; }
-        .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-        .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
-
-        .proj-title{ font-weight:900; font-size:13px; color:#1f2937; margin-bottom:2px; line-height:1.2; }
-        .proj-sub{ font-size:11px; color:#6b7280; font-weight:700; line-height:1.25; }
-
-        .btn-action {
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 7px 10px;
-            color: var(--muted);
-            font-size: 12px;
-            text-decoration:none;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            gap:6px;
-            font-weight: 900;
-        }
-        .btn-action:hover { background: var(--bg); color: var(--blue); }
-
-        .alert { border-radius: var(--radius); border:none; box-shadow: var(--shadow); margin-bottom: 20px; }
-
-        .form-label{ font-weight:800; color:#4b5563; font-size:12px; margin-bottom:4px; }
-        .form-control, .form-select{ border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-weight:600; font-size:13px; }
-
-        .dealer-item, .quotation-item {
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 12px;
-            background: #f9fafb;
-            transition: all 0.2s;
-        }
-        .dealer-item:hover, .quotation-item:hover {
-            border-color: var(--blue);
-            background: #fff;
-        }
-
+        .stat-label{ color:#4b5563; font-weight:750; font-size:13px; text-transform:uppercase; letter-spacing:0.5px; }
+        .stat-value{ font-size:24px; font-weight:900; line-height:1.2; margin-top:4px; color:#111827; }
+        
+        .form-label{ font-weight:800; color:#4b5563; font-size:12px; margin-bottom:6px; }
+        .form-control, .form-select{ border-radius:12px; border:1px solid var(--border); padding:10px 12px; font-weight:600; font-size:13px; transition:all 0.2s; }
+        .form-control:focus, .form-select:focus{ border-color: var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,0.1); }
+        
+        .btn-tek{ border-radius:12px; font-weight:800; padding:10px 16px; transition:all 0.2s; }
+        .btn-tek i{ margin-right:6px; }
+        
+        .dealer-item, .quotation-item{ border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:12px; background:#fff; transition:all 0.2s; }
+        .dealer-item:hover, .quotation-item:hover{ border-color: var(--blue); box-shadow: var(--shadow); }
+        
+        .alert{ border-radius: var(--radius); border:none; box-shadow: var(--shadow); margin-bottom:20px; }
+        
+        .badge{ padding:6px 10px; font-weight:700; border-radius:20px; font-size:11px; letter-spacing:0.3px; }
+        
+        hr{ margin:16px 0; border-color: var(--border); }
+        
+        .description-box{ background:#f9fafb; border-radius:14px; padding:16px; line-height:1.6; color:#374151; font-size:14px; }
+        
         @media (max-width: 991.98px){
-            .main{
-                margin-left: 0 !important;
-                width: 100% !important;
-                max-width: 100% !important;
-            }
-            .sidebar{
-                position: fixed !important;
-                transform: translateX(-100%);
-                z-index: 1040 !important;
-            }
-            .sidebar.open, .sidebar.active, .sidebar.show{
-                transform: translateX(0) !important;
-            }
+            .main{ margin-left:0 !important; width:100% !important; max-width:100% !important; }
+            .sidebar{ position:fixed !important; transform:translateX(-100%); z-index:1040 !important; }
+            .sidebar.open, .sidebar.active, .sidebar.show{ transform:translateX(0) !important; }
         }
         @media (max-width: 768px) {
-            .content-scroll { padding: 12px 10px 12px !important; }
-            .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
-            .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
+            .content-scroll{ padding:12px !important; }
+            .container-fluid.maxw{ padding-left:6px !important; padding-right:6px !important; }
+            .panel{ padding:12px !important; margin-bottom:12px; }
+            .stat-card{ padding:12px; }
+            .stat-value{ font-size:20px; }
         }
     </style>
 </head>
@@ -417,7 +383,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
         <main class="main" aria-label="Main">
             <?php include 'includes/topbar.php'; ?>
 
-            <div id="contentScroll" class="content-scroll">
+            <div class="content-scroll">
                 <div class="container-fluid maxw">
 
                     <!-- Status Messages -->
@@ -429,92 +395,97 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                         </div>
                     <?php endif; ?>
 
+                    <?php if ($success): ?>
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <i class="bi bi-check-circle-fill me-2"></i><?php echo e($success); ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($error): ?>
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i><?php echo e($error); ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    <?php endif; ?>
+
                     <!-- Header -->
-                    <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
                         <div>
                             <h1 class="h3 fw-bold text-dark mb-1">Manage Quotation</h1>
-                            <p class="text-muted mb-0">
-                                Request #<?php echo e($quotation_request['request_no']); ?> • <?php echo e($quotation_request['title']); ?>
-                            </p>
+                            <div class="muted">Request #<?php echo e($quotation_request['request_no']); ?> • <?php echo e($quotation_request['title']); ?></div>
                         </div>
-                        <div>
-                            <a href="assigned-quotations.php" class="btn btn-outline-secondary">
-                                <i class="bi bi-arrow-left"></i> Back
-                            </a>
-                        </div>
+                        <a href="assigned-quotations.php" class="btn btn-outline-secondary btn-tek">
+                            <i class="bi bi-arrow-left"></i> Back
+                        </a>
                     </div>
 
-                    <!-- Stats Cards -->
+                    <!-- Stats Cards Row -->
                     <div class="row g-3 mb-4">
-                        <div class="col-12 col-md-6 col-xl-3">
+                        <div class="col-md-6 col-xl-3">
                             <div class="stat-card">
                                 <div class="stat-ic blue"><i class="bi bi-building"></i></div>
                                 <div>
                                     <div class="stat-label">Project</div>
-                                    <div class="stat-value" style="font-size:20px;"><?php echo e($quotation_request['project_name']); ?></div>
+                                    <div class="stat-value"><?php echo e($quotation_request['project_name']); ?></div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-12 col-md-6 col-xl-3">
+                        <div class="col-md-6 col-xl-3">
                             <div class="stat-card">
                                 <div class="stat-ic green"><i class="bi bi-person"></i></div>
                                 <div>
                                     <div class="stat-label">Client</div>
-                                    <div class="stat-value" style="font-size:20px;"><?php echo e($quotation_request['client_name'] ?? '—'); ?></div>
+                                    <div class="stat-value"><?php echo e($quotation_request['client_name'] ?? '—'); ?></div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-12 col-md-6 col-xl-3">
+                        <div class="col-md-6 col-xl-3">
                             <div class="stat-card">
                                 <div class="stat-ic yellow"><i class="bi bi-calendar"></i></div>
                                 <div>
                                     <div class="stat-label">Required By</div>
-                                    <div class="stat-value" style="font-size:20px;"><?php echo safeDate($quotation_request['required_by_date']); ?></div>
+                                    <div class="stat-value"><?php echo safeDate($quotation_request['required_by_date']); ?></div>
                                     <?php if (!empty($quotation_request['days_remaining']) && $quotation_request['days_remaining'] > 0): ?>
-                                        <div class="proj-sub"><?php echo $quotation_request['days_remaining']; ?> days left</div>
+                                        <div class="muted" style="font-size:11px;"><?php echo $quotation_request['days_remaining']; ?> days left</div>
                                     <?php endif; ?>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-12 col-md-6 col-xl-3">
+                        <div class="col-md-6 col-xl-3">
                             <div class="stat-card">
                                 <div class="stat-ic red"><i class="bi bi-flag"></i></div>
                                 <div>
                                     <div class="stat-label">Priority</div>
-                                    <div class="stat-value" style="font-size:20px;"><?php echo e($quotation_request['priority']); ?></div>
+                                    <div class="stat-value"><?php echo e($quotation_request['priority']); ?></div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Description Panel -->
-                    <div class="panel mb-4">
-                        <div class="panel-header">
-                            <h3 class="panel-title">Description</h3>
-                            <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-                        </div>
-                        <div class="description-box" style="background:#f9fafb; border-radius:12px; padding:16px;">
+                    <div class="panel">
+                        <h3 class="panel-title mb-3">Description</h3>
+                        <div class="description-box">
                             <?php echo nl2br(e($quotation_request['description'])); ?>
                         </div>
                         <?php if (!empty($quotation_request['specifications'])): ?>
                             <div class="mt-3">
-                                <h4 class="fw-900 mb-2" style="font-size:14px;">Specifications</h4>
-                                <div class="description-box" style="background:#f9fafb; border-radius:12px; padding:16px;">
+                                <h4 class="fw-bold mb-2" style="font-size:13px; color:#4b5563;">Specifications</h4>
+                                <div class="description-box">
                                     <?php echo nl2br(e($quotation_request['specifications'])); ?>
                                 </div>
                             </div>
                         <?php endif; ?>
                     </div>
 
-                    <div class="row g-4">
+                    <!-- Main Content Row -->
+                    <div class="row g-4 mt-1">
                         <!-- Left Column: Dealers -->
                         <div class="col-lg-6">
                             <!-- Add Dealer Panel -->
-                            <div class="panel mb-4">
-                                <div class="panel-header">
-                                    <h3 class="panel-title">Add Dealer</h3>
-                                    <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-                                </div>
+                            <div class="panel">
+                                <h3 class="panel-title mb-3">Add Dealer</h3>
                                 <form method="POST" action="">
                                     <input type="hidden" name="action" value="add_dealer">
                                     <div class="row g-3">
@@ -538,7 +509,9 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                             <textarea class="form-control" name="notes" rows="2" placeholder="Any specific instructions..."></textarea>
                                         </div>
                                         <div class="col-12">
-                                            <button type="submit" class="btn btn-primary w-100">Add Dealer</button>
+                                            <button class="btn btn-primary btn-tek w-100" type="submit">
+                                                <i class="bi bi-plus-circle"></i> Add Dealer
+                                            </button>
                                         </div>
                                     </div>
                                 </form>
@@ -546,23 +519,20 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
 
                             <!-- Assigned Dealers Panel -->
                             <div class="panel">
-                                <div class="panel-header">
-                                    <h3 class="panel-title">Assigned Dealers</h3>
-                                    <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-                                </div>
+                                <h3 class="panel-title mb-3">Assigned Dealers</h3>
                                 <?php if (empty($assigned_dealers)): ?>
-                                    <div class="text-center py-4 text-muted">
-                                        <i class="bi bi-shop" style="font-size: 32px;"></i>
-                                        <p class="mt-2 fw-bold">No dealers assigned yet</p>
+                                    <div class="text-center py-5 text-muted">
+                                        <i class="bi bi-shop" style="font-size: 48px;"></i>
+                                        <p class="mt-3 fw-bold">No dealers assigned yet</p>
                                         <p class="small">Add dealers to start collecting quotations.</p>
                                     </div>
                                 <?php else: ?>
                                     <?php foreach ($assigned_dealers as $dealer): ?>
                                         <div class="dealer-item">
-                                            <div class="d-flex justify-content-between align-items-start">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <div>
-                                                    <h5 class="fw-900 mb-1"><?php echo e($dealer['dealer_name']); ?></h5>
-                                                    <div class="proj-sub">
+                                                    <h5 class="fw-bold mb-1"><?php echo e($dealer['dealer_name']); ?></h5>
+                                                    <div class="muted" style="font-size:12px;">
                                                         <i class="bi bi-person"></i> <?php echo e($dealer['contact_person'] ?? '—'); ?>
                                                         <?php if (!empty($dealer['mobile_number'])): ?>
                                                             • <i class="bi bi-telephone"></i> <?php echo e($dealer['mobile_number']); ?>
@@ -571,16 +541,21 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                                 </div>
                                                 <?php echo getStatusBadge($dealer['status']); ?>
                                             </div>
-                                            <?php if ($dealer['status'] === 'Pending'): ?>
-                                                <div class="mt-3">
-                                                    <button type="button" class="btn-action" data-bs-toggle="modal" data-bs-target="#uploadModal<?php echo $dealer['id']; ?>">
-                                                        <i class="bi bi-upload"></i> Upload Quotation
-                                                    </button>
+                                            <?php if (!empty($dealer['expected_quotation_date'])): ?>
+                                                <div class="muted mt-1" style="font-size:11px;">
+                                                    <i class="bi bi-calendar"></i> Expected: <?php echo safeDate($dealer['expected_quotation_date']); ?>
                                                 </div>
                                             <?php endif; ?>
-                                            <?php if (!empty($dealer['expected_quotation_date'])): ?>
-                                                <div class="mt-2 proj-sub">
-                                                    <i class="bi bi-calendar"></i> Expected: <?php echo safeDate($dealer['expected_quotation_date']); ?>
+                                            <?php if (!empty($dealer['notes'])): ?>
+                                                <div class="muted mt-1" style="font-size:11px;">
+                                                    <i class="bi bi-pencil"></i> <?php echo e($dealer['notes']); ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if ($dealer['status'] === 'Pending'): ?>
+                                                <div class="mt-3">
+                                                    <button type="button" class="btn btn-sm btn-outline-primary btn-tek" data-bs-toggle="modal" data-bs-target="#uploadModal<?php echo $dealer['id']; ?>">
+                                                        <i class="bi bi-upload"></i> Upload Quotation
+                                                    </button>
                                                 </div>
                                             <?php endif; ?>
                                         </div>
@@ -588,9 +563,9 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                         <!-- Upload Quotation Modal -->
                                         <div class="modal fade" id="uploadModal<?php echo $dealer['id']; ?>" tabindex="-1">
                                             <div class="modal-dialog modal-lg">
-                                                <div class="modal-content">
-                                                    <div class="modal-header">
-                                                        <h5 class="modal-title fw-900">Upload Quotation - <?php echo e($dealer['dealer_name']); ?></h5>
+                                                <div class="modal-content" style="border-radius:20px;">
+                                                    <div class="modal-header" style="border-bottom:1px solid var(--border);">
+                                                        <h5 class="modal-title fw-bold">Upload Quotation - <?php echo e($dealer['dealer_name']); ?></h5>
                                                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                     </div>
                                                     <form method="POST" action="" enctype="multipart/form-data">
@@ -600,7 +575,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                                             
                                                             <div class="row g-3">
                                                                 <div class="col-md-6">
-                                                                    <label class="form-label required">Quotation No.</label>
+                                                                    <label class="form-label">Quotation No. *</label>
                                                                     <input type="text" class="form-control" name="quotation_no" required placeholder="Your reference">
                                                                 </div>
                                                                 <div class="col-md-6">
@@ -608,7 +583,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                                                     <input type="text" class="form-control" name="dealer_quotation_ref" placeholder="Dealer's reference">
                                                                 </div>
                                                                 <div class="col-md-6">
-                                                                    <label class="form-label required">Quotation Date</label>
+                                                                    <label class="form-label">Quotation Date *</label>
                                                                     <input type="text" class="form-control datepicker" name="quotation_date" value="<?php echo date('Y-m-d'); ?>" required>
                                                                 </div>
                                                                 <div class="col-md-6">
@@ -616,7 +591,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                                                     <input type="text" class="form-control datepicker" name="valid_until">
                                                                 </div>
                                                                 <div class="col-md-12">
-                                                                    <label class="form-label required">Grand Total (₹)</label>
+                                                                    <label class="form-label">Grand Total (₹) *</label>
                                                                     <input type="number" class="form-control" name="grand_total" step="0.01" required placeholder="0.00">
                                                                 </div>
                                                                 <div class="col-md-12">
@@ -637,9 +612,9 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <div class="modal-footer">
-                                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                            <button type="submit" class="btn btn-primary">Upload Quotation</button>
+                                                        <div class="modal-footer" style="border-top:1px solid var(--border);">
+                                                            <button type="button" class="btn btn-outline-secondary btn-tek" data-bs-dismiss="modal">Cancel</button>
+                                                            <button type="submit" class="btn btn-primary btn-tek">Upload Quotation</button>
                                                         </div>
                                                     </form>
                                                 </div>
@@ -653,54 +628,54 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                         <!-- Right Column: Quotations Received -->
                         <div class="col-lg-6">
                             <div class="panel">
-                                <div class="panel-header">
-                                    <h3 class="panel-title">Quotations Received</h3>
-                                    <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-                                </div>
+                                <h3 class="panel-title mb-3">Quotations Received</h3>
                                 <?php if (empty($quotations)): ?>
-                                    <div class="text-center py-4 text-muted">
-                                        <i class="bi bi-inbox" style="font-size: 32px;"></i>
-                                        <p class="mt-2 fw-bold">No quotations uploaded yet</p>
+                                    <div class="text-center py-5 text-muted">
+                                        <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                                        <p class="mt-3 fw-bold">No quotations uploaded yet</p>
                                         <p class="small">Upload quotations from assigned dealers.</p>
                                     </div>
                                 <?php else: ?>
                                     <?php foreach ($quotations as $quote): ?>
                                         <div class="quotation-item">
-                                            <div class="d-flex justify-content-between align-items-start">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <div>
-                                                    <h5 class="fw-900 mb-1"><?php echo e($quote['quotation_no']); ?></h5>
-                                                    <div class="proj-sub">
+                                                    <h5 class="fw-bold mb-1"><?php echo e($quote['quotation_no']); ?></h5>
+                                                    <div class="muted" style="font-size:12px;">
                                                         <i class="bi bi-shop"></i> <?php echo e($quote['dealer_name']); ?>
                                                         <?php if (!empty($quote['dealer_quotation_ref'])): ?>
                                                             • Ref: <?php echo e($quote['dealer_quotation_ref']); ?>
                                                         <?php endif; ?>
                                                     </div>
                                                 </div>
-                                                <span class="badge bg-primary">Submitted</span>
+                                                <span class="badge bg-primary"><i class="bi bi-check-circle"></i> Submitted</span>
                                             </div>
                                             <div class="row mt-2">
                                                 <div class="col-6">
-                                                    <div class="proj-sub">Amount</div>
-                                                    <div class="fw-900 text-success"><?php echo formatCurrency($quote['grand_total']); ?></div>
+                                                    <div class="muted" style="font-size:11px;">Amount</div>
+                                                    <div class="fw-bold text-success" style="font-size:16px;"><?php echo formatCurrency($quote['grand_total']); ?></div>
                                                 </div>
                                                 <div class="col-6">
-                                                    <div class="proj-sub">Date</div>
-                                                    <div><?php echo safeDate($quote['quotation_date']); ?></div>
+                                                    <div class="muted" style="font-size:11px;">Date</div>
+                                                    <div class="fw-bold"><?php echo safeDate($quote['quotation_date']); ?></div>
                                                 </div>
                                             </div>
-                                            <?php if (!empty($quote['delivery_terms']) || !empty($quote['payment_terms'])): ?>
-                                                <div class="mt-2">
+                                            <?php if (!empty($quote['delivery_terms']) || !empty($quote['payment_terms']) || !empty($quote['warranty'])): ?>
+                                                <div class="mt-2 d-flex flex-wrap gap-2">
                                                     <?php if (!empty($quote['delivery_terms'])): ?>
-                                                        <span class="badge bg-info me-1">Delivery: <?php echo e($quote['delivery_terms']); ?></span>
+                                                        <span class="badge bg-info">Delivery: <?php echo e($quote['delivery_terms']); ?></span>
                                                     <?php endif; ?>
                                                     <?php if (!empty($quote['payment_terms'])): ?>
                                                         <span class="badge bg-secondary">Payment: <?php echo e($quote['payment_terms']); ?></span>
                                                     <?php endif; ?>
+                                                    <?php if (!empty($quote['warranty'])): ?>
+                                                        <span class="badge bg-dark">Warranty: <?php echo e($quote['warranty']); ?></span>
+                                                    <?php endif; ?>
                                                 </div>
                                             <?php endif; ?>
                                             <?php if (!empty($quote['quotation_document'])): ?>
-                                                <div class="mt-2">
-                                                    <a href="<?php echo e($quote['quotation_document']); ?>" target="_blank" class="btn-action">
+                                                <div class="mt-3">
+                                                    <a href="<?php echo e($quote['quotation_document']); ?>" target="_blank" class="btn btn-sm btn-outline-primary btn-tek">
                                                         <i class="bi bi-file-pdf"></i> View Document
                                                     </a>
                                                 </div>
@@ -712,22 +687,23 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                         </div>
                     </div>
 
-                    <!-- Submit to QS Button Panel -->
+                    <!-- Submit to QS Panel -->
                     <div class="panel mt-4">
-                        <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
                             <div>
-                                <h3 class="panel-title mb-0">Ready to Submit to QS?</h3>
-                                <p class="proj-sub mt-1 mb-0">Once submitted, QS team will review and negotiate with dealers.</p>
+                                <h3 class="panel-title mb-1">Ready to Submit to QS?</h3>
+                                <p class="muted mb-0" style="font-size:13px;">Once submitted, QS team will review and negotiate with dealers.</p>
                             </div>
                             <form method="POST" action="" onsubmit="return confirm('Are you sure you want to submit all quotations to the QS team? You cannot make changes after submission.');">
                                 <input type="hidden" name="action" value="submit_to_qs">
-                                <button type="submit" class="btn btn-success btn-lg" <?php echo empty($quotations) ? 'disabled' : ''; ?>>
+                                <button type="submit" class="btn btn-success btn-tek btn-lg" <?php echo empty($quotations) ? 'disabled' : ''; ?>>
                                     <i class="bi bi-send"></i> Submit to QS
                                 </button>
                             </form>
                         </div>
                         <?php if ($total_dealers > 0 && !$all_submitted): ?>
-                            <div class="mt-3 text-warning">
+                            <hr>
+                            <div class="text-warning">
                                 <i class="bi bi-info-circle"></i> 
                                 <?php echo $submitted_count; ?> out of <?php echo $total_dealers; ?> dealers have submitted quotations. 
                                 Please wait for all quotations before submitting.
@@ -765,3 +741,4 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
     </script>
 </body>
 </html>
+<?php mysqli_close($conn); ?>
