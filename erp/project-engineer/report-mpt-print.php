@@ -283,7 +283,7 @@ $meta = [
   'project' => $projectName ?: 'Anandhamayam',
   'client'  => $clientName ?: 'Ariharasudhan P',
   'pmc'     => $pmcName,
-  'mpt_no_date' => clean_text('# ' . ($mptNo ?: 'MPT-1-202602-01') . ' / ' . ($mptDate ?: '09.02.2026')),
+  'mpt_no_date' => clean_text(($mptNo ?: 'MPT-1-202602-01') . ' / ' . ($mptDate ?: '09.02.2026')),
   'month'   => $monthText ?: 'February',
   'handover'=> $handoverText ?: 'Mar-26',
 ];
