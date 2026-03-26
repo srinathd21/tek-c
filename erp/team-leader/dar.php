@@ -123,6 +123,7 @@ if (!hasColumn($conn, 'dar_reports', 'incharge')) {
 }
 
 // ---------------- Assigned Sites ----------------
+// ---------------- Assigned Sites ----------------
 $sites = [];
 
 if ($designation === 'manager') {
@@ -131,6 +132,25 @@ if ($designation === 'manager') {
     FROM sites s
     INNER JOIN clients c ON c.id = s.client_id
     WHERE s.manager_employee_id = ?
+      AND s.deleted_at IS NULL
+    ORDER BY s.created_at DESC
+  ";
+  $st = mysqli_prepare($conn, $q);
+  if ($st) {
+    mysqli_stmt_bind_param($st, "i", $employeeId);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+    $sites = mysqli_fetch_all($res, MYSQLI_ASSOC);
+    mysqli_stmt_close($st);
+  }
+} elseif ($designation === 'team lead') {
+  // Team Lead specific query - get sites where they are team lead
+  $q = "
+    SELECT s.id, s.project_name, s.project_location, c.client_name
+    FROM sites s
+    INNER JOIN clients c ON c.id = s.client_id
+    WHERE s.team_lead_employee_id = ?
+      AND s.deleted_at IS NULL
     ORDER BY s.created_at DESC
   ";
   $st = mysqli_prepare($conn, $q);
@@ -142,12 +162,14 @@ if ($designation === 'manager') {
     mysqli_stmt_close($st);
   }
 } else {
+  // For Project Engineers, Sr. Engineer, etc. - sites where assigned as project engineer
   $q = "
     SELECT s.id, s.project_name, s.project_location, c.client_name
     FROM site_project_engineers spe
     INNER JOIN sites s ON s.id = spe.site_id
     INNER JOIN clients c ON c.id = s.client_id
     WHERE spe.employee_id = ?
+      AND s.deleted_at IS NULL
     ORDER BY s.created_at DESC
   ";
   $st = mysqli_prepare($conn, $q);
@@ -159,6 +181,36 @@ if ($designation === 'manager') {
     mysqli_stmt_close($st);
   }
 }
+
+// Optional: If you want Team Leads to also see sites where they are project engineers
+// You can modify the team lead section to include both:
+/*
+} elseif ($designation === 'team lead') {
+  $q = "
+    SELECT s.id, s.project_name, s.project_location, c.client_name
+    FROM sites s
+    INNER JOIN clients c ON c.id = s.client_id
+    WHERE s.deleted_at IS NULL
+    AND (
+      s.team_lead_employee_id = ?
+      OR s.id IN (
+        SELECT spe.site_id 
+        FROM site_project_engineers spe 
+        WHERE spe.employee_id = ?
+      )
+    )
+    ORDER BY s.created_at DESC
+  ";
+  $st = mysqli_prepare($conn, $q);
+  if ($st) {
+    mysqli_stmt_bind_param($st, "ii", $employeeId, $employeeId);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+    $sites = mysqli_fetch_all($res, MYSQLI_ASSOC);
+    mysqli_stmt_close($st);
+  }
+}
+*/
 
 // ---------------- Selected Site ----------------
 $siteId = isset($_GET['site_id']) ? (int)$_GET['site_id'] : 0;

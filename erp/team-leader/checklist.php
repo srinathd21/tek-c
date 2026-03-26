@@ -37,6 +37,20 @@ function ymdOrNull($v){
   return $v;
 }
 
+function hasColumn(mysqli $conn, string $table, string $column): bool {
+    $sql = "SELECT 1 FROM information_schema.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1";
+    $st = mysqli_prepare($conn, $sql);
+    if (!$st) return false;
+    mysqli_stmt_bind_param($st, "ss", $table, $column);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+    $ok = (bool)mysqli_fetch_assoc($res);
+    mysqli_stmt_close($st);
+    return $ok;
+}
+
 // ---------------- Logged Employee ----------------
 $empRow = null;
 $st = mysqli_prepare($conn, "SELECT id, full_name, designation FROM employees WHERE id=? LIMIT 1");
@@ -122,15 +136,38 @@ $checklistSections = [
   ],
 ];
 
-// ---------------- Assigned Sites ----------------
+// ---------------- MODIFIED: Assigned Sites (Now matches my-sites.php logic) ----------------
 $sites = [];
 
+// Check if team_lead_employee_id column exists
+$hasTeamLeadCol = hasColumn($conn, 'sites', 'team_lead_employee_id');
+
 if ($designation === 'manager') {
+  // Manager: sites where they are the manager
   $q = "
     SELECT s.id, s.project_name, s.project_location, c.client_name
     FROM sites s
     INNER JOIN clients c ON c.id = s.client_id
     WHERE s.manager_employee_id = ?
+    AND s.deleted_at IS NULL
+    ORDER BY s.created_at DESC
+  ";
+  $st = mysqli_prepare($conn, $q);
+  if ($st) {
+    mysqli_stmt_bind_param($st, "i", $employeeId);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+    $sites = mysqli_fetch_all($res, MYSQLI_ASSOC);
+    mysqli_stmt_close($st);
+  }
+} elseif ($designation === 'team lead' && $hasTeamLeadCol) {
+  // Team Lead: sites where they are assigned as team lead (matches my-sites.php)
+  $q = "
+    SELECT s.id, s.project_name, s.project_location, c.client_name
+    FROM sites s
+    INNER JOIN clients c ON c.id = s.client_id
+    WHERE s.team_lead_employee_id = ?
+    AND s.deleted_at IS NULL
     ORDER BY s.created_at DESC
   ";
   $st = mysqli_prepare($conn, $q);
@@ -142,12 +179,14 @@ if ($designation === 'manager') {
     mysqli_stmt_close($st);
   }
 } else {
+  // Project Engineers: sites where they are assigned as project engineer
   $q = "
     SELECT s.id, s.project_name, s.project_location, c.client_name
     FROM site_project_engineers spe
     INNER JOIN sites s ON s.id = spe.site_id
     INNER JOIN clients c ON c.id = s.client_id
     WHERE spe.employee_id = ?
+    AND s.deleted_at IS NULL
     ORDER BY s.created_at DESC
   ";
   $st = mysqli_prepare($conn, $q);
@@ -198,7 +237,7 @@ $todayYmd = date('Y-m-d');
 $defaultDocNo = '';
 
 if ($siteId > 0) {
-  // Get the count for today's date for this site
+  // Get the count for this site
   $seq = 1;
   $st = mysqli_prepare($conn, "SELECT COUNT(*) AS cnt FROM checklist_reports WHERE site_id=?");
   if ($st) {
@@ -210,15 +249,8 @@ if ($siteId > 0) {
     $seq = ((int)($row['cnt'] ?? 0)) + 1;
   }
   
-  // Option 1: Format like CHK-SITEID-DATE-SEQ (commented out version)
-  // $defaultDocNo = 'CHK-' . $siteId . '-' . date('Ymd') . '-' . str_pad($seq, 2, '0', STR_PAD_LEFT);
-  
-  // Option 2: Simple format with site ID and sequence (FIXED)
-  $defaultDocNo =   $defaultDarNo = '#' . str_pad($seq, 2, '0', STR_PAD_LEFT);
-
-  
-  // Option 3: Just sequential number (if you want simple counting)
-  // $defaultDocNo = '#' . ($siteId * 100 + $seq);
+  // Simple format with site ID and sequence
+  $defaultDocNo = '#' . str_pad($seq, 2, '0', STR_PAD_LEFT);
 }
 
 // ---------------- SUBMIT ----------------
@@ -338,6 +370,19 @@ if ($st) {
 $pmcName = "M/s. UKB Construction Management Pvt Ltd";
 $defaultProjectEngineer = $preparedBy;
 $defaultPmcLead = "PMC Lead";
+
+// Get role display name
+$roleDisplay = '';
+switch($designation) {
+  case 'team lead':
+    $roleDisplay = 'Team Lead';
+    break;
+  case 'manager':
+    $roleDisplay = 'Manager';
+    break;
+  default:
+    $roleDisplay = 'Project Engineer';
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -435,6 +480,15 @@ $defaultPmcLead = "PMC Lead";
       color:#fff;
     }
     .btn-primary-tek:hover{ background:#2a8bc9; color:#fff; }
+    .site-count-badge {
+      background: #f3f4f6;
+      border-radius: 20px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #4b5563;
+      margin-left: 8px;
+    }
   </style>
 </head>
 
@@ -454,7 +508,7 @@ $defaultPmcLead = "PMC Lead";
           </div>
           <div class="d-flex gap-2 flex-wrap">
             <span class="badge-pill"><i class="bi bi-person"></i> <?php echo e($preparedBy); ?></span>
-            <span class="badge-pill"><i class="bi bi-award"></i> <?php echo e($empRow['designation'] ?? ($_SESSION['designation'] ?? '')); ?></span>
+            <span class="badge-pill"><i class="bi bi-award"></i> <?php echo e($roleDisplay); ?></span>
           </div>
         </div>
 
@@ -484,7 +538,10 @@ $defaultPmcLead = "PMC Lead";
 
           <div class="grid-2">
             <div>
-              <label class="form-label">My Assigned Sites <span class="text-danger">*</span></label>
+              <label class="form-label">
+                My Assigned Sites <span class="text-danger">*</span>
+                <span class="site-count-badge"><?php echo count($sites); ?> site<?php echo count($sites) != 1 ? 's' : ''; ?></span>
+              </label>
               <select class="form-select" id="sitePicker">
                 <option value="">-- Select Site --</option>
                 <?php foreach ($sites as $s): ?>
@@ -494,7 +551,13 @@ $defaultPmcLead = "PMC Lead";
                   </option>
                 <?php endforeach; ?>
               </select>
-              <div class="small-muted mt-1">Selecting a site will load project & client details.</div>
+              <?php if (empty($sites)): ?>
+                <div class="small-muted mt-2 text-warning">
+                  <i class="bi bi-exclamation-triangle"></i> You are not assigned to any sites. Please contact your manager.
+                </div>
+              <?php else: ?>
+                <div class="small-muted mt-1">Selecting a site will load project & client details.</div>
+              <?php endif; ?>
             </div>
 
             <div class="d-flex align-items-end justify-content-end">
@@ -521,7 +584,9 @@ $defaultPmcLead = "PMC Lead";
             </div>
 
             <?php if (!$site): ?>
-              <div class="text-muted" style="font-weight:800;">Please select a site above to load details.</div>
+              <div class="text-muted" style="font-weight:800;">
+                <i class="bi bi-info-circle"></i> Please select a site above to load details.
+              </div>
             <?php else: ?>
               <div class="grid-3">
                 <div>
@@ -623,7 +688,7 @@ $defaultPmcLead = "PMC Lead";
             <div class="table-responsive">
               <table class="table table-bordered align-middle mb-0">
                 <thead>
-                  <tr><th>Doc No</th><th>Date</th><th>Project</th></tr>
+                  <tr><th>Doc No</th><th>Date</th><th>Project</th>   </tr>
                 </thead>
                 <tbody>
                   <?php foreach ($recent as $r): ?>
@@ -664,3 +729,6 @@ document.addEventListener('DOMContentLoaded', function(){
 
 </body>
 </html>
+<?php
+if (isset($conn)) { mysqli_close($conn); }
+?>

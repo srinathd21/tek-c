@@ -329,7 +329,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_mom'])) {
     $mso = ymdOrNull($mom_shared_on);
 
     $ins = mysqli_prepare($conn, "
-      INSERT INTO mom_reports
+      INSERT INTO   
       (site_id, employee_id, mom_no, mom_date,
        architects,
        meeting_conducted_by, meeting_held_at, meeting_time,

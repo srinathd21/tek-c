@@ -1,7 +1,19 @@
 <?php
-// report-mom-print-final-v3.php
-// Final adjustments: corrected column width math so right-table fits the outer box,
-// Deadline column reduced (and won't overflow), and left section titles center-aligned.
+// report-mom-print-final-v3-A3-PORTRAIT-CONTROLLED-FONTSAFE-FOOTER-NOGAP.php
+// FULL CODE (A3 PORTRAIT "sheet style" with FULL ALIGNMENT CONTROL)
+// - Supports:
+//    ?view=123        => inline view/print
+//    ?view=123&dl=1   => force download
+//    ?view=123&mode=string => returns bytes in $GLOBALS['__MOM_PDF_RESULT__']
+// - Page size: A3 Portrait
+// - Outer border on every page
+// - Big header prints ONLY on first page
+// - Page 2+ starts exactly at top border area (NO extra top gap)
+// - Title font size 14, content font size 11
+// - Footer shows page X/Y like 1/3, 2/3 (FPDF AliasNbPages)
+// - FIX: Array to string conversion safe clean_text()
+// - FIX: CalcRowHeight uses same inner width as MultiCell (no overlap)
+// - Font: tries Calibri if installed, otherwise falls back to Arial automatically
 
 ob_start();
 session_start();
@@ -14,13 +26,26 @@ if (empty($_SESSION['employee_id'])) {
     exit;
 }
 
-$employeeId = (int)$_SESSION['employee_id'];
+$MODE_STRING   = (isset($_GET['mode']) && $_GET['mode'] === 'string');
+$forceDownload = (isset($_GET['dl']) && $_GET['dl'] == '1');
+
+$employeeId = (int)($_SESSION['employee_id'] ?? 0);
 $conn = get_db_connection();
 if (!$conn) die("DB connection failed");
 
 /* ----------------- helpers ----------------- */
 
 function clean_text($s){
+    // handle arrays/objects safely (prevents "Array to string conversion")
+    if (is_array($s)) {
+        $s = implode(' ', array_map(function($v){
+            if (is_array($v) || is_object($v)) return '';
+            return (string)$v;
+        }, $s));
+    } elseif (is_object($s)) {
+        $s = method_exists($s, '__toString') ? (string)$s : json_encode($s);
+    }
+
     $s = strip_tags((string)$s);
     $s = html_entity_decode($s, ENT_QUOTES, 'UTF-8');
     $s = preg_replace('/\s+/', ' ', $s);
@@ -41,6 +66,7 @@ function time_format($time){
     return $t ? date('h:i A', $t) : $time;
 }
 function decode_rows($json){
+    if (is_array($json)) return $json; // already decoded
     $json = (string)$json;
     if (trim($json) === '') return [];
     $arr = json_decode($json, true);
@@ -67,7 +93,7 @@ $sql = "
  FROM mom_reports m
  JOIN sites s ON s.id = m.site_id
  JOIN clients c ON c.id = s.client_id
- LEFT JOIN employees e ON e.id = m.prepared_by
+ LEFT JOIN employees e ON e.id = m.employee_id
  WHERE m.id = ? AND m.employee_id = ?
  LIMIT 1
 ";
@@ -80,32 +106,35 @@ $row = mysqli_fetch_assoc($res);
 mysqli_stmt_close($st);
 if (!$row) die("MOM not found or not allowed");
 
-// Map data
+// Map data with correct column names
 $data = [];
 $data['project_name']   = clean_text($row['project_name'] ?? 'Project');
 $data['client_name']    = clean_text($row['client_name'] ?? 'Client');
 $data['pmc_name']       = clean_text($row['pmc_name'] ?? 'M/s. UKB Construction Management Pvt Ltd');
 $data['architects']     = clean_text($row['architects'] ?? '');
-$data['mom_no']         = clean_text($row['mom_no'] ?? 'MOM-'.date('Ymd'));
+$data['mom_no']         = clean_text($row['mom_no'] ?? ('MOM-'.date('Ymd')));
 $data['mom_date']       = dmy_dash($row['mom_date'] ?? date('Y-m-d'));
 $data['meeting_conducted'] = clean_text($row['meeting_conducted_by'] ?? '');
 $data['meeting_held_at']   = clean_text($row['meeting_held_at'] ?? '');
 $data['meeting_time']    = time_format($row['meeting_time'] ?? '');
-$data['agenda']          = decode_rows($row['meeting_agenda_json'] ?? '');
-$data['attendees']       = decode_rows($row['attendees_json'] ?? []);
-$data['discussions']     = decode_rows($row['discussions_json'] ?? []);
-$data['mom_shared_to']   = decode_rows($row['mom_shared_to_json'] ?? []);
-$data['shared_by']       = clean_text($row['shared_by'] ?? $row['prepared_name'] ?? '');
-$data['shared_on']       = dmy_dash($row['shared_on'] ?? '');
+$data['agenda']          = decode_rows($row['agenda_json'] ?? ''); // Fixed: was meeting_agenda_json
+$data['attendees']       = decode_rows($row['attendees_json'] ?? []); // Correct
+$data['discussions']     = decode_rows($row['minutes_json'] ?? []); // Fixed: was discussions_json
+$data['mom_shared_to']   = !empty($row['mom_shared_to']) ? [['attendees' => $row['mom_shared_to'], 'copy_to' => $row['mom_copy_to'] ?? '']] : []; // Fixed: mom_shared_to is text, not JSON
+$data['shared_by']       = clean_text($row['mom_shared_by'] ?? ($row['prepared_name'] ?? '')); // Fixed: was shared_by
+$data['shared_on']       = dmy_dash($row['mom_shared_on'] ?? ''); // Fixed: was shared_on
 $data['short_forms']     = [
   ['INFO','Information'],
   ['IMM','Immediately'],
   ['ASAP','As Soon As Possible'],
   ['TBF','To be Followed'],
 ];
-$data['amended_points']  = decode_rows($row['amended_points_json'] ?? []);
-$data['next_meeting_date']  = clean_text($row['next_meeting_date'] ? dmy_dash($row['next_meeting_date']) : '');
+$data['amended_points']  = decode_rows($row['amended_json'] ?? []); // Fixed: was amended_points_json
+$data['next_meeting_date']  = clean_text(!empty($row['next_meeting_date']) ? dmy_dash($row['next_meeting_date']) : '');
 $data['next_meeting_place'] = clean_text($row['next_meeting_place'] ?? '');
+
+// Remove the debug line that's stopping execution
+// print_r($data['discussions']);die;
 
 // sensible defaults
 if (count($data['agenda']) === 0) {
@@ -119,36 +148,66 @@ if (count($data['attendees']) === 0) {
 }
 if (count($data['discussions']) === 0) {
   for ($i=1;$i<=12;$i++){
-    $data['discussions'][] = ['slno'=>$i,'discussion'=>'','responsible'=>'','deadline'=>''];
+    $data['discussions'][] = ['discussion' => '', 'responsible' => '', 'deadline' => ''];
   }
 }
-if (count($data['mom_shared_to']) === 0) {
+if (empty($data['mom_shared_to']) || count($data['mom_shared_to']) === 0) {
   $data['mom_shared_to'] = [['attendees'=>'All Attendees','copy_to'=>'']];
 }
 
-/* ----------------- PDF class (adjusted) ----------------- */
+/* ----------------- PDF class ----------------- */
 
 class DPRMOM_PDF extends FPDF {
   public $meta = [];
   public $logoPath = '';
-  public $outerX = 6;
-  public $outerY = 6;
-  public $leftLabelW = 12;
-  public $leftTitleW = 42;
-  public $lineH = 6;
-  public $rowGap = 1.8;
+
+  // sheet border inset
+  public $outerX = 8;
+  public $outerY = 8;
+
+  // left merged widths
+  public $leftLabelW = 13;
+  public $leftTitleW = 52;
+
+  // row metrics (right side tables)
+  public $lineH = 6.5;
+  public $rowGap = 2.0;
+  public $sectionGap = 10;
+
+  // title box metrics (left merged title)
+  public $titleLineH = 6.0;
+  public $titlePadTop = 2;
+  public $titlePadBottom = 2;
+  public $minLeftTitleH = 22;
+
+  public $minSectionH = 0;
+
   public $GREY = [220,220,220];
-  public $defaultFontSize = 9;
+
+  // FONT CONTROL
+  public $fontFamily = 'Arial'; // will be set to Calibri if available
+  public $titleFontSize = 14;
+  public $defaultFontSize = 11;
 
   function SetMeta($m){ $this->meta = $m; }
 
   function Header(){
     $W = $this->GetPageWidth() - ($this->outerX*2);
+
+    // outer border on every page
     $this->SetLineWidth(0.35);
     $this->Rect($this->outerX, $this->outerY, $W, $this->GetPageHeight() - ($this->outerY*2));
 
-    $logoW = 28; $rightW = 62; $titleW = $W - $logoW - $rightW;
-    $headerH = 22;
+    // only print big header on page 1
+    if ($this->PageNo() != 1) {
+      // NO GAP on pages 2+ (start exactly at top border area)
+      $this->SetY($this->outerY);
+      $this->SetFont($this->fontFamily,'',$this->defaultFontSize);
+      return;
+    }
+
+    $logoW = 25; $rightW = 107; $titleW = $W - $logoW - $rightW;
+    $headerH = 24;
 
     $this->SetXY($this->outerX, $this->outerY);
     $this->Cell($logoW, $headerH, '', 1, 0, 'C');
@@ -159,59 +218,99 @@ class DPRMOM_PDF extends FPDF {
     }
 
     $this->SetFillColor($this->GREY[0], $this->GREY[1], $this->GREY[2]);
-    $this->SetFont('Arial','B',12);
+    $this->SetFont($this->fontFamily,'B',$this->titleFontSize);
     $this->Cell($titleW, $headerH, 'MINUTES OF MEETING', 1, 0, 'C', true);
 
     $rx = $this->outerX + $logoW + $titleW;
     $rH = $headerH / 2;
-    $labW = 28;
+    $labW = 45;
     $valW = $rightW - $labW;
 
     $this->SetXY($rx, $this->outerY);
-    $this->SetFont('Arial','B',$this->defaultFontSize);
+    $this->SetFont($this->fontFamily,'B',$this->defaultFontSize);
     $this->Cell($labW, $rH, 'MOM No', 1, 0, 'L');
-    $this->SetFont('Arial','',$this->defaultFontSize);
+    $this->SetFont($this->fontFamily,'',$this->defaultFontSize);
     $this->Cell($valW, $rH, $this->meta['mom_no'] ?? '', 1, 1, 'L');
 
     $this->SetX($rx);
-    $this->SetFont('Arial','B',$this->defaultFontSize);
+    $this->SetFont($this->fontFamily,'B',$this->defaultFontSize);
     $this->Cell($labW, $rH, 'Date', 1, 0, 'L');
-    $this->SetFont('Arial','',$this->defaultFontSize);
+    $this->SetFont($this->fontFamily,'',$this->defaultFontSize);
     $this->Cell($valW, $rH, $this->meta['mom_date'] ?? '', 1, 1, 'L');
 
-    $this->SetY($this->outerY + $headerH + 6);
-    $this->SetFont('Arial','',$this->defaultFontSize);
+    $this->SetY($this->outerY + $headerH + 7);
+    $this->SetFont($this->fontFamily,'',$this->defaultFontSize);
+  }
+
+  function Footer(){
+    $this->SetY(-16); // move page no. up a little
+    $this->SetFont($this->fontFamily,'',$this->defaultFontSize);
+    $this->Cell(0, 8, $this->PageNo().'/{nb}', 0, 0, 'C');
   }
 
   function NbLinesForCell($w, $txt){
     $cw = &$this->CurrentFont['cw'];
+    if ($w == 0) $w = $this->w - $this->rMargin - $this->x;
+
     $wmax = ($w - 2*$this->cMargin) * 1000 / $this->FontSize;
-    $s = str_replace("\r",'', (string)$txt);
+    $s = str_replace("\r", '', (string)$txt);
     $nb = strlen($s);
-    if ($nb === 0) return 1;
-    $lines = 1;
-    $accum = 0;
-    for ($i=0;$i<$nb;$i++){
+    if ($nb > 0 && $s[$nb-1] == "\n") $nb--;
+
+    $sep = -1;
+    $i = 0;
+    $j = 0;
+    $l = 0;
+    $nl = 1;
+
+    while ($i < $nb) {
       $c = $s[$i];
-      if ($c == "\n") { $lines++; $accum = 0; continue; }
-      $accum += $cw[$c] ?? 0;
-      if ($accum > $wmax) { $lines++; $accum = 0; }
+      if ($c == "\n") {
+        $i++;
+        $sep = -1;
+        $j = $i;
+        $l = 0;
+        $nl++;
+        continue;
+      }
+      if ($c == ' ') $sep = $i;
+
+      $l += $cw[$c] ?? 0;
+      if ($l > $wmax) {
+        if ($sep == -1) {
+          if ($i == $j) $i++;
+        } else {
+          $i = $sep + 1;
+        }
+        $sep = -1;
+        $j = $i;
+        $l = 0;
+        $nl++;
+      } else {
+        $i++;
+      }
     }
-    return $lines;
+    return $nl;
   }
 
-  function CalcRowHeight($widths, $cells, $lineH = null, $fontsizes = null){
+  function CalcRowHeight($widths, $cells, $lineH = null, $fontsizes = null, $styles = null){
     if ($lineH === null) $lineH = $this->lineH;
     if ($fontsizes === null) $fontsizes = array_fill(0, count($cells), $this->defaultFontSize);
+    if ($styles === null) $styles = array_fill(0, count($cells), '');
 
     $maxLines = 1;
-    for ($i=0;$i<count($cells);$i++){
+    for ($i=0; $i<count($cells); $i++){
       $fs = $fontsizes[$i] ?? $this->defaultFontSize;
-      $this->SetFont('Arial','',$fs);
-      $lines = $this->NbLinesForCell($widths[$i], (string)$cells[$i]);
+      $st = $styles[$i] ?? '';
+      $this->SetFont($this->fontFamily, $st, $fs);
+
+      $innerW = $widths[$i] - 2*$this->cMargin;
+      if ($innerW <= 0) $innerW = $widths[$i];
+
+      $lines = $this->NbLinesForCell($innerW, (string)$cells[$i]);
       if ($lines > $maxLines) $maxLines = $lines;
     }
-    $this->SetFont('Arial','',$this->defaultFontSize);
+    $this->SetFont($this->fontFamily,'',$this->defaultFontSize);
     return ($lineH * $maxLines) + $this->rowGap;
   }
 
@@ -221,45 +320,72 @@ class DPRMOM_PDF extends FPDF {
     }
   }
 
-  function RowWrapped($x, $widths, $cells, $lineH = null, $aligns = null, $fontsizes = null, $ensure = true){
+  function RowWrapped($x, $widths, $cells, $lineH = null, $aligns = null, $fontsizes = null, $styles = null, $ensure = true){
     if ($lineH === null) $lineH = $this->lineH;
     if ($aligns === null) $aligns = array_fill(0, count($cells), 'L');
     if ($fontsizes === null) $fontsizes = array_fill(0, count($cells), $this->defaultFontSize);
+    if ($styles === null) $styles = array_fill(0, count($cells), '');
 
-    $h = $this->CalcRowHeight($widths, $cells, $lineH, $fontsizes);
+    $h = $this->CalcRowHeight($widths, $cells, $lineH, $fontsizes, $styles);
     if ($ensure) $this->EnsureSpace($h);
 
-    $this->SetXY($x, $this->GetY());
-    for ($i=0;$i<count($cells);$i++){
+    $yStartRow = $this->GetY();
+    $this->SetXY($x, $yStartRow);
+
+    for ($i=0; $i<count($cells); $i++){
       $w = $widths[$i];
       $xcur = $this->GetX();
       $ycur = $this->GetY();
+
       $this->Rect($xcur, $ycur, $w, $h);
+
       $fs = $fontsizes[$i] ?? $this->defaultFontSize;
-      $this->SetFont('Arial','',$fs);
-      $this->MultiCell($w, $lineH, (string)$cells[$i], 0, $aligns[$i]);
+      $st = $styles[$i] ?? '';
+      $this->SetFont($this->fontFamily, $st, $fs);
+
+      $txt = (string)$cells[$i];
+      $innerW = $w - 2*$this->cMargin;
+
+      $lines = $this->NbLinesForCell($innerW, $txt);
+      $textH = $lines * $lineH;
+      $yText = $ycur + max(0, ($h - $textH) / 2);
+
+      $this->SetXY($xcur + $this->cMargin, $yText);
+      $this->MultiCell($innerW, $lineH, $txt, 0, $aligns[$i] ?? 'L');
+
       $this->SetXY($xcur + $w, $ycur);
     }
-    $this->Ln($h);
-    $this->SetFont('Arial','',$this->defaultFontSize);
+
+    $this->SetY($yStartRow + $h);
+    $this->Ln(0);
+    $this->SetFont($this->fontFamily,'',$this->defaultFontSize);
   }
 
-  // LeftMerged now centers the title text inside the title box
   function LeftMerged($x, $y, $label, $title, $height){
     $this->SetFillColor($this->GREY[0], $this->GREY[1], $this->GREY[2]);
+
+    $height = max($height, $this->minLeftTitleH);
+
     $this->SetXY($x, $y);
-    $this->SetFont('Arial','B',$this->defaultFontSize);
+    $this->SetFont($this->fontFamily,'B',$this->defaultFontSize);
     $this->Cell($this->leftLabelW, $height, $label, 1, 0, 'C', true);
 
-    // draw and fill title box
     $this->SetXY($x + $this->leftLabelW, $y);
     $this->Rect($x + $this->leftLabelW, $y, $this->leftTitleW, $height, 'DF');
 
-    // write title centered inside the box
-    $this->SetXY($x + $this->leftLabelW + 2, $y + 1);
-    $this->SetFont('Arial','B',$this->defaultFontSize);
-    $titleSafe = break_long_words((string)$title, 22);
-    $this->MultiCell($this->leftTitleW - 4, $this->lineH, $titleSafe, 0, 'C');
+    $this->SetFont($this->fontFamily,'B',$this->defaultFontSize);
+    $titleSafe = break_long_words((string)$title, 24);
+
+    $textW = $this->leftTitleW - 2*$this->cMargin;
+    $titleLines = $this->NbLinesForCell($textW, $titleSafe);
+    $textH = $titleLines * $this->titleLineH;
+
+    $usableH = $height - ($this->titlePadTop + $this->titlePadBottom);
+    $yStart = $y + $this->titlePadTop + max(0, ($usableH - $textH) / 2);
+
+    $this->SetXY($x + $this->leftLabelW + $this->cMargin, $yStart);
+    $this->MultiCell($textW, $this->titleLineH, $titleSafe, 0, 'C');
+
     $this->SetXY($x + $this->leftLabelW + $this->leftTitleW, $y);
   }
 
@@ -269,45 +395,100 @@ class DPRMOM_PDF extends FPDF {
     $totalRowsH = 0;
     foreach ($rows as $r) {
       $widths = $r[0];
-      $cells = $r[1];
-      $fonts = $r[3] ?? null;
-      $h = $this->CalcRowHeight($widths, $cells, $lineH, $fonts);
-      $totalRowsH += $h;
+      $cells  = $r[1];
+      $fonts  = $r[3] ?? null;
+      $styles = $r[4] ?? null;
+      $hh = $this->CalcRowHeight($widths, $cells, $lineH, $fonts, $styles);
+      $totalRowsH += $hh;
     }
 
-    // compute title height (centered)
-    $this->SetFont('Arial','B',$this->defaultFontSize);
-    $titleSafe = break_long_words((string)$title, 22);
-    $titleLines = $this->NbLinesForCell($this->leftTitleW - 4, $titleSafe);
-    $titleH = ($this->lineH * $titleLines) + 4;
-    $this->SetFont('Arial','',$this->defaultFontSize);
+    $this->SetFont($this->fontFamily,'B',$this->defaultFontSize);
+    $titleSafe = break_long_words((string)$title, 24);
 
-    $mergedH = max($totalRowsH, $titleH, $this->lineH + $this->rowGap);
+    $textW = $this->leftTitleW - 2*$this->cMargin;
+    $titleLines = $this->NbLinesForCell($textW, $titleSafe);
+    $titleNeedH = ($titleLines * $this->titleLineH) + $this->titlePadTop + $this->titlePadBottom;
+
+    $minTitleH = max($this->minLeftTitleH, $titleNeedH);
+
+    $this->SetFont($this->fontFamily,'',$this->defaultFontSize);
+
+    $mergedH = max($totalRowsH, $titleNeedH, $minTitleH, $this->lineH + $this->rowGap);
+    if ($this->minSectionH > 0) $mergedH = max($mergedH, $this->minSectionH);
+
     $this->EnsureSpace($mergedH);
 
-    $this->LeftMerged($X0, $this->GetY(), $label, $title, $mergedH);
+    $yTop = $this->GetY();
+
+    $this->LeftMerged($X0, $yTop, $label, $title, $mergedH);
 
     foreach ($rows as $r) {
       $widths = $r[0];
       $cells  = $r[1];
       $aligns = $r[2] ?? null;
       $fonts  = $r[3] ?? null;
-      $this->RowWrapped($xR, $widths, $cells, $lineH, $aligns, $fonts, false);
+      $styles = $r[4] ?? null;
+      $this->RowWrapped($xR, $widths, $cells, $lineH, $aligns, $fonts, $styles, false);
     }
-    $this->Ln(2);
+
+    $yEnd = $this->GetY();
+    $minEnd = $yTop + $mergedH;
+    if ($yEnd < $minEnd) $this->SetY($minEnd);
+
+    $this->Ln($this->sectionGap);
   }
 }
 
 /* ----------------- setup & render ----------------- */
 
-$pdf = new DPRMOM_PDF('P','mm','A4');
-$pdf->SetMargins(6,6,6);
+// A3 PORTRAIT
+$pdf = new DPRMOM_PDF('P','mm','A3');
+$pdf->SetMargins(8,8,8);
 $pdf->SetAutoPageBreak(false);
 $pdf->SetLineWidth(0.35);
+
+// Footer total pages
+$pdf->AliasNbPages();
 
 // optional logo
 $logoCandidates = [ __DIR__.'/assets/ukb.png', __DIR__.'/assets/ukb.jpg' ];
 foreach ($logoCandidates as $p) { if (file_exists($p)) { $pdf->logoPath = $p; break; } }
+
+// -------------------- ALIGNMENT CONTROL KNOBS --------------------
+$pdf->leftLabelW = 13;
+$pdf->leftTitleW = 54;
+
+// font + sizes
+$pdf->titleFontSize = 14;
+$pdf->defaultFontSize = 11;
+
+// table spacing
+$pdf->lineH = 9.5;
+$pdf->rowGap = 2.0;
+$pdf->sectionGap = 10;
+
+// left title formatting
+$pdf->titleLineH = 6.0;
+$pdf->titlePadTop = 2;
+$pdf->titlePadBottom = 2;
+$pdf->minLeftTitleH = 22;
+
+// OPTIONAL: force minimum height for every section
+// $pdf->minSectionH = 40;
+// ---------------------------------------------------------------
+
+// TRY CALIBRI IF INSTALLED (no fatal error)
+$fontDir = __DIR__ . '/libs/font/';
+$calibriOk = file_exists($fontDir.'calibri.php') && file_exists($fontDir.'calibrib.php');
+if ($calibriOk) {
+  $pdf->AddFont('Calibri','','calibri.php');
+  $pdf->AddFont('Calibri','B','calibrib.php');
+  if (file_exists($fontDir.'calibrii.php')) $pdf->AddFont('Calibri','I','calibrii.php');
+  if (file_exists($fontDir.'calibriz.php')) $pdf->AddFont('Calibri','BI','calibriz.php');
+  $pdf->fontFamily = 'Calibri';
+} else {
+  $pdf->fontFamily = 'Arial';
+}
 
 $pdf->SetMeta(['mom_no'=>$data['mom_no'],'mom_date'=>$data['mom_date']]);
 $pdf->AddPage();
@@ -320,8 +501,8 @@ $h  = $pdf->lineH;
 $avail = $W - ($wL + $wS);
 $xR = $X0 + $wL + $wS;
 
-/* ---------- A: Project Information (centered title) ---------- */
-$colsA = [$avail*0.25, $avail*0.25, $avail*0.25, $avail*0.25];
+/* ---------- A: Project Information ---------- */
+$colsA = [$avail*0.25, $avail*0.25, $avail*0.21, $avail*0.29];
 $rowsA = [
   [$colsA, ['Project','','PMC','']],
   [$colsA, [$data['project_name'],'',$data['pmc_name'],'']],
@@ -330,7 +511,7 @@ $rowsA = [
 ];
 $pdf->DrawSection($X0, $xR, 'A.', 'PROJECT INFORMATION', $rowsA, $h);
 
-/* ---------- B: Meeting Information (centered title) ---------- */
+/* ---------- B: Meeting Information ---------- */
 $half = $avail/2;
 $rowsB = [
   [[$half,$half], ['Meeting Conducted by','Date']],
@@ -340,63 +521,61 @@ $rowsB = [
 ];
 $pdf->DrawSection($X0, $xR, 'B.', 'MEETING INFORMATION', $rowsB, $h);
 
-/* ---------- C: Agenda (centered title) ---------- */
+/* ---------- C: Agenda ---------- */
 $rowsC = [];
-$rowsC[] = [[18, $avail-18], ['No.','Agenda Items']];
+$noW = $avail * 0.08;
+$rowsC[] = [[$noW, $avail-$noW], ['No.','Agenda Items']];
 foreach($data['agenda'] as $i=>$ag){
-  $rowsC[] = [[18, $avail-18], [ (string)($i+1), clean_text($ag['item'] ?? $ag) ]];
+  $rowsC[] = [[$noW, $avail-$noW], [ (string)($i+1), clean_text($ag['item'] ?? $ag) ]];
 }
 $pdf->DrawSection($X0, $xR, 'C.', 'MEETING AGENDA', $rowsC, $h);
 
-/* ---------- D: Attendees (centered title) ---------- */
-$wa = $avail*0.23; $wb = $avail*0.28; $wc = $avail*0.23; $wd = $avail*0.26;
+/* ---------- D: Attendees ---------- */
+$wa = $avail*0.25; $wb = $avail*0.25; $wc = $avail*0.22; $wd = $avail*0.28;
 $rowsD = [];
-$rowsD[] = [[$wa,$wb,$wc,$wd], ['Stakeholders','Name','Designation','Firm']];
+$rowsD[] = [[$wa,$wb,$wc,$wd], ['Stakeholders','Name','Designation','Firm'], ['L','L','L','L'], [11,11,11,11], ['B','B','B','B']];
 foreach($data['attendees'] as $a){
   $rowsD[] = [[$wa,$wb,$wc,$wd], [
     clean_text($a['stakeholder'] ?? ''),
     clean_text($a['name'] ?? ''),
     clean_text($a['designation'] ?? ''),
     clean_text($a['firm'] ?? '')
-  ]];
+  ], ['L','L','L','L'], [11,11,11,11], ['', '', '', '']];
 }
 $pdf->DrawSection($X0, $xR, 'D.', 'MEETING ATTENDEES', $rowsD, $h);
 
-/* ---------- E: Minutes of Discussions (centered title) ---------- */
+/* ---------- E: Minutes of Discussions ---------- */
 $discs = $data['discussions'];
 $totalDiscs = count($discs);
 $globalIdx = 0;
 
 while ($globalIdx < $totalDiscs) {
-    $remainingSpace = $pdf->GetPageHeight() - $pdf->GetY() - $pdf->outerY - 18;
+    $remainingSpace = $pdf->GetPageHeight() - $pdf->GetY() - $pdf->outerY - 20;
 
-    // fixed left small column (sl no) measured inside available width
-    $col1 = 12; // keep slno visually ~12mm
-    $remaining = $avail - $col1; // ensure total widths = avail
-    if ($remaining < 60) $remaining = $avail * 0.9; // defensive
+    $col1 = $avail * 0.08;
+    $remaining = $avail - $col1;
 
-    // distribute remaining into discussion / responsible / deadline
-    $col2 = $remaining * 0.70;   // discussion (major)
-    $col3 = $remaining * 0.12;   // responsible
-    $col4 = $remaining * 0.18;   // deadline (reduced but adequate)
+    $col2 = $remaining * 0.70;
+    $col3 = $remaining * 0.14;
+    $col4 = $remaining * 0.16;
 
     $rowsChunk = [];
-    $rowsChunk[] = [[$col1,$col2,$col3,$col4], ['Sl.No.','Discussions/Decisions','Responsible by','Deadline'], ['C','L','L','C'], [9,9,9,9]];
-    $estH = $pdf->CalcRowHeight([$col1,$col2,$col3,$col4], $rowsChunk[0][1], $h, $rowsChunk[0][3]);
+    $rowsChunk[] = [[$col1,$col2,$col3,$col4], ['Sl.No.','Discussions/Decisions',"Responsible\nby",'Deadline'], ['L','L','C','C'], [11,11,11,11], ['B','B','B','B']];
+    $estH = $pdf->CalcRowHeight([$col1,$col2,$col3,$col4], $rowsChunk[0][1], $h, $rowsChunk[0][3], $rowsChunk[0][4]);
 
     $i = 0;
     while (($globalIdx + $i) < $totalDiscs) {
         $r = $discs[$globalIdx + $i];
         $serial = (string)($globalIdx + $i + 1);
-        $discussionText = break_long_words(clean_text($r['discussion'] ?? ''), 24);
-        $responsibleText = break_long_words(clean_text($r['responsible'] ?? ''), 18);
+        $discussionText = break_long_words(clean_text($r['discussion'] ?? ''), 28);
+        $responsibleText = break_long_words(clean_text($r['responsible'] ?? ''), 20);
         $deadlineText = break_long_words(dmy_dash($r['deadline'] ?? ''), 12);
 
-        $fonts = [9,9,9,9];
-        if (strlen(strip_tags($deadlineText)) > 16) $fonts[3] = 8;
+        $fonts = [11,11,11,11];
+        if (strlen(strip_tags($deadlineText)) > 16) $fonts[3] = 10;
 
-        $rowSpec = [[$col1,$col2,$col3,$col4], [$serial, $discussionText, $responsibleText, $deadlineText], ['C','L','L','C'], $fonts];
-        $rowH = $pdf->CalcRowHeight($rowSpec[0], $rowSpec[1], $h, $fonts);
+        $rowSpec = [[$col1,$col2,$col3,$col4], [$serial, $discussionText, $responsibleText, $deadlineText], ['C','L','L','C'], $fonts, ['', '', '', '']];
+        $rowH = $pdf->CalcRowHeight($rowSpec[0], $rowSpec[1], $h, $fonts, $rowSpec[4]);
 
         if ($estH + $rowH > $remainingSpace && $i>0) break;
         $rowsChunk[] = $rowSpec;
@@ -407,12 +586,12 @@ while ($globalIdx < $totalDiscs) {
     if (count($rowsChunk) == 1 && ($globalIdx < $totalDiscs)) {
         $r = $discs[$globalIdx];
         $serial = (string)($globalIdx + 1);
-        $discussionText = break_long_words(clean_text($r['discussion'] ?? ''), 24);
-        $responsibleText = break_long_words(clean_text($r['responsible'] ?? ''), 18);
+        $discussionText = break_long_words(clean_text($r['discussion'] ?? ''), 28);
+        $responsibleText = break_long_words(clean_text($r['responsible'] ?? ''), 20);
         $deadlineText = break_long_words(dmy_dash($r['deadline'] ?? ''), 12);
-        $fonts = [9,9,9,9];
-        if (strlen($deadlineText) > 16) $fonts[3] = 8;
-        $rowsChunk[] = [[$col1,$col2,$col3,$col4], [$serial,$discussionText,$responsibleText,$deadlineText], ['C','L','L','C'], $fonts];
+        $fonts = [11,11,11,11];
+        if (strlen($deadlineText) > 16) $fonts[3] = 10;
+        $rowsChunk[] = [[$col1,$col2,$col3,$col4], [$serial,$discussionText,$responsibleText,$deadlineText], ['C','L','L','C'], $fonts, ['', '', '', '']];
         $i = 1;
     }
 
@@ -420,69 +599,154 @@ while ($globalIdx < $totalDiscs) {
     $globalIdx += $i;
 }
 
-/* ---------- F: MOM SHARED TO (centered title) ---------- */
+/* ---------- F: MOM SHARED TO ---------- */
 $rowsF = [];
 $colA = $avail*0.5; $colB = $avail*0.5;
-$rowsF[] = [[$colA,$colB], ['Attendees','Copy To'], ['L','L'], [9,9]];
+$rowsF[] = [[$colA,$colB], ['Attendees','Copy To'], ['L','L'], [11,11], ['B','B']];
 if (count($data['mom_shared_to'])>0) {
   foreach ($data['mom_shared_to'] as $s) {
-    $rowsF[] = [[$colA,$colB], [ clean_text($s['attendees'] ?? ''), clean_text($s['copy_to'] ?? '') ], ['L','L'], [9,9]];
+    $rowsF[] = [[$colA,$colB], [ clean_text($s['attendees'] ?? ''), clean_text($s['copy_to'] ?? '') ], ['L','L'], [11,11], ['', '']];
   }
 } else {
-  $rowsF[] = [[$colA,$colB], ['All Attendees',''], ['L','L'], [9,9]];
+  $rowsF[] = [[$colA,$colB], ['All Attendees',''], ['L','L'], [11,11], ['', '']];
 }
 $pdf->DrawSection($X0, $xR, 'F.', 'MOM SHARED TO', $rowsF, $h);
 
-/* ---------- G: MOM SHARED BY (centered title) ---------- */
+/* ---------- G: MOM SHARED BY ---------- */
 $rowsG = [];
-$rowsG[] = [[$avail*0.5,$avail*0.5], ['Shared by','Shared on'], ['L','C'], [9,9]];
-$rowsG[] = [[$avail*0.5,$avail*0.5], [$data['shared_by'],$data['shared_on']], ['L','C'], [9,9]];
+$rowsG[] = [[$avail*0.5,$avail*0.5], ['Shared by','Shared on'], ['L','L'], [11,11], ['B','B']];
+$rowsG[] = [[$avail*0.5,$avail*0.5], [$data['shared_by'],$data['shared_on']], ['L','L'], [11,11], ['', '']];
 $pdf->DrawSection($X0, $xR, 'G.', 'MOM SHARED BY', $rowsG, $h);
 
-/* ---------- H: MOM SHORT-FORMS (centered title) ---------- */
+/* ---------- H: MOM SHORT-FORMS (no header row) ---------- */
 $rowsH = [];
-$col1 = $avail*0.18; $col2 = $avail*0.82;
-$rowsH[] = [[$col1,$col2], ['Short Form','Description'], ['C','L'], [9,9]];
-foreach ($data['short_forms'] as $sf) $rowsH[] = [[$col1,$col2], [$sf[0], $sf[1]], ['C','L'], [9,9]];
+$sfCol1 = $avail*0.25;
+$sfCol2 = $avail*0.75;
+foreach ($data['short_forms'] as $sf) {
+  $rowsH[] = [[$sfCol1,$sfCol2], [$sf[0], $sf[1]], ['L','L'], [11,11], ['B','']];
+}
 $pdf->DrawSection($X0, $xR, 'H.', 'MOM SHORT-FORMS', $rowsH, $h);
 
-/* ---------- I: Amended Points (centered title) ---------- */
-$am = $data['amended_points'];
-$hasAm = false;
-foreach ($am as $a) { if (!empty($a['discussion']) || !empty($a['slno'])) { $hasAm = true; break; } }
-if ($hasAm) {
-  // compute same remaining pattern as E to keep visual consistency
-  $col1 = 12;
-  $remaining = max(60, $avail - $col1);
-  $c2 = $remaining * 0.60;
-  $c3 = $remaining * 0.20;
-  $c4 = $remaining * 0.20;
-  $rowsI = [];
-  $rowsI[] = [[$col1,$c2,$c3,$c4], ['Sl.No','Discussions/Decisions','Responsible by','Deadline'], ['C','L','L','C'], [9,9,9,9]];
-  foreach ($am as $a) {
-    $rowsI[] = [[$col1,$c2,$c3,$c4], [
-      $a['slno'] ?? '',
-      break_long_words(clean_text($a['discussion'] ?? ''), 24),
-      break_long_words(clean_text($a['responsible'] ?? ''), 18),
-      break_long_words(dmy_dash($a['deadline'] ?? ''), 12)
-    ], ['C','L','L','C'], [9,9,9,9]];
+/* ---------- I: AMENDED POINTS ---------- */
+$wSl   = $avail * 0.08;
+$wResp = $avail * 0.14;
+$wDead = $avail * 0.16;
+$wDisc = $avail - ($wSl + $wResp + $wDead);
+
+$rowsI = [];
+$rowsI[] = [
+  [$wSl, $wDisc, $wResp, $wDead],
+  ['Sl.No.', 'Discussions/Decisions', "Responsible\nby", 'Deadline'],
+  ['L','L','C','C'],
+  [11,11,11,11],
+  ['B','B','B','B']
+];
+
+$am = $data['amended_points'] ?? [];
+$hasData = false;
+foreach ($am as $a) {
+  if (!empty($a['discussion']) || !empty($a['slno']) || !empty($a['responsible']) || !empty($a['deadline'])) {
+    $hasData = true; break;
   }
-  $pdf->DrawSection($X0, $xR, 'I.', 'AMENDED POINTS (INCASE OF MISSED POINTS)', $rowsI, $h);
 }
 
-/* ---------- J: NEXT MEETING DATE & PLACE (centered title) ---------- */
-$nextDate = break_long_words($data['next_meeting_date'] ?: '', 18);
-$nextPlace = break_long_words($data['next_meeting_place'] ?: '', 18);
+if ($hasData) {
+  foreach ($am as $a) {
+    $rowsI[] = [
+      [$wSl, $wDisc, $wResp, $wDead],
+      [
+        (string)($a['slno'] ?? ''),
+        break_long_words(clean_text($a['discussion'] ?? ''), 28),
+        break_long_words(clean_text($a['responsible'] ?? ''), 20),
+        break_long_words(dmy_dash($a['deadline'] ?? ''), 12),
+      ],
+      ['C','L','L','C'],
+      [11,11,11,11],
+      ['','','','']
+    ];
+  }
+} else {
+  $rowsI[] = [
+    [$wSl, $wDisc, $wResp, $wDead],
+    ['', '', '', ''],
+    ['C','L','L','C'],
+    [11,11,11,11],
+    ['','','','']
+  ];
+}
+
+$pdf->DrawSection(
+  $X0, $xR,
+  'I.',
+  "AMENDED POINTS\n(INCASE OF MISSED\nPOINTS)",
+  $rowsI,
+  $h
+);
+
+$pdf->Ln(6);
+
+/* ---------- J: NEXT MEETING DATE & PLACE ---------- */
+$nextDate  = break_long_words($data['next_meeting_date'] ?: '', 18);
+$nextPlace = break_long_words($data['next_meeting_place'] ?: '', 22);
 
 $rowsJ = [];
-$rowsJ[] = [[$avail*0.5,$avail*0.5], ['Date','Place'], ['C','C'], [9,9]];
-$rowsJ[] = [[$avail*0.5,$avail*0.5], [$nextDate, $nextPlace], ['C','C'], [9,9]];
+$rowsJ[] = [[$avail*0.5,$avail*0.5], ['Date','Place'], ['L','L'], [11,11], ['B','B']];
+$rowsJ[] = [[$avail*0.5,$avail*0.5], [$nextDate, $nextPlace], ['L','L'], [11,11], ['', '']];
 $pdf->DrawSection($X0, $xR, 'J.', 'NEXT MEETING DATE & PLACE', $rowsJ, $h);
 
 /* ---------- OUTPUT ---------- */
-ob_end_clean();
-$filename = 'MOM_' . preg_replace('/[^A-Za-z0-9\-_]/','_', $data['mom_no']) . '.pdf';
-$pdf->Output('I', $filename);
 
-try { if (isset($conn) && $conn instanceof mysqli) $conn->close(); } catch (Throwable $e) {}
+// Safe filename
+$rawMomNo = trim((string)($data['mom_no'] ?? ''));
+$safeMomNo = preg_replace('/[^A-Za-z0-9\-_]/', '_', $rawMomNo);
+if ($safeMomNo === '') $safeMomNo = 'ID_' . $viewId;
+$filename = 'MOM_' . $safeMomNo . '_A3.pdf';
+
+// MODE_STRING path (for mail attachment / internal use)
+if ($MODE_STRING) {
+    $pdfBytes = $pdf->Output('S');
+
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
+    $GLOBALS['__MOM_PDF_RESULT__'] = [
+        'filename' => $filename,
+        'bytes'    => $pdfBytes,
+    ];
+
+    try {
+        if (isset($conn) && $conn instanceof mysqli) $conn->close();
+    } catch (Throwable $e) {}
+
+    return;
+}
+
+// Browser response path (inline view/print OR download)
+while (ob_get_level() > 0) {
+    ob_end_clean();
+}
+
+if (!headers_sent()) {
+    header('Content-Type: application/pdf');
+    header('Content-Transfer-Encoding: binary');
+    header('Accept-Ranges: bytes');
+    header('X-Content-Type-Options: nosniff');
+
+    if ($forceDownload) {
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+    } else {
+        header('Content-Disposition: inline; filename="' . $filename . '"');
+    }
+
+    header('Cache-Control: private, max-age=0, must-revalidate');
+    header('Pragma: public');
+}
+
+$pdf->Output($forceDownload ? 'D' : 'I', $filename);
+
+try {
+    if (isset($conn) && $conn instanceof mysqli) $conn->close();
+} catch (Throwable $e) {}
+
 exit;
