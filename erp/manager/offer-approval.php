@@ -41,7 +41,7 @@ $isDirector = in_array($designation, ['director', 'vice president', 'general man
 $isAdmin = ($designation === 'administrator' || $designation === 'admin');
 
 // Only HR, Directors, and Admins can approve offers
-if (!$isHr && !$isDirector && !$isAdmin) {
+if (!$isManager && !$isDirector && !$isAdmin) {
     $_SESSION['flash_error'] = "You don't have permission to access offer approval.";
     header("Location: ../dashboard.php");
     exit;

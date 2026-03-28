@@ -138,61 +138,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     // Update Onboarding Status
-    // Update Onboarding Status
-elseif (isset($_POST['action']) && $_POST['action'] === 'update_status') {
-    $onboarding_id = (int)$_POST['onboarding_id'];
-    $status = mysqli_real_escape_string($conn, $_POST['status']);
-    $remarks = mysqli_real_escape_string($conn, $_POST['remarks'] ?? '');
-    
-    $update_fields = [];
-    $params = [];
-    $types = "";
-    
-    if ($status === 'Completed') {
-        $update_fields[] = "status = ?";
-        $update_fields[] = "completed_at = CURDATE()";
-        $update_fields[] = "completed_by = ?";
-        $params[] = $status;
-        $params[] = $current_employee_id;
-        $types .= "si";
-    } else {
-        $update_fields[] = "status = ?";
-        $params[] = $status;
-        $types .= "s";
-    }
-    
-    // Add remarks with timestamp
-    if (!empty($remarks)) {
-        $timestamp = date('Y-m-d H:i:s');
-        $update_fields[] = "remarks = CONCAT(IFNULL(remarks, ''), '\n[{$timestamp}] {$remarks}')";
-    }
-    
-    $query = "UPDATE onboarding SET " . implode(", ", $update_fields) . " WHERE id = ?";
-    $params[] = $onboarding_id;
-    $types .= "i";
-    
-    $update_stmt = mysqli_prepare($conn, $query);
-    mysqli_stmt_bind_param($update_stmt, $types, ...$params);
-    
-    if (mysqli_stmt_execute($update_stmt)) {
-        logActivity(
-            $conn,
-            'UPDATE',
-            'onboarding',
-            "Updated onboarding status to {$status}",
-            $onboarding_id,
-            null,
-            null,
-            json_encode(['status' => $status, 'remarks' => $remarks])
-        );
+    elseif (isset($_POST['action']) && $_POST['action'] === 'update_status') {
+        $onboarding_id = (int)$_POST['onboarding_id'];
+        $status = mysqli_real_escape_string($conn, $_POST['status']);
+        $remarks = mysqli_real_escape_string($conn, $_POST['remarks'] ?? '');
         
-        $message = "Onboarding status updated successfully!";
-        $messageType = "success";
-    } else {
-        $message = "Error updating status: " . mysqli_error($conn);
-        $messageType = "danger";
-    }
-}   
+        $update_fields = [];
+        $params = [];
+        $types = "";
+        
+        if ($status === 'Completed') {
+            $update_fields[] = "status = ?";
+            $update_fields[] = "completed_at = CURDATE()";
+            $update_fields[] = "completed_by = ?";
+            $params[] = $status;
+            $params[] = $current_employee_id;
+            $types .= "si";
+        } else {
+            $update_fields[] = "status = ?";
+            $params[] = $status;
+            $types .= "s";
+        }
+        
+        // Add remarks with timestamp
+        if (!empty($remarks)) {
+            $timestamp = date('Y-m-d H:i:s');
+            $update_fields[] = "remarks = CONCAT(IFNULL(remarks, ''), '\n[{$timestamp}] {$remarks}')";
+        }
+        
+        $query = "UPDATE onboarding SET " . implode(", ", $update_fields) . " WHERE id = ?";
+        $params[] = $onboarding_id;
+        $types .= "i";
+        
+        $update_stmt = mysqli_prepare($conn, $query);
+        mysqli_stmt_bind_param($update_stmt, $types, ...$params);
+        
+        if (mysqli_stmt_execute($update_stmt)) {
+            logActivity(
+                $conn,
+                'UPDATE',
+                'onboarding',
+                "Updated onboarding status to {$status}",
+                $onboarding_id,
+                null,
+                null,
+                json_encode(['status' => $status, 'remarks' => $remarks])
+            );
+            
+            $message = "Onboarding status updated successfully!";
+            $messageType = "success";
+        } else {
+            $message = "Error updating status: " . mysqli_error($conn);
+            $messageType = "danger";
+        }
+    }   
     
     // Update Document Submission
     elseif (isset($_POST['action']) && $_POST['action'] === 'update_documents') {
@@ -376,9 +375,6 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'update_status') {
         mysqli_stmt_bind_param($update_stmt, "si", $employee_code, $onboarding_id);
         
         if (mysqli_stmt_execute($update_stmt)) {
-            // Also update in employees table if employee record exists
-            // (This would be created later when employee is fully onboarded)
-            
             $message = "Employee code generated: {$employee_code}";
             $messageType = "success";
         } else {
@@ -449,7 +445,7 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'update_status') {
                     $details['department'],
                     $details['designation'],
                     $reporting_to,
-                    $details['department'], // work_location (simplified)
+                    $details['department'],
                     $username,
                     $hashed_password
                 );
@@ -504,7 +500,7 @@ $date_from = $_GET['date_from'] ?? '';
 $date_to = $_GET['date_to'] ?? '';
 $search = trim($_GET['search'] ?? '');
 
-// Build query
+// Build main query
 $query = "
     SELECT 
         o.*,
@@ -568,14 +564,18 @@ if (!empty($search)) {
 
 // Managers see only onboarding from their requests
 if (!$isHr && !$isAdmin && $isManager) {
-    $query .= " AND h.requested_by = {$current_employee_id}";
+    $query .= " AND h.requested_by = " . (int)$current_employee_id;
 }
 
 $query .= " ORDER BY o.joining_date DESC, o.created_at DESC";
 
 $onboardings = mysqli_query($conn, $query);
+if (!$onboardings) {
+    error_log("Main query failed: " . mysqli_error($conn));
+    $onboardings = false;
+}
 
-// Get accepted candidates for new onboarding (candidates who have accepted offers but not yet onboarded)
+// Get accepted candidates for new onboarding
 $candidates_query = "
     SELECT c.id, c.first_name, c.last_name, c.candidate_code, c.email, c.phone,
            o.id as offer_id, o.offer_no, o.ctc, o.expected_joining_date,
@@ -588,14 +588,21 @@ $candidates_query = "
     WHERE c.status = 'Accepted' 
       AND o.status = 'Accepted'
       AND ob.id IS NULL
-    ORDER BY o.response_date DESC
 ";
 
+// Add manager filter if needed
 if (!$isHr && !$isAdmin && $isManager) {
-    $candidates_query .= " AND h.requested_by = {$current_employee_id}";
+    $candidates_query .= " AND h.requested_by = " . (int)$current_employee_id;
 }
 
+// Add ORDER BY after WHERE conditions
+$candidates_query .= " ORDER BY o.response_date DESC";
+
 $candidates_result = mysqli_query($conn, $candidates_query);
+if (!$candidates_result) {
+    error_log("Candidates query failed: " . mysqli_error($conn));
+    $candidates_result = false;
+}
 
 // Get reporting managers for dropdown
 $managers_query = "
@@ -606,10 +613,18 @@ $managers_query = "
     ORDER BY full_name
 ";
 $managers_result = mysqli_query($conn, $managers_query);
+if (!$managers_result) {
+    error_log("Managers query failed: " . mysqli_error($conn));
+    $managers_result = false;
+}
 
 // Get departments for filter
 $dept_query = "SELECT DISTINCT department FROM hiring_requests ORDER BY department";
 $dept_result = mysqli_query($conn, $dept_query);
+if (!$dept_result) {
+    error_log("Departments query failed: " . mysqli_error($conn));
+    $dept_result = false;
+}
 
 // Get statistics
 $stats_query = "
@@ -626,11 +641,25 @@ $stats_query = "
 ";
 
 if (!$isHr && !$isAdmin && $isManager) {
-    $stats_query .= " WHERE o.hiring_request_id IN (SELECT id FROM hiring_requests WHERE requested_by = {$current_employee_id})";
+    $stats_query .= " WHERE o.hiring_request_id IN (SELECT id FROM hiring_requests WHERE requested_by = " . (int)$current_employee_id . ")";
 }
 
 $stats_result = mysqli_query($conn, $stats_query);
-$stats = mysqli_fetch_assoc($stats_result);
+if (!$stats_result) {
+    error_log("Stats query failed: " . mysqli_error($conn));
+    $stats = [
+        'total_count' => 0,
+        'pending_count' => 0,
+        'in_progress_count' => 0,
+        'completed_count' => 0,
+        'cancelled_count' => 0,
+        'upcoming_joining' => 0,
+        'overdue_joining' => 0,
+        'avg_onboarding_days' => 0
+    ];
+} else {
+    $stats = mysqli_fetch_assoc($stats_result);
+}
 
 // ---------------- HELPER FUNCTIONS ----------------
 function e($v)
@@ -647,7 +676,7 @@ function formatCurrency($amount)
 
 function formatDate($date)
 {
-    if (!$date)
+    if (!$date || $date === '0000-00-00')
         return '—';
     return date('d M Y', strtotime($date));
 }
@@ -809,6 +838,10 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             background: #ef4444;
         }
 
+        .stat-ic.total {
+            background: #6b7280;
+        }
+
         .stat-label {
             color: #4b5563;
             font-weight: 750;
@@ -911,6 +944,25 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
         .btn-reset:hover {
             background: #4b5563;
+            color: #fff;
+        }
+
+        .btn-danger-custom {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .btn-danger-custom:hover {
+            background: #dc2626;
             color: #fff;
         }
 
@@ -1355,11 +1407,18 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 <label class="form-label">Department</label>
                                 <select name="department" class="form-select form-select-sm">
                                     <option value="">All Departments</option>
-                                    <?php while ($dept = mysqli_fetch_assoc($dept_result)): ?>
+                                    <?php 
+                                    if ($dept_result && mysqli_num_rows($dept_result) > 0):
+                                        mysqli_data_seek($dept_result, 0);
+                                        while ($dept = mysqli_fetch_assoc($dept_result)): 
+                                    ?>
                                         <option value="<?php echo e($dept['department']); ?>" <?php echo $department_filter === $dept['department'] ? 'selected' : ''; ?>>
                                             <?php echo e($dept['department']); ?>
                                         </option>
-                                    <?php endwhile; ?>
+                                    <?php 
+                                        endwhile;
+                                    endif; 
+                                    ?>
                                 </select>
                             </div>
 
@@ -1396,7 +1455,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             <h3 class="panel-title">
                                 <i class="bi bi-person-check"></i> Onboarding List
                             </h3>
-                            <span class="badge bg-secondary"><?php echo mysqli_num_rows($onboardings); ?> records</span>
+                            <span class="badge bg-secondary"><?php echo $onboardings ? mysqli_num_rows($onboardings) : 0; ?> records</span>
                         </div>
 
                         <div class="table-responsive">
@@ -1414,23 +1473,28 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php if (mysqli_num_rows($onboardings) === 0): ?>
-                                        
+                                    <?php if (!$onboardings || mysqli_num_rows($onboardings) === 0): ?>
+                                        <tr>
+                                            <td colspan="8" class="text-center py-4 text-muted">
+                                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                                No onboarding records found
+                                            </td>
+                                        </tr>
                                     <?php else: ?>
                                         <?php while ($item = mysqli_fetch_assoc($onboardings)): 
                                             // Calculate progress
                                             $checklist_items = [
-                                                'id_card_issued' => $item['id_card_issued'],
-                                                'email_created' => $item['email_created'],
-                                                'system_access_given' => $item['system_access_given'],
-                                                'biometric_enrolled' => $item['biometric_enrolled'],
-                                                'orientation_completed' => $item['orientation_completed'],
-                                                'training_completed' => $item['training_completed'],
-                                                'welcome_kit_issued' => $item['welcome_kit_issued']
+                                                'id_card_issued' => $item['id_card_issued'] ?? 0,
+                                                'email_created' => $item['email_created'] ?? 0,
+                                                'system_access_given' => $item['system_access_given'] ?? 0,
+                                                'biometric_enrolled' => $item['biometric_enrolled'] ?? 0,
+                                                'orientation_completed' => $item['orientation_completed'] ?? 0,
+                                                'training_completed' => $item['training_completed'] ?? 0,
+                                                'welcome_kit_issued' => $item['welcome_kit_issued'] ?? 0
                                             ];
                                             $completed_count = array_sum($checklist_items);
                                             $total_items = count($checklist_items);
-                                            $progress_percentage = ($completed_count / $total_items) * 100;
+                                            $progress_percentage = ($total_items > 0) ? ($completed_count / $total_items) * 100 : 0;
                                             
                                             // Check if date is upcoming or overdue
                                             $today = date('Y-m-d');
@@ -1464,7 +1528,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                             <?php if (!empty($item['candidate_photo'])): ?>
                                                                 <img src="../<?php echo e($item['candidate_photo']); ?>" alt="Photo">
                                                             <?php else: ?>
-                                                                <?php echo getInitials($item['candidate_name']); ?>
+                                                                <?php echo getInitials($item['candidate_name'] ?? ''); ?>
                                                             <?php endif; ?>
                                                         </div>
                                                         <div>
@@ -1487,7 +1551,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                     <div class="position-info">
                                                         <div class="position-text">
                                                             <i class="bi bi-briefcase"></i>
-                                                            <?php echo e($item['position_title']); ?>
+                                                            <?php echo e($item['position_title'] ?? 'N/A'); ?>
                                                         </div>
                                                         <?php if (!empty($item['department'])): ?>
                                                             <div class="department-badge">
@@ -1514,8 +1578,8 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
                                                 <td>
                                                     <?php if (!empty($item['reporting_to_name'])): ?>
-                                                        <div class="requester-name"><?php echo e($item['reporting_to_name']); ?></div>
-                                                        <div class="requester-designation"><?php echo e($item['reporting_to_designation'] ?: ''); ?></div>
+                                                        <div class="fw-bold"><?php echo e($item['reporting_to_name']); ?></div>
+                                                        <div class="small text-muted"><?php echo e($item['reporting_to_designation'] ?: ''); ?></div>
                                                     <?php else: ?>
                                                         <span class="text-muted">—</span>
                                                     <?php endif; ?>
@@ -1532,8 +1596,8 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                         </div>
                                                     </div>
                                                     <div class="checklist-count">
-                                                        <i class="bi bi-check-circle"></i> ID: <?php echo $item['id_card_issued'] ? 'Yes' : 'No'; ?> | 
-                                                        Email: <?php echo $item['email_created'] ? 'Yes' : 'No'; ?>
+                                                        <i class="bi bi-check-circle"></i> ID: <?php echo $checklist_items['id_card_issued'] ? 'Yes' : 'No'; ?> | 
+                                                        Email: <?php echo $checklist_items['email_created'] ? 'Yes' : 'No'; ?>
                                                     </div>
                                                 </td>
 
@@ -1553,7 +1617,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                     </a>
 
                                                     <?php if ($item['status'] !== 'Completed' && $item['status'] !== 'Cancelled'): ?>
-                                                        <button class="btn-action edit" onclick="openEditModal(<?php echo e(json_encode($item)); ?>)" title="Edit Details">
+                                                        <button class="btn-action edit" onclick="openEditModal(<?php echo $item['id']; ?>)" title="Edit Details">
                                                             <i class="bi bi-pencil"></i>
                                                         </button>
                                                         
@@ -1573,7 +1637,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                     <?php endif; ?>
 
                                                     <?php if ($item['status'] === 'Completed' && !empty($item['employee_code'])): ?>
-                                                        <a href="../employee-view.php?id=<?php echo $item['employee_code']; ?>" class="btn-action" title="View Employee">
+                                                        <a href="../employee-view.php?code=<?php echo $item['employee_code']; ?>" class="btn-action" title="View Employee">
                                                             <i class="bi bi-person"></i>
                                                         </a>
                                                     <?php endif; ?>
@@ -1611,24 +1675,28 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             <div class="col-md-12">
                                 <label class="form-label required">Select Candidate</label>
                                 <select name="candidate_id" class="form-select select2" id="candidate_select" required>
-                                   <option value="">Choose candidate who accepted offer...</option>
-<?php 
-mysqli_data_seek($candidates_result, 0);
-while ($candidate = mysqli_fetch_assoc($candidates_result)): 
-?>
-    <option value="<?php echo $candidate['id']; ?>" 
-            data-offer-id="<?php echo $candidate['offer_id']; ?>"
-            data-offer-no="<?php echo e($candidate['offer_no']); ?>"
-            data-hiring-id="<?php echo $candidate['hiring_id']; ?>"
-            data-position="<?php echo e($candidate['position_title']); ?>"
-            data-department="<?php echo e($candidate['department']); ?>"
-            data-designation="<?php echo e($candidate['designation']); ?>"
-            data-joining-date="<?php echo $candidate['expected_joining_date']; ?>">
-        <?php echo e($candidate['first_name'] . ' ' . $candidate['last_name']); ?> 
-        (<?php echo e($candidate['candidate_code']); ?>) - <?php echo e($candidate['position_title']); ?>
-        (Offer: <?php echo e($candidate['offer_no']); ?>)
-    </option>
-<?php endwhile; ?>
+                                    <option value="">Choose candidate who accepted offer...</option>
+                                    <?php 
+                                    if ($candidates_result && mysqli_num_rows($candidates_result) > 0):
+                                        mysqli_data_seek($candidates_result, 0);
+                                        while ($candidate = mysqli_fetch_assoc($candidates_result)): 
+                                    ?>
+                                        <option value="<?php echo $candidate['id']; ?>" 
+                                                data-offer-id="<?php echo $candidate['offer_id']; ?>"
+                                                data-offer-no="<?php echo e($candidate['offer_no']); ?>"
+                                                data-hiring-id="<?php echo $candidate['hiring_id']; ?>"
+                                                data-position="<?php echo e($candidate['position_title']); ?>"
+                                                data-department="<?php echo e($candidate['department']); ?>"
+                                                data-designation="<?php echo e($candidate['designation']); ?>"
+                                                data-joining-date="<?php echo $candidate['expected_joining_date']; ?>">
+                                            <?php echo e($candidate['first_name'] . ' ' . $candidate['last_name']); ?> 
+                                            (<?php echo e($candidate['candidate_code']); ?>) - <?php echo e($candidate['position_title']); ?>
+                                            (Offer: <?php echo e($candidate['offer_no']); ?>)
+                                        </option>
+                                    <?php 
+                                        endwhile;
+                                    endif; 
+                                    ?>
                                 </select>
                                 <input type="hidden" name="offer_id" id="offer_id">
                                 <input type="hidden" name="hiring_request_id" id="hiring_request_id">
@@ -1660,16 +1728,20 @@ while ($candidate = mysqli_fetch_assoc($candidates_result)):
                             <div class="col-md-4">
                                 <label class="form-label">Reporting To</label>
                                 <select name="reporting_to" class="form-select">
-    <option value="">Select Manager</option>
-    <?php 
-    mysqli_data_seek($managers_result, 0);
-    while ($manager = mysqli_fetch_assoc($managers_result)): 
-    ?>
-        <option value="<?php echo $manager['id']; ?>">
-            <?php echo e($manager['full_name']); ?> (<?php echo e($manager['designation']); ?>)
-        </option>
-    <?php endwhile; ?>
-</select>
+                                    <option value="">Select Manager</option>
+                                    <?php 
+                                    if ($managers_result && mysqli_num_rows($managers_result) > 0):
+                                        mysqli_data_seek($managers_result, 0);
+                                        while ($manager = mysqli_fetch_assoc($managers_result)): 
+                                    ?>
+                                        <option value="<?php echo $manager['id']; ?>">
+                                            <?php echo e($manager['full_name']); ?> (<?php echo e($manager['designation']); ?>)
+                                        </option>
+                                    <?php 
+                                        endwhile;
+                                    endif; 
+                                    ?>
+                                </select>
                             </div>
                         </div>
 
@@ -1789,100 +1861,6 @@ while ($candidate = mysqli_fetch_assoc($candidates_result)):
         </div>
     </div>
 
-    <!-- Checklist Modal -->
-    <div class="modal fade" id="checklistModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form method="POST">
-                    <input type="hidden" name="action" value="update_checklist">
-                    <input type="hidden" name="onboarding_id" id="checklist_onboarding_id">
-
-                    <div class="modal-header">
-                        <h5 class="modal-title">Onboarding Checklist</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-
-                    <div class="modal-body">
-                        <div class="checklist-item">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="id_card_issued" id="chk_id_card">
-                                <label class="form-check-label" for="chk_id_card">
-                                    <strong>ID Card Issued</strong>
-                                    <br><small class="text-muted">Employee ID card has been issued</small>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="checklist-item">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="email_created" id="chk_email">
-                                <label class="form-check-label" for="chk_email">
-                                    <strong>Email Account Created</strong>
-                                    <br><small class="text-muted">Company email address created</small>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="checklist-item">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="system_access_given" id="chk_system">
-                                <label class="form-check-label" for="chk_system">
-                                    <strong>System Access Granted</strong>
-                                    <br><small class="text-muted">Access to systems, drives, and software</small>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="checklist-item">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="biometric_enrolled" id="chk_biometric">
-                                <label class="form-check-label" for="chk_biometric">
-                                    <strong>Biometric Enrolled</strong>
-                                    <br><small class="text-muted">Biometric attendance registered</small>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="checklist-item">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="orientation_completed" id="chk_orientation">
-                                <label class="form-check-label" for="chk_orientation">
-                                    <strong>Orientation Completed</strong>
-                                    <br><small class="text-muted">Company orientation session attended</small>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="checklist-item">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="training_completed" id="chk_training">
-                                <label class="form-check-label" for="chk_training">
-                                    <strong>Training Completed</strong>
-                                    <br><small class="text-muted">Role-specific training completed</small>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="checklist-item">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="welcome_kit_issued" id="chk_welcome">
-                                <label class="form-check-label" for="chk_welcome">
-                                    <strong>Welcome Kit Issued</strong>
-                                    <br><small class="text-muted">Welcome kit / onboarding kit provided</small>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn-primary-custom">Update Checklist</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
     <!-- Complete Onboarding Modal -->
     <div class="modal fade" id="completeModal" tabindex="-1">
         <div class="modal-dialog">
@@ -1989,7 +1967,7 @@ while ($candidate = mysqli_fetch_assoc($candidates_result)):
             });
 
             // Initialize Select2
-            $('.select2').select2({
+            $('#candidate_select').select2({
                 theme: 'bootstrap-5',
                 dropdownParent: $('#createOnboardingModal'),
                 width: '100%'
@@ -2000,7 +1978,6 @@ while ($candidate = mysqli_fetch_assoc($candidates_result)):
                 var selected = $(this).find(':selected');
                 var offerId = selected.data('offer-id');
                 var hiringId = selected.data('hiring-id');
-                var position = selected.data('position');
                 var department = selected.data('department');
                 var designation = selected.data('designation');
                 var joiningDate = selected.data('joining-date');
@@ -2008,7 +1985,7 @@ while ($candidate = mysqli_fetch_assoc($candidates_result)):
                 $('#offer_id').val(offerId);
                 $('#hiring_request_id').val(hiringId);
                 $('#department').val(department);
-                $('#designation').val(designation || position);
+                $('#designation').val(designation);
                 
                 if (joiningDate) {
                     $('#joining_date').val(joiningDate);
@@ -2025,10 +2002,8 @@ while ($candidate = mysqli_fetch_assoc($candidates_result)):
             new bootstrap.Modal(document.getElementById('createOnboardingModal')).show();
         }
 
-        function openEditModal(item) {
-            // Populate edit form with item data
-            $('#status_onboarding_id').val(item.id);
-            // You can create a separate edit modal if needed
+        function openEditModal(id) {
+            $('#status_onboarding_id').val(id);
             new bootstrap.Modal(document.getElementById('statusModal')).show();
         }
 
@@ -2062,4 +2037,4 @@ while ($candidate = mysqli_fetch_assoc($candidates_result)):
 if (isset($conn) && $conn) {
     mysqli_close($conn);
 }
-?>  
+?>

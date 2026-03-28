@@ -383,13 +383,15 @@ $stats = [
 
 $stats_query = "SELECT 
     COUNT(*) as total,
-    SUM(CASE WHEN status = 'New' THEN 1 ELSE 0 END) as new,
-    SUM(CASE WHEN status = 'Interview Scheduled' THEN 1 ELSE 0 END) as interview,
-    SUM(CASE WHEN status IN ('Selected', 'Offered', 'Joined') THEN 1 ELSE 0 END) as selected
+    SUM(CASE WHEN c.status = 'New' THEN 1 ELSE 0 END) as new,
+    SUM(CASE WHEN c.status = 'Interview Scheduled' THEN 1 ELSE 0 END) as interview,
+    SUM(CASE WHEN c.status IN ('Selected', 'Offered', 'Joined') THEN 1 ELSE 0 END) as selected
 FROM candidates c";
+
 if (!$isHr && $isManager) {
     $stats_query .= " LEFT JOIN hiring_requests h ON c.hiring_request_id = h.id WHERE h.requested_by = {$current_employee_id}";
 }
+
 $stats_res = mysqli_query($conn, $stats_query);
 if ($stats_res) {
     $stats = mysqli_fetch_assoc($stats_res);
