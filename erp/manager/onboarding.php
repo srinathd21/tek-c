@@ -567,11 +567,13 @@ if (!$isHr && !$isAdmin && $isManager) {
     $query .= " AND h.requested_by = " . (int)$current_employee_id;
 }
 
+// Add ORDER BY after all WHERE conditions
 $query .= " ORDER BY o.joining_date DESC, o.created_at DESC";
 
 $onboardings = mysqli_query($conn, $query);
 if (!$onboardings) {
     error_log("Main query failed: " . mysqli_error($conn));
+    error_log("Query: " . $query);
     $onboardings = false;
 }
 
@@ -590,17 +592,18 @@ $candidates_query = "
       AND ob.id IS NULL
 ";
 
-// Add manager filter if needed
+// Add manager filter if needed (MUST BE BEFORE ORDER BY)
 if (!$isHr && !$isAdmin && $isManager) {
     $candidates_query .= " AND h.requested_by = " . (int)$current_employee_id;
 }
 
-// Add ORDER BY after WHERE conditions
+// Add ORDER BY after all WHERE conditions
 $candidates_query .= " ORDER BY o.response_date DESC";
 
 $candidates_result = mysqli_query($conn, $candidates_query);
 if (!$candidates_result) {
     error_log("Candidates query failed: " . mysqli_error($conn));
+    error_log("Query: " . $candidates_query);
     $candidates_result = false;
 }
 
