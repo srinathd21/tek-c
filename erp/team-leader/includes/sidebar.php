@@ -62,20 +62,8 @@
     <div class="collapse ps-2" id="quotationMenu">
       <!-- Assigned Quotations -->
       <a class="side-link" href="assigned-quotations.php">
-        <i class="bi bi-inbox"></i><span class="label">Assigned to Me</span>
+        <i class="bi bi-inbox"></i><span class="label">Quotation Request</span>
         <span class="ms-auto badge bg-warning" id="assignedCount" style="font-size: 0.7rem;">0</span>
-      </a>
-      
-      <!-- Quotations in Progress -->
-      <a class="side-link" href="quotations-in-progress.php">
-        <i class="bi bi-arrow-right-circle"></i><span class="label">In Progress</span>
-        <span class="ms-auto badge bg-info" id="inProgressCount" style="font-size: 0.7rem;">0</span>
-      </a>
-      
-      <!-- Quotations Received (ready to submit) -->
-      <a class="side-link" href="quotations-to-submit.php">
-        <i class="bi bi-send"></i><span class="label">Ready to Submit</span>
-        <span class="ms-auto badge bg-primary" id="toSubmitCount" style="font-size: 0.7rem;">0</span>
       </a>
       
       <!-- Quotations with QS -->

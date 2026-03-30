@@ -32,7 +32,7 @@ function safeDate($v, $dash = '—') {
     $v = trim((string)$v);
     if ($v === '' || $v === '0000-00-00') return $dash;
     $ts = strtotime($v);
-    return $ts ? date('d M Y', $ts) : e($v);
+    return $ts ? date('d M Y, h:i A', $ts) : e($v);
 }
 
 function formatCurrency($amount) {
@@ -67,7 +67,7 @@ function getStatusBadge($status) {
     return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $status . '</span>';
 }
 
-// Fetch quotation request details with proper access check
+// Fetch quotation request details with proper access check, including QS employee
 $query = "
     SELECT 
         qr.*,
@@ -85,6 +85,8 @@ $query = "
         m.employee_code AS manager_code,
         tl.full_name AS team_lead_name,
         tl.employee_code AS team_lead_code,
+        qs_emp.full_name AS qs_employee_name,
+        qs_emp.employee_code AS qs_employee_code,
         (
             SELECT GROUP_CONCAT(e.full_name SEPARATOR ', ')
             FROM site_project_engineers spe
@@ -96,10 +98,10 @@ $query = "
     LEFT JOIN clients c ON s.client_id = c.id
     LEFT JOIN employees m ON s.manager_employee_id = m.id
     LEFT JOIN employees tl ON s.team_lead_employee_id = tl.id
+    LEFT JOIN employees qs_emp ON qr.qs_employee_id = qs_emp.id
     WHERE qr.id = ?
 ";
 
-// Allow access if user is manager who created it, or project engineer assigned to it, or team lead of the site
 $stmt = mysqli_prepare($conn, $query);
 mysqli_stmt_bind_param($stmt, "i", $request_id);
 mysqli_stmt_execute($stmt);
@@ -115,6 +117,7 @@ if (!$request) {
 // Check if user has permission to view this request
 $is_manager = ($request['requested_by'] == $user_id);
 $is_project_engineer = ($request['project_engineer_id'] == $user_id);
+$is_qs = ($request['qs_employee_id'] == $user_id && $request['status'] === 'With QS');
 
 // Check if user is team lead for this site
 $is_team_lead = false;
@@ -128,7 +131,7 @@ if (mysqli_stmt_num_rows($stmt) > 0) {
 }
 mysqli_stmt_close($stmt);
 
-if (!$is_manager && !$is_project_engineer && !$is_team_lead) {
+if (!$is_manager && !$is_project_engineer && !$is_team_lead && !$is_qs) {
     header('Location: index.php');
     exit();
 }
@@ -143,7 +146,6 @@ if (!empty($request['additional_documents_json'])) {
 $status = $_GET['status'] ?? '';
 $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
 ?>
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -174,6 +176,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
     <link href="assets/css/footer.css" rel="stylesheet" />
 
     <style>
+        /* Keep all existing styles from previous version */
         .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
 
         .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px 16px 12px; height:100%; }
@@ -477,6 +480,10 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                 <a href="assigned-quotations.php" class="btn btn-outline-secondary">
                                     <i class="bi bi-arrow-left"></i> Back
                                 </a>
+                            <?php elseif ($is_qs): ?>
+                                <a href="qs-quotations.php" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left"></i> Back
+                                </a>
                             <?php else: ?>
                                 <a href="my-quotation-requests.php" class="btn btn-outline-secondary">
                                     <i class="bi bi-arrow-left"></i> Back
@@ -492,6 +499,12 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                             <?php if ($request['status'] === 'Assigned' && ($is_project_engineer || $is_team_lead)): ?>
                                 <a href="manage-quotation.php?id=<?php echo $request['id']; ?>" class="btn btn-primary">
                                     <i class="bi bi-play-circle"></i> Start Working
+                                </a>
+                            <?php endif; ?>
+                            
+                            <?php if ($request['status'] === 'With QS' && $is_qs): ?>
+                                <a href="qs-manage-quotation.php?id=<?php echo $request['id']; ?>" class="btn btn-primary">
+                                    <i class="bi bi-file-text"></i> Manage Quotations
                                 </a>
                             <?php endif; ?>
                         </div>
@@ -539,6 +552,27 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                             </div>
                         </div>
                     </div>
+
+                    <!-- QS Assignment Card (if assigned) -->
+                    <?php if ($request['status'] === 'With QS' && !empty($request['qs_employee_name'])): ?>
+                    <div class="row g-3 mb-4">
+                        <div class="col-12">
+                            <div class="stat-card">
+                                <div class="stat-ic purple"><i class="bi bi-person-badge"></i></div>
+                                <div>
+                                    <div class="stat-label">Assigned QS</div>
+                                    <div class="stat-value" style="font-size:20px;"><?php echo e($request['qs_employee_name']); ?></div>
+                                    <?php if (!empty($request['qs_employee_code'])): ?>
+                                        <div class="proj-sub">Code: <?php echo e($request['qs_employee_code']); ?></div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($request['qs_assigned_at'])): ?>
+                                        <div class="proj-sub">Assigned on: <?php echo safeDate($request['qs_assigned_at']); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
 
                     <!-- Budget Card (if budget exists) -->
                     <?php if ($request['estimated_budget'] > 0): ?>
@@ -798,6 +832,21 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                 </div>
                             </div>
                             <?php endif; ?>
+                            
+                            <?php if ($request['qs_assigned_at'] && $request['status'] !== 'Assigned'): ?>
+                            <div class="timeline-item">
+                                <div class="timeline-dot completed"></div>
+                                <div class="timeline-content">
+                                    <div class="timeline-title">Forwarded to QS</div>
+                                    <div class="timeline-date">
+                                        <?php echo safeDate($request['qs_assigned_at']); ?> 
+                                        <?php if ($request['qs_employee_name']): ?>
+                                            to <?php echo e($request['qs_employee_name']); ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endif; ?>
 
                             <?php
                             $status_dot_class = 'pending';
@@ -824,6 +873,13 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                         <div class="mt-2 p-2" style="background: rgba(107,114,128,.08); border-radius: 8px; font-size:12px;">
                                             <strong>Cancellation Reason:</strong><br>
                                             <?php echo e($request['cancellation_reason']); ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ($request['status'] === 'With QS' && !empty($request['qs_employee_name'])): ?>
+                                        <div class="mt-2 p-2" style="background: rgba(139,92,246,.08); border-radius: 8px; font-size:12px;">
+                                            <strong>Assigned QS:</strong> <?php echo e($request['qs_employee_name']); ?>
+                                            <?php if (!empty($request['qs_employee_code'])): ?> (<?php echo e($request['qs_employee_code']); ?>)<?php endif; ?>
+                                            <br><small>Forwarded by TL on <?php echo safeDate($request['qs_assigned_at']); ?></small>
                                         </div>
                                     <?php endif; ?>
                                 </div>
@@ -864,3 +920,6 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
     </script>
 </body>
 </html>
+<?php
+if (isset($conn)) { mysqli_close($conn); }
+?>

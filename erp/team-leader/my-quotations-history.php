@@ -183,12 +183,11 @@ if (empty($tl_site_ids)) {
 
 // ---------- Stats ----------
 $total_history = count($requests);
-$completed_count = 0;
 $approved_count = 0;
 $rejected_count = 0;
 $cancelled_count = 0;
+$completed_count = 0;
 $total_quotations = 0;
-$total_savings = 0;
 
 foreach ($requests as $req) {
     if ($req['status'] === 'Approved') {
@@ -218,10 +217,9 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
 
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
 
-    <!-- DataTables (Bootstrap 5 + Responsive) -->
+    <!-- DataTables -->
     <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
     <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
 
@@ -231,8 +229,8 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
     <link href="assets/css/footer.css" rel="stylesheet" />
 
     <style>
+        /* All styles same as before */
         .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-
         .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px 16px 12px; height:100%; }
         .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
         .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
@@ -281,12 +279,8 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
             font-weight: 900;
         }
         .btn-action:hover { background: var(--bg); color: var(--blue); }
-        .btn-action.view{
-            border-color: rgba(45,156,219,.25);
-        }
-        .btn-action.compare{
-            border-color: rgba(245,158,11,.25);
-        }
+        .btn-action.view{ border-color: rgba(45,156,219,.25); }
+        .btn-action.compare{ border-color: rgba(245,158,11,.25); }
 
         .proj-title{ font-weight:900; font-size:13px; color:#1f2937; margin-bottom:2px; line-height:1.2; }
         .proj-sub{ font-size:11px; color:#6b7280; font-weight:700; line-height:1.25; }
@@ -312,7 +306,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
         }
         th.actions-col, td.actions-col { width: 100px !important; }
 
-        /* ---------- Mobile Cards ---------- */
+        /* Mobile cards styles */
         .history-card{
             border:1px solid var(--border);
             border-radius: 16px;
@@ -321,109 +315,34 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
             padding: 12px;
             position: relative;
         }
-        .history-card.approved{
-            border-left: 4px solid #10b981;
-        }
-        .history-card.rejected{
-            border-left: 4px solid #ef4444;
-        }
-        .history-card.cancelled{
-            border-left: 4px solid #6b7280;
-        }
-        .history-card.completed{
-            border-left: 4px solid #10b981;
-        }
-        .history-card .top{
-            display:flex;
-            align-items:flex-start;
-            justify-content:space-between;
-            gap:10px;
-        }
-        .history-card .title{
-            font-weight:1000;
-            color:#111827;
-            font-size: 14px;
-            line-height:1.2;
-            margin:0;
-        }
-        .history-card .meta{
-            margin-top:6px;
-            display:flex;
-            flex-wrap:wrap;
-            gap:8px 10px;
-            color:#6b7280;
-            font-weight:800;
-            font-size:12px;
-        }
+        .history-card.approved{ border-left: 4px solid #10b981; }
+        .history-card.rejected{ border-left: 4px solid #ef4444; }
+        .history-card.cancelled{ border-left: 4px solid #6b7280; }
+        .history-card.completed{ border-left: 4px solid #10b981; }
+        .history-card .top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+        .history-card .title{ font-weight:1000; color:#111827; font-size:14px; line-height:1.2; margin:0; }
+        .history-card .meta{ margin-top:6px; display:flex; flex-wrap:wrap; gap:8px 10px; color:#6b7280; font-weight:800; font-size:12px; }
         .history-kv{ margin-top:10px; display:grid; gap:8px; }
         .history-row{ display:flex; gap:10px; align-items:flex-start; }
-        .history-key{
-            flex:0 0 85px;
-            color:#6b7280;
-            font-weight:1000;
-            font-size:12px;
-        }
-        .history-val{
-            flex:1 1 auto;
-            font-weight:900;
-            color:#111827;
-            font-size:12.5px;
-            line-height:1.3;
-            word-break: break-word;
-        }
-        .history-actions{
-            margin-top:12px;
-            display:flex;
-            gap:8px;
-            justify-content:flex-end;
-            flex-wrap: wrap;
-        }
-        .history-actions a{ 
-            padding: 6px 12px; 
-            border-radius:10px; 
-            justify-content:center;
-            white-space: nowrap;
-        }
-        .stat-chip{
-            background: #f3f4f6;
-            padding: 4px 8px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            color: #6b7280;
-        }
-        .stat-chip i{
-            margin-right: 4px;
-        }
-        .finalized-amount{
-            color: #10b981;
-            font-weight: 900;
-        }
+        .history-key{ flex:0 0 85px; color:#6b7280; font-weight:1000; font-size:12px; }
+        .history-val{ flex:1; font-weight:900; color:#111827; font-size:12.5px; }
+        .history-actions{ margin-top:12px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+        .stat-chip{ background:#f3f4f6; padding:4px 8px; border-radius:20px; font-size:11px; font-weight:700; color:#6b7280; }
+        .stat-chip i{ margin-right:4px; }
 
         @media (max-width: 991.98px){
-            .main{
-                margin-left: 0 !important;
-                width: 100% !important;
-                max-width: 100% !important;
-            }
-            .sidebar{
-                position: fixed !important;
-                transform: translateX(-100%);
-                z-index: 1040 !important;
-            }
-            .sidebar.open, .sidebar.active, .sidebar.show{
-                transform: translateX(0) !important;
-            }
+            .main{ margin-left:0; width:100%; max-width:100%; }
+            .sidebar{ position:fixed; transform:translateX(-100%); z-index:1040; }
+            .sidebar.open, .sidebar.active, .sidebar.show{ transform:translateX(0); }
         }
-        @media (max-width: 768px) {
-            .content-scroll { padding: 12px 10px 12px !important; }
-            .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
-            .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
-            .history-actions { flex-wrap: wrap; }
+        @media (max-width: 768px){
+            .content-scroll{ padding:12px 10px; }
+            .container-fluid.maxw{ padding-left:6px; padding-right:6px; }
+            .panel{ padding:12px; margin-bottom:12px; border-radius:14px; }
+            .history-actions{ flex-wrap:wrap; }
         }
     </style>
 </head>
-
 <body>
 <div class="app">
     <?php include 'includes/sidebar.php'; ?>
@@ -435,7 +354,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
 
                 <!-- Status Messages -->
                 <?php if ($status && $message): ?>
-                    <div class="alert alert-<?php echo $status === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
+                    <div class="alert alert-<?php echo $status === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show">
                         <i class="bi bi-<?php echo $status === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'; ?> me-2"></i>
                         <?php echo htmlspecialchars($message); ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -449,57 +368,30 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                         <p class="text-muted mb-0">Complete history of all quotation requests handled by you</p>
                     </div>
                     <div>
-                        <a href="assigned-quotations.php" class="btn btn-outline-secondary">
-                            <i class="bi bi-arrow-left"></i> Back
-                        </a>
+                        <a href="assigned-quotations.php" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back</a>
                     </div>
                 </div>
 
                 <!-- Stats -->
                 <div class="row g-3 mb-3">
                     <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic blue"><i class="bi bi-clock-history"></i></div>
-                            <div>
-                                <div class="stat-label">Total History</div>
-                                <div class="stat-value"><?php echo (int)$total_history; ?></div>
-                            </div>
-                        </div>
+                        <div class="stat-card"><div class="stat-ic blue"><i class="bi bi-clock-history"></i></div><div><div class="stat-label">Total History</div><div class="stat-value"><?php echo (int)$total_history; ?></div></div></div>
                     </div>
                     <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic green"><i class="bi bi-check-circle"></i></div>
-                            <div>
-                                <div class="stat-label">Approved</div>
-                                <div class="stat-value"><?php echo (int)$approved_count; ?></div>
-                            </div>
-                        </div>
+                        <div class="stat-card"><div class="stat-ic green"><i class="bi bi-check-circle"></i></div><div><div class="stat-label">Approved</div><div class="stat-value"><?php echo (int)$approved_count; ?></div></div></div>
                     </div>
                     <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic red"><i class="bi bi-x-circle"></i></div>
-                            <div>
-                                <div class="stat-label">Rejected</div>
-                                <div class="stat-value"><?php echo (int)$rejected_count; ?></div>
-                            </div>
-                        </div>
+                        <div class="stat-card"><div class="stat-ic red"><i class="bi bi-x-circle"></i></div><div><div class="stat-label">Rejected</div><div class="stat-value"><?php echo (int)$rejected_count; ?></div></div></div>
                     </div>
                     <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic purple"><i class="bi bi-file-text"></i></div>
-                            <div>
-                                <div class="stat-label">Total Quotations</div>
-                                <div class="stat-value"><?php echo (int)$total_quotations; ?></div>
-                            </div>
-                        </div>
+                        <div class="stat-card"><div class="stat-ic purple"><i class="bi bi-file-text"></i></div><div><div class="stat-label">Total Quotations</div><div class="stat-value"><?php echo (int)$total_quotations; ?></div></div></div>
                     </div>
                 </div>
 
-                <!-- Info Banner if no history -->
+                <!-- Info Banner -->
                 <?php if (empty($requests)): ?>
-                <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
-                    <i class="bi bi-info-circle-fill me-2"></i>
-                    No quotation history found. Start working on assigned quotations to build your history.
+                <div class="alert alert-info alert-dismissible fade show mb-3">
+                    <i class="bi bi-info-circle-fill me-2"></i> No quotation history found. Start working on assigned quotations to build your history.
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
                 <?php endif; ?>
@@ -508,7 +400,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                 <div class="panel mb-4">
                     <div class="panel-header">
                         <h3 class="panel-title">Quotation History</h3>
-                        <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
+                        <button class="panel-menu"><i class="bi bi-three-dots"></i></button>
                     </div>
 
                     <!-- MOBILE: Cards -->
@@ -516,7 +408,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                         <div class="d-grid gap-3">
                             <?php if (empty($requests)): ?>
                                 <div class="text-center py-4 text-muted">
-                                    <i class="bi bi-clock-history" style="font-size: 48px;"></i>
+                                    <i class="bi bi-clock-history" style="font-size:48px;"></i>
                                     <p class="mt-2 fw-bold">No history found</p>
                                     <p class="small">Completed quotation requests will appear here.</p>
                                 </div>
@@ -541,7 +433,6 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                                         else echo 'bg-secondary';
                                                     ?>"><?php echo e($priority); ?></span>
                                                 </div>
-                                                
                                                 <div class="meta">
                                                     <span><i class="bi bi-building"></i> <?php echo e($req['project_name'] ?? ''); ?></span>
                                                     <span><i class="bi bi-tag"></i> <?php echo e($req['quotation_type'] ?? ''); ?></span>
@@ -557,43 +448,20 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                         </div>
 
                                         <div class="history-kv">
-                                            <div class="history-row">
-                                                <div class="history-key">Request No.</div>
-                                                <div class="history-val fw-800"><?php echo e($req['request_no']); ?></div>
-                                            </div>
-
-                                            <div class="history-row">
-                                                <div class="history-key">Created</div>
-                                                <div class="history-val"><?php echo safeDate($req['created_at']); ?></div>
-                                            </div>
-
+                                            <div class="history-row"><div class="history-key">Request No.</div><div class="history-val"><?php echo e($req['request_no']); ?></div></div>
+                                            <div class="history-row"><div class="history-key">Created</div><div class="history-val"><?php echo safeDate($req['created_at']); ?></div></div>
                                             <?php if (!empty($req['finalized_at'])): ?>
-                                            <div class="history-row">
-                                                <div class="history-key">Completed</div>
-                                                <div class="history-val"><?php echo safeDate($req['finalized_at']); ?></div>
-                                            </div>
+                                            <div class="history-row"><div class="history-key">Completed</div><div class="history-val"><?php echo safeDate($req['finalized_at']); ?></div></div>
                                             <?php endif; ?>
-
-                                            <div class="history-row">
-                                                <div class="history-key">Status</div>
-                                                <div class="history-val"><?php echo getStatusBadge($req['status']); ?></div>
-                                            </div>
-
+                                            <div class="history-row"><div class="history-key">Status</div><div class="history-val"><?php echo getStatusBadge($req['status']); ?></div></div>
                                             <?php if (!empty($req['selected_dealer'])): ?>
-                                            <div class="history-row">
-                                                <div class="history-key">Selected Dealer</div>
-                                                <div class="history-val"><?php echo e($req['selected_dealer']); ?></div>
-                                            </div>
+                                            <div class="history-row"><div class="history-key">Selected Dealer</div><div class="history-val"><?php echo e($req['selected_dealer']); ?></div></div>
                                             <?php endif; ?>
                                         </div>
 
                                         <div class="history-actions">
-                                            <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action view" title="View Details">
-                                                <i class="bi bi-eye"></i> View
-                                            </a>
-                                            <a href="quotation-comparison.php?id=<?php echo $req['id']; ?>" class="btn-action compare" title="Compare Quotations">
-                                                <i class="bi bi-bar-chart"></i> Compare
-                                            </a>
+                                            <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action view"><i class="bi bi-eye"></i> View</a>
+                                            <a href="quotation-comparison.php?id=<?php echo $req['id']; ?>" class="btn-action compare"><i class="bi bi-bar-chart"></i> Compare</a>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
@@ -618,40 +486,20 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                         <th>Status</th>
                                         <th>Priority</th>
                                         <th class="text-end actions-col">Actions</th>
-                                    </thead>
+                                    </tr>
+                                </thead>
                                 <tbody>
                                 <?php foreach ($requests as $req): ?>
                                     <tr class="<?php echo $req['priority'] === 'Urgent' ? 'table-danger' : ($req['priority'] === 'High' ? 'table-warning' : ''); ?>">
-                                        <tr>
-                                            <span class="fw-800"><?php echo e($req['request_no']); ?></span>
-                                        </td>
+                                        <td><span class="fw-800"><?php echo e($req['request_no']); ?></span></td>
                                         <td>
                                             <div class="proj-title"><?php echo e($req['title']); ?></div>
-                                            <div class="proj-sub">
-                                                <i class="bi bi-building"></i> <?php echo e($req['project_name']); ?>
-                                                <?php if (!empty($req['project_code'])): ?>
-                                                    (<?php echo e($req['project_code']); ?>)
-                                                <?php endif; ?>
-                                            </div>
+                                            <div class="proj-sub"><i class="bi bi-building"></i> <?php echo e($req['project_name']); ?><?php if (!empty($req['project_code'])): ?> (<?php echo e($req['project_code']); ?>)<?php endif; ?></div>
                                         </td>
                                         <td><?php echo e($req['quotation_type']); ?></td>
-                                        <td class="text-center">
-                                            <span class="badge bg-info rounded-pill"><?php echo intval($req['quotations_count'] ?? 0); ?></span>
-                                        </td>
-                                        <td>
-                                            <?php if (!empty($req['finalized_amount'])): ?>
-                                                <span class="fw-700 text-success"><?php echo formatCurrency($req['finalized_amount']); ?></span>
-                                            <?php else: ?>
-                                                <span class="text-muted">—</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <?php if (!empty($req['selected_dealer'])): ?>
-                                                <div class="fw-700"><?php echo e($req['selected_dealer']); ?></div>
-                                            <?php else: ?>
-                                                <span class="text-muted">—</span>
-                                            <?php endif; ?>
-                                        </td>
+                                        <td class="text-center"><span class="badge bg-info rounded-pill"><?php echo intval($req['quotations_count'] ?? 0); ?></span></td>
+                                        <td><?php if (!empty($req['finalized_amount'])): ?><span class="fw-700 text-success"><?php echo formatCurrency($req['finalized_amount']); ?></span><?php else: ?><span class="text-muted">—</span><?php endif; ?></td>
+                                        <td><?php if (!empty($req['selected_dealer'])): ?><div class="fw-700"><?php echo e($req['selected_dealer']); ?></div><?php else: ?><span class="text-muted">—</span><?php endif; ?></td>
                                         <td>
                                             <div class="fw-700"><?php echo safeDate($req['created_at']); ?></div>
                                             <div class="proj-sub"><?php echo getTimeAgo($req['created_at']); ?></div>
@@ -667,27 +515,22 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                         <td><?php echo getStatusBadge($req['status']); ?></td>
                                         <td><?php echo getPriorityBadge($req['priority']); ?></td>
                                         <td class="text-end actions-col">
-                                            <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action view" title="View Details">
-                                                <i class="bi bi-eye"></i>
-                                            </a>
-                                            <a href="quotation-comparison.php?id=<?php echo $req['id']; ?>" class="btn-action compare" title="Compare Quotations">
-                                                <i class="bi bi-bar-chart"></i>
-                                            </a>
+                                            <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action view" title="View Details"><i class="bi bi-eye"></i></a>
+                                            <a href="quotation-comparison.php?id=<?php echo $req['id']; ?>" class="btn-action compare" title="Compare Quotations"><i class="bi bi-bar-chart"></i></a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>
-                             </table>
+                            </table>
                         </div>
                     </div>
-
                 </div>
 
-                <!-- Summary Panel -->
+                <!-- Performance Summary Panel -->
                 <div class="panel">
                     <div class="panel-header">
                         <h3 class="panel-title">Performance Summary</h3>
-                        <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
+                        <button class="panel-menu"><i class="bi bi-three-dots"></i></button>
                     </div>
                     <div class="row g-3">
                         <div class="col-md-3">
@@ -712,17 +555,13 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                         <div class="col-md-3">
                             <div class="text-center">
                                 <div class="fw-900 text-muted small">Completed Requests</div>
-                                <div class="fw-900 fs-2 text-success">
-                                    <?php echo (int)$completed_count; ?>
-                                </div>
+                                <div class="fw-900 fs-2 text-success"><?php echo (int)$completed_count; ?></div>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="text-center">
                                 <div class="fw-900 text-muted small">Total Requests</div>
-                                <div class="fw-900 fs-2 text-primary">
-                                    <?php echo (int)$total_history; ?>
-                                </div>
+                                <div class="fw-900 fs-2 text-primary"><?php echo (int)$total_history; ?></div>
                             </div>
                         </div>
                     </div>
@@ -738,16 +577,12 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
 <!-- JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
-
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-    // Init DataTable ONLY on md+ screens
     function initHistoryTable() {
         const isDesktop = window.matchMedia('(min-width: 768px)').matches;
         const tbl = document.getElementById('historyTable');
@@ -758,13 +593,10 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                 $('#historyTable').DataTable({
                     responsive: true,
                     autoWidth: false,
-                    scrollX: false,
                     pageLength: 10,
                     lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-                    order: [[6, 'desc']], // Sort by created date descending
-                    columnDefs: [
-                        { targets: [10], orderable: false, searchable: false } // Action column
-                    ],
+                    order: [[6, 'desc']], // Created column (index 6)
+                    columnDefs: [{ targets: [10], orderable: false, searchable: false }],
                     language: {
                         zeroRecords: "No history found",
                         info: "Showing _START_ to _END_ of _TOTAL_ requests",
@@ -773,10 +605,6 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                         search: "Search:"
                     }
                 });
-
-                setTimeout(function() {
-                    $('.dataTables_filter input').focus();
-                }, 400);
             }
         } else {
             if ($.fn.DataTable.isDataTable('#historyTable')) {
@@ -790,6 +618,8 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
         window.addEventListener('resize', initHistoryTable);
     });
 </script>
-
 </body>
 </html>
+<?php
+if (isset($conn)) { mysqli_close($conn); }
+?>

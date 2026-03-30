@@ -58,6 +58,7 @@
 
 
     <!-- QUOTATION MANAGEMENT - NEW SECTION -->
+  
     <a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#quotationMenu">
       <i class="bi bi-file-text"></i>
       <span class="label">Quotations</span>
@@ -68,31 +69,12 @@
 
     <div class="collapse ps-2 side-submenu-collapse" id="quotationMenu">
 
-      <a class="side-link sub-link" href="quotation-requests.php">
-        <i class="bi bi-plus-circle"></i>
-        <span class="label">New Request</span>
+       <a class="side-link" href="all-quotation-requests.php">
+        <i class="bi bi-inbox"></i><span class="label">All Quotation</span>
+       
       </a>
 
-      <a class="side-link sub-link" href="my-quotation-requests.php">
-        <i class="bi bi-list-check"></i>
-        <span class="label">My Requests</span>
-      </a>
-
-      <a class="side-link sub-link" href="pending-approvals.php">
-        <i class="bi bi-clock-history"></i>
-        <span class="label">Pending Approvals</span>
-
-      </a>
-
-      <a class="side-link sub-link" href="quotation-comparison.php">
-        <i class="bi bi-bar-chart-steps"></i>
-        <span class="label">Comparison</span>
-      </a>
-
-      <a class="side-link sub-link" href="approved-quotations.php">
-        <i class="bi bi-check-circle"></i>
-        <span class="label">Approved</span>
-      </a>
+     
 
       <a class="side-link sub-link" href="dealers.php">
         <i class="bi bi-shop"></i>

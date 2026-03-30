@@ -44,26 +44,6 @@
         <span class="label">My Requests</span>
       </a>
 
-      <a class="side-link sub-link" href="pending-approvals.php">
-        <i class="bi bi-clock-history"></i>
-        <span class="label">Pending Approvals</span>
-
-      </a>
-
-      <a class="side-link sub-link" href="quotation-comparison.php">
-        <i class="bi bi-bar-chart-steps"></i>
-        <span class="label">Comparison</span>
-      </a>
-
-      <a class="side-link sub-link" href="approved-quotations.php">
-        <i class="bi bi-check-circle"></i>
-        <span class="label">Approved</span>
-      </a>
-
-      <a class="side-link sub-link" href="dealers.php">
-        <i class="bi bi-shop"></i>
-        <span class="label">Dealers</span>
-      </a>
 
     </div>
     <!-- Today's Reports -->
