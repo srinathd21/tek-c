@@ -1,6 +1,6 @@
 <?php
-// pending-approvals.php (Manager) — show quotation requests pending manager approval
-// Based on actual database schema - no quotations table exists
+// my-quotation-requests.php — show ALL quotation requests created by logged-in user
+// Edit and Delete functionality for draft and pending requests
 
 session_start();
 require_once 'includes/db-config.php';
@@ -12,7 +12,7 @@ $success = '';
 $error   = '';
 $requests = [];
 
-// ---------- Auth (Manager only) ----------
+// ---------- Auth ----------
 if (empty($_SESSION['employee_id'])) {
   header("Location: ../login.php");
   exit;
@@ -20,19 +20,20 @@ if (empty($_SESSION['employee_id'])) {
 
 $empId = (int)$_SESSION['employee_id'];
 $designation = strtolower(trim((string)($_SESSION['designation'] ?? '')));
+$user_name = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? '';
 
-// Allow managers and directors
-$allowed = [
-  'manager',
-  'director',
-  'vice president',
-  'general manager',
-  'project engineer'
-];
-if (!in_array($designation, $allowed, true)) {
-  header("Location: index.php");
-  exit;
-}
+// Debug: Log the designation to see what's actually in the session
+error_log("User designation: " . $designation);
+error_log("User ID: " . $empId);
+error_log("User Name: " . $user_name);
+
+// ============================================================
+// Edit permission: User can edit if status is Draft OR Pending Assignment
+// Because "Pending Assignment" means the request hasn't been assigned to anyone yet
+// ============================================================
+$editable_statuses = ['Draft', 'Pending Assignment'];
+
+// Allow all authenticated users to view their requests
 
 // ---------- Helpers ----------
 function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
@@ -71,22 +72,7 @@ function getStatusBadge($status) {
     return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $status . '</span>';
 }
 
-function getTimeAgo($datetime) {
-    if (empty($datetime)) return '—';
-    $time = strtotime($datetime);
-    $now = time();
-    $diff = $now - $time;
-    
-    if ($diff < 60) return 'Just now';
-    if ($diff < 3600) return floor($diff / 60) . ' minutes ago';
-    if ($diff < 86400) return floor($diff / 3600) . ' hours ago';
-    if ($diff < 2592000) return floor($diff / 86400) . ' days ago';
-    return date('d M Y', $time);
-}
-
-// ---------- Fetch all quotation requests pending manager approval ----------
-// Statuses that need manager approval: 'QS Finalized' (ready for manager decision)
-// Note: No quotations table exists, so we're only showing request details
+// ---------- Fetch all quotation requests for this user ----------
 $sql = "
   SELECT 
     qr.*,
@@ -95,48 +81,92 @@ $sql = "
     s.project_location,
     c.client_name,
     c.company_name,
-    c.mobile_number AS client_mobile,
-    e.full_name AS requested_by_employee_name
+    e.full_name as requested_by_employee_name,
+    e.id as requested_by_id
   FROM quotation_requests qr
   JOIN sites s ON qr.site_id = s.id
   LEFT JOIN clients c ON s.client_id = c.id
   LEFT JOIN employees e ON qr.requested_by = e.id
-  WHERE qr.status = 'QS Finalized'
+  WHERE qr.requested_by = ?
   ORDER BY 
-    FIELD(qr.priority, 'Urgent', 'High', 'Medium', 'Low'),
-    qr.updated_at DESC
+    CASE 
+      WHEN qr.status = 'Draft' THEN 1
+      WHEN qr.status = 'Pending Assignment' THEN 2
+      WHEN qr.status = 'Assigned' THEN 3
+      WHEN qr.status = 'Quotations Received' THEN 4
+      WHEN qr.status = 'With QS' THEN 5
+      WHEN qr.status = 'QS Finalized' THEN 6
+      WHEN qr.status = 'Approved' THEN 7
+      WHEN qr.status = 'Rejected' THEN 8
+      WHEN qr.status = 'Cancelled' THEN 9
+      ELSE 10
+    END,
+    qr.created_at DESC
 ";
 
 $stmt = mysqli_prepare($conn, $sql);
 if (!$stmt) {
   $error = "Database error: " . mysqli_error($conn);
 } else {
+  mysqli_stmt_bind_param($stmt, "i", $empId);
   mysqli_stmt_execute($stmt);
   $res = mysqli_stmt_get_result($stmt);
   $requests = mysqli_fetch_all($res, MYSQLI_ASSOC);
   mysqli_stmt_close($stmt);
 }
 
+// Debug: Log the number of requests found
+error_log("Found " . count($requests) . " quotation requests for user ID: " . $empId);
+if (count($requests) > 0) {
+    error_log("First request status: " . $requests[0]['status']);
+    error_log("First request title: " . $requests[0]['title']);
+}
+
 // ---------- Stats ----------
-$total_pending = count($requests);
-$urgent_count = 0;
-$high_count = 0;
+$total_requests = count($requests);
+$draft_count = 0;
+$pending_count = 0;
+$approved_count = 0;
+$rejected_count = 0;
 
 foreach ($requests as $req) {
-    if ($req['priority'] === 'Urgent') $urgent_count++;
-    if ($req['priority'] === 'High') $high_count++;
+    if ($req['status'] === 'Draft') $draft_count++;
+    elseif ($req['status'] === 'Approved') $approved_count++;
+    elseif ($req['status'] === 'Rejected') $rejected_count++;
+    elseif (in_array($req['status'], ['Pending Assignment', 'Assigned', 'Quotations Received', 'With QS', 'QS Finalized'])) $pending_count++;
 }
 
 // Get status message if any
 $status = $_GET['status'] ?? '';
 $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
+
+// Get user's role display name
+function getRoleDisplay($designation) {
+    $roles = [
+        'project engineer grade 1' => 'Project Engineer',
+        'project engineer grade 2' => 'Project Engineer',
+        'sr. engineer' => 'Senior Engineer',
+        'sr engineer' => 'Senior Engineer',
+        'senior engineer' => 'Senior Engineer',
+        'team lead' => 'Team Lead',
+        'teamleader' => 'Team Lead',
+        'manager' => 'Manager',
+        'director' => 'Director',
+        'hr' => 'HR',
+        'accountant' => 'Accountant'
+    ];
+    return $roles[$designation] ?? ucfirst($designation);
+}
+
+// Define editable statuses globally for JavaScript
+$editable_statuses_js = json_encode($editable_statuses);
 ?>
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pending Approvals - TEK-C</title>
+  <title>My Quotation Requests - TEK-C</title>
 
   <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
@@ -168,7 +198,6 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
     .stat-ic.yellow{ background: #f59e0b; }
     .stat-ic.red{ background: #ef4444; }
     .stat-ic.purple{ background: #8b5cf6; }
-    .stat-ic.orange{ background: #f2994a; }
     .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
     .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
 
@@ -203,14 +232,24 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
       font-weight: 900;
     }
     .btn-action:hover { background: var(--bg); color: var(--blue); }
-    .btn-action.approve{
+    .btn-action.reports{
+      border-color: rgba(45,156,219,.25);
+    }
+    .btn-action.quotation{
       border-color: rgba(16,185,129,.25);
     }
-    .btn-action.reject{
+    .btn-action.danger{
       border-color: rgba(239,68,68,.25);
+      color: #ef4444;
     }
-    .btn-action.view{
-      border-color: rgba(45,156,219,.25);
+    .btn-action.danger:hover { 
+      background: #fee2e2; 
+      color: #dc2626;
+    }
+    .btn-action.disabled, .btn-action:disabled {
+      opacity: 0.5;
+      pointer-events: none;
+      cursor: not-allowed;
     }
 
     .proj-title{ font-weight:900; font-size:13px; color:#1f2937; margin-bottom:2px; line-height:1.2; }
@@ -235,37 +274,54 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
       margin: 0 3px;
       font-weight: 750;
     }
-    th.actions-col, td.actions-col { width: 120px !important; }
+    th.actions-col, td.actions-col { width: 130px !important; }
+
+    /* Role badge */
+    .role-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: #f3f4f6;
+      color: #6b7280;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Debug info (visible only to admins - remove in production) */
+    .debug-info {
+      background: #fef9c3;
+      border: 1px solid #facc15;
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 15px;
+      font-size: 12px;
+      font-family: monospace;
+      color: #854d0e;
+    }
 
     /* ---------- Mobile Cards ---------- */
-    .approval-card{
+    .request-card{
       border:1px solid var(--border);
       border-radius: 16px;
       background: var(--surface);
       box-shadow: var(--shadow);
       padding: 12px;
-      position: relative;
     }
-    .approval-card.urgent{
-      border-left: 4px solid #dc2626;
-    }
-    .approval-card.high{
-      border-left: 4px solid #f59e0b;
-    }
-    .approval-card .top{
+    .request-card .top{
       display:flex;
       align-items:flex-start;
       justify-content:space-between;
       gap:10px;
     }
-    .approval-card .title{
+    .request-card .title{
       font-weight:1000;
       color:#111827;
       font-size: 14px;
       line-height:1.2;
       margin:0;
     }
-    .approval-card .meta{
+    .request-card .meta{
       margin-top:6px;
       display:flex;
       flex-wrap:wrap;
@@ -274,15 +330,15 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
       font-weight:800;
       font-size:12px;
     }
-    .approval-kv{ margin-top:10px; display:grid; gap:8px; }
-    .approval-row{ display:flex; gap:10px; align-items:flex-start; }
-    .approval-key{
-      flex:0 0 90px;
+    .request-kv{ margin-top:10px; display:grid; gap:8px; }
+    .request-row{ display:flex; gap:10px; align-items:flex-start; }
+    .request-key{
+      flex:0 0 85px;
       color:#6b7280;
       font-weight:1000;
       font-size:12px;
     }
-    .approval-val{
+    .request-val{
       flex:1 1 auto;
       font-weight:900;
       color:#111827;
@@ -290,13 +346,13 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
       line-height:1.3;
       word-break: break-word;
     }
-    .approval-actions{
+    .request-actions{
       margin-top:12px;
       display:flex;
       gap:8px;
       justify-content:flex-end;
     }
-    .approval-actions a, .approval-actions button{ 
+    .request-actions a{ 
       padding: 6px 12px; 
       border-radius:10px; 
       justify-content:center;
@@ -322,7 +378,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
       .content-scroll { padding: 12px 10px 12px !important; }
       .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
       .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
-      .approval-actions { flex-wrap: wrap; }
+      .request-actions { flex-wrap: wrap; }
     }
   </style>
 </head>
@@ -336,6 +392,8 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
     <div id="contentScroll" class="content-scroll">
       <div class="container-fluid maxw">
 
+        
+
         <!-- Status Messages -->
         <?php if ($status && $message): ?>
           <div class="alert alert-<?php echo $status === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
@@ -348,8 +406,15 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
         <!-- Page Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
           <div>
-            <h1 class="h3 fw-bold text-dark mb-1">Pending Approvals</h1>
-            <p class="text-muted mb-0">Quotation requests waiting for your decision</p>
+            <h1 class="h3 fw-bold text-dark mb-1">My Quotation Requests</h1>
+            <p class="text-muted mb-0">
+              <i class="bi bi-person-badge me-1"></i> Your role: 
+              <span class="role-badge">
+                <i class="bi bi-pencil-square"></i>
+                <?php echo getRoleDisplay($designation); ?>
+              </span>
+              <span class="ms-2 text-success small">(You can edit and delete draft/pending requests)</span>
+            </p>
           </div>
           <div>
             <a href="quotation-requests.php" class="btn btn-primary">
@@ -362,28 +427,19 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
         <div class="row g-3 mb-3">
           <div class="col-12 col-md-6 col-xl-3">
             <div class="stat-card">
-              <div class="stat-ic blue"><i class="bi bi-clock-history"></i></div>
+              <div class="stat-ic blue"><i class="bi bi-file-text"></i></div>
               <div>
-                <div class="stat-label">Pending Approval</div>
-                <div class="stat-value"><?php echo (int)$total_pending; ?></div>
+                <div class="stat-label">Total Requests</div>
+                <div class="stat-value"><?php echo (int)$total_requests; ?></div>
               </div>
             </div>
           </div>
           <div class="col-12 col-md-6 col-xl-3">
             <div class="stat-card">
-              <div class="stat-ic red"><i class="bi bi-exclamation-triangle"></i></div>
+              <div class="stat-ic yellow"><i class="bi bi-clock-history"></i></div>
               <div>
-                <div class="stat-label">Urgent</div>
-                <div class="stat-value"><?php echo (int)$urgent_count; ?></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic orange"><i class="bi bi-arrow-up"></i></div>
-              <div>
-                <div class="stat-label">High Priority</div>
-                <div class="stat-value"><?php echo (int)$high_count; ?></div>
+                <div class="stat-label">Pending</div>
+                <div class="stat-value"><?php echo (int)$pending_count; ?></div>
               </div>
             </div>
           </div>
@@ -391,17 +447,41 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
             <div class="stat-card">
               <div class="stat-ic green"><i class="bi bi-check-circle"></i></div>
               <div>
-                <div class="stat-label">To Review</div>
-                <div class="stat-value"><?php echo (int)$total_pending; ?></div>
+                <div class="stat-label">Approved</div>
+                <div class="stat-value"><?php echo (int)$approved_count; ?></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="stat-card">
+              <div class="stat-ic red"><i class="bi bi-pencil"></i></div>
+              <div>
+                <div class="stat-label">Drafts</div>
+                <div class="stat-value"><?php echo (int)$draft_count; ?></div>
               </div>
             </div>
           </div>
         </div>
 
+        <!-- Rejected Count (if any) -->
+        <?php if ($rejected_count > 0): ?>
+        <div class="row g-3 mb-3">
+          <div class="col-12">
+            <div class="stat-card">
+              <div class="stat-ic purple"><i class="bi bi-x-circle"></i></div>
+              <div>
+                <div class="stat-label">Rejected / Cancelled</div>
+                <div class="stat-value"><?php echo (int)$rejected_count; ?></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Directory -->
         <div class="panel mb-4">
           <div class="panel-header">
-            <h3 class="panel-title">Requests Awaiting Approval</h3>
+            <h3 class="panel-title">Quotation Requests</h3>
             <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
           </div>
 
@@ -410,17 +490,19 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
             <div class="d-grid gap-3">
               <?php if (empty($requests)): ?>
                 <div class="text-center py-4 text-muted">
-                  <i class="bi bi-check2-circle" style="font-size: 48px;"></i>
-                  <p class="mt-2 fw-bold">No pending approvals</p>
-                  <p class="small">All caught up! No requests waiting for your decision.</p>
+                  <i class="bi bi-inbox" style="font-size: 48px;"></i>
+                  <p class="mt-2 fw-bold">No quotation requests found</p>
+                  <a href="quotation-requests.php" class="btn btn-primary btn-sm mt-2">
+                    <i class="bi bi-plus-circle"></i> Create your first request
+                  </a>
                 </div>
               <?php else: ?>
-                <?php foreach ($requests as $req): 
-                  $cardClass = '';
-                  if ($req['priority'] === 'Urgent') $cardClass = 'urgent';
-                  elseif ($req['priority'] === 'High') $cardClass = 'high';
-                ?>
-                  <div class="approval-card <?php echo $cardClass; ?>">
+                <?php foreach ($requests as $req): ?>
+                  <?php 
+                    // Check if this request is editable (status is in editable_statuses array)
+                    $is_editable = in_array($req['status'], $editable_statuses);
+                  ?>
+                  <div class="request-card">
                     <div class="top">
                       <div style="flex:1 1 auto;">
                         <div class="d-flex align-items-center justify-content-between gap-2">
@@ -437,92 +519,47 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                         <div class="meta">
                           <span><i class="bi bi-building"></i> <?php echo e($req['project_name'] ?? ''); ?></span>
                           <span><i class="bi bi-tag"></i> <?php echo e($req['quotation_type'] ?? ''); ?></span>
+                          <span class="badge bg-light text-dark">Status: <?php echo $req['status']; ?></span>
                         </div>
                       </div>
                     </div>
 
-                    <div class="approval-kv">
-                      <div class="approval-row">
-                        <div class="approval-key">Request No.</div>
-                        <div class="approval-val fw-800"><?php echo e($req['request_no']); ?></div>
+                    <div class="request-kv">
+                      <div class="request-row">
+                        <div class="request-key">Request No.</div>
+                        <div class="request-val fw-800"><?php echo e($req['request_no']); ?></div>
                       </div>
 
-                      <div class="approval-row">
-                        <div class="approval-key">Requested By</div>
-                        <div class="approval-val"><?php echo e($req['requested_by_employee_name'] ?? $req['requested_by_name']); ?></div>
+                      <div class="request-row">
+                        <div class="request-key">Date</div>
+                        <div class="request-val"><?php echo safeDate($req['request_date']); ?></div>
                       </div>
 
-                      <div class="approval-row">
-                        <div class="approval-key">Status</div>
-                        <div class="approval-val"><?php echo getStatusBadge($req['status']); ?></div>
+                      <div class="request-row">
+                        <div class="request-key">Status</div>
+                        <div class="request-val"><?php echo getStatusBadge($req['status']); ?></div>
                       </div>
 
-                      <div class="approval-row">
-                        <div class="approval-key">Last Updated</div>
-                        <div class="approval-val">
-                          <?php echo safeDate($req['updated_at']); ?>
-                          <span class="proj-sub d-block"><?php echo getTimeAgo($req['updated_at']); ?></span>
-                        </div>
-                      </div>
-
-                      <?php if (!empty($req['client_name'])): ?>
-                      <div class="approval-row">
-                        <div class="approval-key">Client</div>
-                        <div class="approval-val"><?php echo e($req['client_name']); ?></div>
-                      </div>
-                      <?php endif; ?>
-
-                      <?php if (!empty($req['description'])): ?>
-                      <div class="approval-row">
-                        <div class="approval-key">Description</div>
-                        <div class="approval-val"><?php echo e(substr($req['description'], 0, 100)); ?>...</div>
+                      <?php if (!empty($req['estimated_budget']) && $req['estimated_budget'] > 0): ?>
+                      <div class="request-row">
+                        <div class="request-key">Budget</div>
+                        <div class="request-val">₹ <?php echo number_format($req['estimated_budget'], 2); ?></div>
                       </div>
                       <?php endif; ?>
                     </div>
 
-                    <div class="approval-actions">
-                      <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action view" title="View Details">
+                    <div class="request-actions">
+                      <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action" title="View Details">
                         <i class="bi bi-eye"></i> View
                       </a>
-                      <a href="approve-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action approve" title="Approve">
-                        <i class="bi bi-check-lg"></i> Approve
-                      </a>
-                      <button type="button" class="btn-action reject" data-bs-toggle="modal" data-bs-target="#rejectModal<?php echo $req['id']; ?>" title="Reject">
-                        <i class="bi bi-x-lg"></i> Reject
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Reject Modal for each request -->
-                  <div class="modal fade" id="rejectModal<?php echo $req['id']; ?>" tabindex="-1" aria-labelledby="rejectModalLabel<?php echo $req['id']; ?>" aria-hidden="true">
-                    <div class="modal-dialog">
-                      <div class="modal-content">
-                        <div class="modal-header">
-                          <h5 class="modal-title fw-900" id="rejectModalLabel<?php echo $req['id']; ?>">Reject Quotation Request</h5>
-                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <form action="process-quotation-decision.php" method="POST">
-                          <div class="modal-body">
-                            <input type="hidden" name="request_id" value="<?php echo $req['id']; ?>">
-                            <input type="hidden" name="decision" value="reject">
-                            
-                            <p class="mb-3">You are about to reject request: <strong><?php echo e($req['request_no']); ?></strong></p>
-                            
-                            <div class="mb-3">
-                              <label class="form-label required">Reason for Rejection</label>
-                              <textarea class="form-control" name="rejection_reason" rows="3" required placeholder="Please provide a reason for rejection..."></textarea>
-                            </div>
-                            
-                            <div class="form-text">
-                              <i class="bi bi-info-circle"></i> This will update the request status to "Rejected" and notify the requester.
-                            </div>
-                          </div>
-                          <div class="modal-footer">
-                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-danger">Reject Request</button>
-                          </div>
-                        </form>
-                      </div>
+                      <?php if ($is_editable): ?>
+                        <a href="edit-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action quotation" title="Edit">
+                          <i class="bi bi-pencil"></i> Edit
+                        </a>
+                        <a href="javascript:void(0);" onclick="deleteRequest(<?php echo $req['id']; ?>, '<?php echo e($req['title']); ?>')" class="btn-action danger" title="Delete">
+                          <i class="bi bi-trash"></i> Delete
+                        </a>
+                      <?php endif; ?>
                     </div>
                   </div>
                 <?php endforeach; ?>
@@ -533,57 +570,61 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
           <!-- DESKTOP/TABLET: DataTable -->
           <div class="d-none d-md-block">
             <div class="table-responsive">
-              <table id="pendingApprovalsTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
+              <table id="myQuotationRequestsTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
                 <thead>
                   <tr>
                     <th>Request No.</th>
-                    <th>Title / Site</th>
+                    <th>Title</th>
+                    <th>Site/Project</th>
                     <th>Type</th>
-                    <th>Requested By</th>
-                    <th>Status</th>
-                    <th>Last Updated</th>
+                    <th>Date</th>
                     <th>Priority</th>
+                    <th>Status</th>
+                    <th>Budget</th>
                     <th class="text-end actions-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                 <?php foreach ($requests as $req): ?>
-                  <tr class="<?php echo $req['priority'] === 'Urgent' ? 'table-danger' : ($req['priority'] === 'High' ? 'table-warning' : ''); ?>">
+                  <?php 
+                    $is_editable = in_array($req['status'], $editable_statuses);
+                  ?>
+                  <tr>
                     <td>
                       <span class="fw-800"><?php echo e($req['request_no']); ?></span>
                     </td>
                     <td>
                       <div class="proj-title"><?php echo e($req['title']); ?></div>
-                      <div class="proj-sub">
-                        <i class="bi bi-building"></i> <?php echo e($req['project_name']); ?>
-                        <?php if (!empty($req['project_code'])): ?>
-                          (<?php echo e($req['project_code']); ?>)
-                        <?php endif; ?>
-                      </div>
-                      <?php if (!empty($req['client_name'])): ?>
-                        <div class="proj-sub"><i class="bi bi-person"></i> <?php echo e($req['client_name']); ?></div>
+                    </td>
+                    <td>
+                      <div class="proj-title"><?php echo e($req['project_name']); ?></div>
+                      <?php if (!empty($req['project_code'])): ?>
+                        <div class="proj-sub">Code: <?php echo e($req['project_code']); ?></div>
                       <?php endif; ?>
                     </td>
                     <td><?php echo e($req['quotation_type']); ?></td>
-                    <td>
-                      <div class="proj-title"><?php echo e($req['requested_by_employee_name'] ?? $req['requested_by_name']); ?></div>
-                    </td>
+                    <td><?php echo safeDate($req['request_date']); ?></td>
+                    <td><?php echo getPriorityBadge($req['priority']); ?></td>
                     <td><?php echo getStatusBadge($req['status']); ?></td>
                     <td>
-                      <span class="fw-800"><?php echo safeDate($req['updated_at']); ?></span>
-                      <div class="proj-sub"><?php echo getTimeAgo($req['updated_at']); ?></div>
+                      <?php if (!empty($req['estimated_budget']) && $req['estimated_budget'] > 0): ?>
+                        <span class="fw-800">₹ <?php echo number_format($req['estimated_budget'], 2); ?></span>
+                      <?php else: ?>
+                        —
+                      <?php endif; ?>
                     </td>
-                    <td><?php echo getPriorityBadge($req['priority']); ?></td>
                     <td class="text-end actions-col">
-                      <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action view" title="View Details">
+                      <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action" title="View Details">
                         <i class="bi bi-eye"></i>
                       </a>
-                      <a href="approve-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action approve" title="Approve">
-                        <i class="bi bi-check-lg"></i>
-                      </a>
-                      <button type="button" class="btn-action reject" data-bs-toggle="modal" data-bs-target="#rejectModal<?php echo $req['id']; ?>" title="Reject">
-                        <i class="bi bi-x-lg"></i>
-                      </button>
+                      <?php if ($is_editable): ?>
+                        <a href="edit-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action quotation" title="Edit">
+                          <i class="bi bi-pencil"></i>
+                        </a>
+                        <a href="javascript:void(0);" onclick="deleteRequest(<?php echo $req['id']; ?>, '<?php echo e($req['title']); ?>')" class="btn-action danger" title="Delete">
+                          <i class="bi bi-trash"></i>
+                        </a>
+                      <?php endif; ?>
                     </td>
                   </tr>
                 <?php endforeach; ?>
@@ -601,6 +642,27 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
   </main>
 </div>
 
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteModalLabel">Delete Quotation Request</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete this quotation request?</p>
+        <p class="fw-bold" id="deleteRequestTitle"></p>
+        <p class="text-danger small">This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <a href="#" id="confirmDeleteBtn" class="btn btn-danger">Delete</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -613,26 +675,37 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
+  // Delete request function
+  function deleteRequest(id, title) {
+    document.getElementById('deleteRequestTitle').innerText = title;
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+    confirmBtn.href = 'delete-quotation-request.php?id=' + id;
+    
+    // Show modal
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    deleteModal.show();
+  }
+  
   // Init DataTable ONLY on md+ screens
-  function initPendingApprovalsTable() {
+  function initQuotationRequestsTable() {
     const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-    const tbl = document.getElementById('pendingApprovalsTable');
+    const tbl = document.getElementById('myQuotationRequestsTable');
     if (!tbl) return;
 
     if (isDesktop) {
-      if (!$.fn.DataTable.isDataTable('#pendingApprovalsTable')) {
-        $('#pendingApprovalsTable').DataTable({
+      if (!$.fn.DataTable.isDataTable('#myQuotationRequestsTable')) {
+        $('#myQuotationRequestsTable').DataTable({
           responsive: true,
           autoWidth: false,
           scrollX: false,
           pageLength: 10,
           lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-          order: [[5, 'desc']], // Sort by date
+          order: [[4, 'desc']], // Sort by date descending
           columnDefs: [
-            { targets: [7], orderable: false, searchable: false } // Action column
+            { targets: [8], orderable: false, searchable: false } // Action column
           ],
           language: {
-            zeroRecords: "No pending approvals found",
+            zeroRecords: "No quotation requests found",
             info: "Showing _START_ to _END_ of _TOTAL_ requests",
             infoEmpty: "No requests to show",
             lengthMenu: "Show _MENU_",
@@ -645,15 +718,15 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
         }, 400);
       }
     } else {
-      if ($.fn.DataTable.isDataTable('#pendingApprovalsTable')) {
-        $('#pendingApprovalsTable').DataTable().destroy();
+      if ($.fn.DataTable.isDataTable('#myQuotationRequestsTable')) {
+        $('#myQuotationRequestsTable').DataTable().destroy();
       }
     }
   }
 
   $(function () {
-    initPendingApprovalsTable();
-    window.addEventListener('resize', initPendingApprovalsTable);
+    initQuotationRequestsTable();
+    window.addEventListener('resize', initQuotationRequestsTable);
   });
 </script>
 
