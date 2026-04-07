@@ -56,14 +56,14 @@
       <span class="ms-auto label position-relative">
         <i class="bi bi-chevron-down"></i>
         <!-- Notification badge for pending assignments -->
-        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem; display: none;" id="pendingQuotationBadge">0</span>
+        <!-- <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem; display: none;" id="pendingQuotationBadge">0</span> -->
       </span>
     </a>
     <div class="collapse ps-2" id="quotationMenu">
       <!-- Assigned Quotations -->
       <a class="side-link" href="assigned-quotations.php">
         <i class="bi bi-inbox"></i><span class="label">Quotation Request</span>
-        <span class="ms-auto badge bg-warning" id="assignedCount" style="font-size: 0.7rem;">0</span>
+        <!-- <span class="ms-auto badge bg-warning" id="assignedCount" style="font-size: 0.7rem;">0</span> -->
       </a>
       
       <!-- Quotations with QS -->

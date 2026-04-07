@@ -137,7 +137,9 @@ mysqli_stmt_bind_param($onboarding_stmt, "i", $candidate_id);
 mysqli_stmt_execute($onboarding_stmt);
 $onboarding_result = mysqli_stmt_get_result($onboarding_stmt);
 $onboarding = mysqli_fetch_assoc($onboarding_result);
-
+// Temporarily remove the status filter for testing
+        $employees_query = "SELECT id, full_name, designation FROM employees ORDER BY full_name";
+        $employees_result = mysqli_query($conn, $employees_query);
 // ---------------- HANDLE STATUS UPDATE ----------------
 $message = '';
 $messageType = '';
@@ -546,6 +548,93 @@ $pageTitle = "Candidate: " . getFullName($candidate['first_name'], $candidate['l
             .candidate-header { flex-direction: column; text-align: center; }
         }
     </style>
+
+    <!-- JavaScript - MOVED TO HEAD FOR BETTER AVAILABILITY -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    
+    <script>
+    // DEFINE THE FUNCTION GLOBALLY BEFORE ANY BUTTON CAN CALL IT
+    function openScheduleInterviewModal() {
+        console.log('openScheduleInterviewModal called');
+        var modalElement = document.getElementById('scheduleInterviewModal');
+        if (modalElement) {
+            var modal = new bootstrap.Modal(modalElement);
+            modal.show();
+        } else {
+            console.error('Modal element not found');
+            alert('Error: Could not open interview scheduling form. Please refresh the page.');
+        }
+    }
+    
+    // Make it available on window object as well
+    window.openScheduleInterviewModal = openScheduleInterviewModal;
+    
+    $(document).ready(function() {
+        console.log('Document ready - Initializing components');
+        
+        // Initialize Select2
+        $('.select2').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            dropdownParent: $('#scheduleInterviewModal'),
+            placeholder: 'Select an option',
+            allowClear: true
+        });
+
+        // Show/hide location/link based on interview mode
+        $('select[name="interview_mode"]').change(function() {
+            var selectedMode = $(this).val();
+            
+            if (selectedMode === 'Online') {
+                $('#onlineLinkField').show();
+                $('#locationField').hide();
+                $('input[name="location"]').val('').prop('required', false);
+                $('input[name="interview_link"]').prop('required', false);
+            } else if (selectedMode === 'In-Person') {
+                $('#onlineLinkField').hide();
+                $('#locationField').show();
+                $('input[name="interview_link"]').val('').prop('required', false);
+                $('input[name="location"]').prop('required', true);
+            } else {
+                $('#onlineLinkField').hide();
+                $('#locationField').hide();
+                $('input[name="interview_link"]').val('').prop('required', false);
+                $('input[name="location"]').val('').prop('required', false);
+            }
+        });
+        
+        // Trigger change event to set initial state
+        $('select[name="interview_mode"]').trigger('change');
+        
+        // Set minimum date for interview date picker
+        var today = new Date().toISOString().split('T')[0];
+        $('input[name="interview_date"]').attr('min', today);
+        
+        // Validate date selection
+        $('input[name="interview_date"]').change(function() {
+            var selectedDate = $(this).val();
+            if (selectedDate < today) {
+                alert('Please select today or a future date for the interview.');
+                $(this).val(today);
+            }
+        });
+        
+        // Auto-set round number based on existing interviews count
+        var interviewCount = <?php echo $interview_count; ?>;
+        $('#interview_round').val(interviewCount + 1);
+        
+        // Reset modal form when closed
+        $('#scheduleInterviewModal').on('hidden.bs.modal', function() {
+            $(this).find('form')[0].reset();
+            $('select[name="interview_mode"]').trigger('change');
+            $('.select2').val(null).trigger('change');
+        });
+        
+        console.log('All components initialized successfully');
+    });
+    </script>
 </head>
 <body>
 <div class="app">
@@ -794,7 +883,7 @@ $pageTitle = "Candidate: " . getFullName($candidate['first_name'], $candidate['l
                                                             <?php echo getInterviewStatusBadge($interview['status'] ?? 'Scheduled'); ?>
                                                         </div>
                                                         <div class="mt-2">
-                                                            <div><i class="bi bi-person"></i> Interviewer: <?php echo e($interview['interviewer_name']); ?></div>
+                                                            <div><i class="bi bi-person"></i> Interviewer: <?php echo e($interview['interviewer_full_name']); ?></div>
                                                             <div><i class="bi bi-geo-alt"></i> Mode: <?php echo e($interview['interview_mode']); ?></div>
                                                             <?php if (!empty($interview['interview_link'])): ?>
                                                                 <div><i class="bi bi-link"></i> <a href="<?php echo e($interview['interview_link']); ?>" target="_blank">Meeting Link</a></div>
@@ -1132,20 +1221,26 @@ $pageTitle = "Candidate: " . getFullName($candidate['first_name'], $candidate['l
                     </div>
                     
                     <div class="mb-3">
-                        <label class="form-label required">Interviewer</label>
-                        <select name="interviewer_id" class="form-select select2" required>
-                            <option value="">Select Interviewer</option>
-                            <?php 
-                            $employees_query = "SELECT id, full_name, designation FROM employees WHERE employee_status = 'active' ORDER BY full_name";
-                            $employees_result = mysqli_query($conn, $employees_query);
-                            while ($emp = mysqli_fetch_assoc($employees_result)): 
-                            ?>
-                                <option value="<?php echo $emp['id']; ?>">
-                                    <?php echo e($emp['full_name']); ?> (<?php echo e($emp['designation']); ?>)
-                                </option>
-                            <?php endwhile; ?>
-                        </select>
-                    </div>
+    <label class="form-label required">Interviewer</label>
+    <select name="interviewer_id" class="form-select select2" required>
+        <option value="">Select Interviewer</option>
+        <?php 
+        
+        
+        if ($employees_result && mysqli_num_rows($employees_result) > 0) {
+            while ($emp = mysqli_fetch_assoc($employees_result)) {
+                ?>
+                <option value="<?php echo $emp['id']; ?>">
+                    <?php echo htmlspecialchars($emp['full_name']); ?> (<?php echo htmlspecialchars($emp['designation']); ?>)
+                </option>
+                <?php
+            }
+        } else {
+            echo '<option value="" disabled>No employees found in database</option>';
+        }
+        ?>
+    </select>
+</div>
                     
                     <div class="mb-3" id="onlineLinkField">
                         <label class="form-label">Meeting Link</label>
@@ -1160,53 +1255,14 @@ $pageTitle = "Candidate: " . getFullName($candidate['first_name'], $candidate['l
                 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-add">Schedule Interview</button>
+                    <button type="submit" class="btn-add btn btn-success">Schedule Interview</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- JavaScript -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="assets/js/sidebar-toggle.js"></script>
-
-<script>
-$(document).ready(function() {
-    // Initialize Select2
-    $('.select2').select2({
-        theme: 'bootstrap-5',
-        width: '100%',
-        dropdownParent: $('#scheduleInterviewModal')
-    });
-
-    // Show/hide location/link based on interview mode
-    $('select[name="interview_mode"]').change(function() {
-        if ($(this).val() === 'Online') {
-            $('#onlineLinkField').show();
-            $('#locationField').hide();
-            $('input[name="location"]').prop('required', false);
-            $('input[name="interview_link"]').prop('required', false);
-        } else if ($(this).val() === 'In-Person') {
-            $('#onlineLinkField').hide();
-            $('#locationField').show();
-            $('input[name="location"]').prop('required', true);
-            $('input[name="interview_link"]').prop('required', false);
-        } else {
-            $('#onlineLinkField').hide();
-            $('#locationField').hide();
-            $('input[name="location"]').prop('required', false);
-            $('input[name="interview_link"]').prop('required', false);
-        }
-    });
-});
-
-function openScheduleInterviewModal() {
-    new bootstrap.Modal(document.getElementById('scheduleInterviewModal')).show();
-}
-</script>
 
 </body>
 </html>

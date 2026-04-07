@@ -800,9 +800,7 @@ $message = isset($_GET['message']) ? urldecode($_GET['message']) : '';
                                             <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action view" title="View Details">
                                                 <i class="bi bi-eye"></i>
                                             </a>
-                                            <a href="quotation-comparison.php?id=<?php echo $req['id']; ?>" class="btn-action compare" title="Compare Quotations">
-                                                <i class="bi bi-bar-chart"></i>
-                                            </a>
+                                            
                                          </td>
                                      </tr>
                                 <?php endforeach; ?>

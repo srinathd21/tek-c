@@ -105,6 +105,7 @@ $query = "
         final_q.finalized_amount AS final_negotiated_amount,
         final_q.finalized_at AS final_quotation_date,
         final_q.qs_remarks AS final_qs_remarks,
+        final_q.quotation_document AS final_quotation_document,   -- Added for download
         final_d.dealer_name AS final_dealer_name
     FROM quotation_requests qr
     JOIN sites s ON qr.site_id = s.id
@@ -148,11 +149,6 @@ if (!$is_admin) {
         $is_team_lead = true;
     }
     mysqli_stmt_close($stmt);
-}
-
-if (!$is_manager && !$is_project_engineer && !$is_team_lead && !$is_qs && !$is_admin) {
-    header('Location: index.php');
-    exit();
 }
 
 // Parse attachments JSON
@@ -659,7 +655,7 @@ mysqli_stmt_close($stmt);
                 </div>
                 <?php endif; ?>
 
-                <!-- Finalized Quotation Card -->
+                <!-- Finalized Quotation Card (with download button) -->
                 <?php if ($request['status'] === 'QS Finalized' || $request['status'] === 'Approved'): ?>
                 <div class="final-quote-card">
                     <div class="d-flex justify-content-between align-items-start">
@@ -673,6 +669,19 @@ mysqli_stmt_close($stmt);
                             <div class="proj-sub">Finalized on <?php echo safeDate($request['final_quotation_date']); ?></div>
                         </div>
                     </div>
+
+                    <!-- Download/View button for the final quotation document -->
+                    <?php if (!empty($request['final_quotation_document'])): ?>
+                    <div class="mt-3">
+                        <a href="<?php echo e($request['final_quotation_document']); ?>" class="btn btn-sm btn-success" download>
+                            <i class="bi bi-file-earmark-pdf"></i> Download Final Quotation Document
+                        </a>
+                        <a href="<?php echo e($request['final_quotation_document']); ?>" target="_blank" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                    </div>
+                    <?php endif; ?>
+
                     <div class="row mt-2">
                         <?php if ($request['final_negotiated_amount'] && $request['final_quotation_amount'] && $request['final_negotiated_amount'] < $request['final_quotation_amount']): ?>
                             <div class="col-12"><span class="badge bg-success"><i class="bi bi-piggy-bank"></i> Saved <?php echo formatCurrency($request['final_quotation_amount'] - $request['final_negotiated_amount']); ?></span></div>
@@ -790,7 +799,7 @@ mysqli_stmt_close($stmt);
                     <div class="table-responsive">
                         <table class="table table-sm align-middle">
                             <thead class="table-light">
-                                <tr><th>Dealer</th><th>Amount</th><th>Delivery</th><th>Payment</th><th>Warranty</th><th>Status</th></tr>
+                                <tr><th>Dealer</th><th>Amount</th><th>Delivery</th><th>Payment</th><th>Warranty</th><th>Status</th> </tr>
                             </thead>
                             <tbody>
                             <?php foreach ($quotations as $q): ?>

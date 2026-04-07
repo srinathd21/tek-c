@@ -48,7 +48,7 @@
     </div>
     
     <!-- Mail -->
-    <button class="side-link side-toggle" type="button"
+    <!-- <button class="side-link side-toggle" type="button"
             id="mailToggle"
             aria-expanded="false"
             aria-controls="mailMenu"
@@ -71,14 +71,14 @@
       <a class="side-sublink" href="mail-trash.php">
         <i class="bi bi-trash"></i><span class="label">Trash</span>
       </a>
-    </div>
+    </div> -->
 
     
 
     <!-- Reports -->
-    <a class="side-link" href="report.php">
+    <!-- <a class="side-link" href="report.php">
       <i class="bi bi-file-earmark-text"></i><span class="label">Reports</span>
-    </a>
+    </a> -->
 
     <!-- HR -->
     <button class="side-link side-toggle" type="button"
@@ -101,12 +101,12 @@
       <a class="side-sublink" href="leave-ledger.php">
         <i class="bi bi-clock-history"></i><span class="label">Leave Ledger</span>
       </a>
-      <a class="side-sublink" href="payslips.php">
+      <!-- <a class="side-sublink" href="payslips.php">
         <i class="bi bi-receipt"></i><span class="label">Payslips</span>
       </a>
       <a class="side-sublink" href="hr-policy.php">
         <i class="bi bi-file-earmark-text"></i><span class="label">HR Policy</span>
-      </a>
+      </a> -->
       <a class="side-sublink" href="salary-loan.php">
         <i class="bi bi-cash-stack"></i><span class="label">Salary Loan Eligibility</span>
       </a>
