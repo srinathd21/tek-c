@@ -1,5 +1,5 @@
 <?php
-// hr/candidates.php - Candidate Management Page (TEK-C Style)
+// manager/candidates.php - Candidate Management Page (TEK-C Style)
 session_start();
 require_once 'includes/db-config.php';
 require_once 'includes/activity-logger.php';
@@ -7,7 +7,9 @@ require_once 'includes/activity-logger.php';
 date_default_timezone_set('Asia/Kolkata');
 
 $conn = get_db_connection();
-if (!$conn) { die("Database connection failed."); }
+if (!$conn) {
+    die("Database connection failed.");
+}
 
 // ---------------- AUTH (HR/Manager) ----------------
 if (empty($_SESSION['employee_id'])) {
@@ -15,10 +17,10 @@ if (empty($_SESSION['employee_id'])) {
     exit;
 }
 
-$current_employee_id = $_SESSION['employee_id'];
+$current_employee_id = (int)$_SESSION['employee_id'];
 
 // Get current employee details
-$emp_stmt = mysqli_prepare($conn, "SELECT * FROM employees WHERE id = ? AND employee_status = 'active'");
+$emp_stmt = mysqli_prepare($conn, "SELECT * FROM employees WHERE id = ? AND employee_status = 'active' LIMIT 1");
 mysqli_stmt_bind_param($emp_stmt, "i", $current_employee_id);
 mysqli_stmt_execute($emp_stmt);
 $emp_res = mysqli_stmt_get_result($emp_stmt);
@@ -30,326 +32,27 @@ if (!$current_employee) {
 }
 
 // Check permissions
-$designation = strtolower(trim($current_employee['designation'] ?? ''));
-$department = strtolower(trim($current_employee['department'] ?? ''));
+$designation = strtolower(trim((string)($current_employee['designation'] ?? '')));
+$department  = strtolower(trim((string)($current_employee['department'] ?? '')));
 
-$isHr = ($designation === 'hr' || $department === 'hr');
-$isManager = in_array($designation, ['manager', 'team lead', 'project manager', 'director', 'administrator']);
+$isHr      = ($designation === 'hr' || $department === 'hr');
+$isManager = in_array($designation, ['manager', 'team lead', 'project manager', 'director', 'administrator'], true);
+$isAdmin   = in_array($designation, ['administrator', 'admin', 'director'], true);
 
-if (!$isHr && !$isManager) {
+if (!$isHr && !$isManager && !$isAdmin) {
     $_SESSION['flash_error'] = "You don't have permission to access this page.";
     header("Location: ../dashboard.php");
     exit;
 }
 
-// ---------------- HANDLE CANDIDATE ACTIONS ----------------
-$message = '';
-$messageType = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    
-    // Add New Candidate
-    if ($_POST['action'] === 'add_candidate' && $isHr) {
-        $hiring_request_id = (int)$_POST['hiring_request_id'];
-        $first_name = mysqli_real_escape_string($conn, $_POST['first_name']);
-        $last_name = mysqli_real_escape_string($conn, $_POST['last_name']);
-        $email = mysqli_real_escape_string($conn, $_POST['email']);
-        $phone = mysqli_real_escape_string($conn, $_POST['phone']);
-        $alternate_phone = !empty($_POST['alternate_phone']) ? mysqli_real_escape_string($conn, $_POST['alternate_phone']) : null;
-        $current_location = mysqli_real_escape_string($conn, $_POST['current_location'] ?? '');
-        $preferred_location = mysqli_real_escape_string($conn, $_POST['preferred_location'] ?? '');
-        $total_experience = !empty($_POST['total_experience']) ? floatval($_POST['total_experience']) : null;
-        $relevant_experience = !empty($_POST['relevant_experience']) ? floatval($_POST['relevant_experience']) : null;
-        $current_ctc = !empty($_POST['current_ctc']) ? floatval($_POST['current_ctc']) : null;
-        $expected_ctc = !empty($_POST['expected_ctc']) ? floatval($_POST['expected_ctc']) : null;
-        $notice_period = !empty($_POST['notice_period']) ? (int)$_POST['notice_period'] : null;
-        $notice_period_negotiable = isset($_POST['notice_period_negotiable']) ? 1 : 0;
-        $current_company = mysqli_real_escape_string($conn, $_POST['current_company'] ?? '');
-        $qualification = mysqli_real_escape_string($conn, $_POST['qualification'] ?? '');
-        $skills = mysqli_real_escape_string($conn, $_POST['skills'] ?? '');
-        $source = mysqli_real_escape_string($conn, $_POST['source'] ?? 'Other');
-        $referred_by = !empty($_POST['referred_by']) ? mysqli_real_escape_string($conn, $_POST['referred_by']) : null;
-        $remarks = mysqli_real_escape_string($conn, $_POST['remarks'] ?? '');
-        
-        // Handle file upload
-        $resume_path = '';
-        if (isset($_FILES['resume']) && $_FILES['resume']['error'] === UPLOAD_ERR_OK) {
-            $upload_dir = '../uploads/candidates/resumes/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
-            }
-            $file_ext = pathinfo($_FILES['resume']['name'], PATHINFO_EXTENSION);
-            $file_name = 'resume_' . time() . '_' . uniqid() . '.' . $file_ext;
-            $target_path = $upload_dir . $file_name;
-            
-            if (move_uploaded_file($_FILES['resume']['tmp_name'], $target_path)) {
-                $resume_path = 'uploads/candidates/resumes/' . $file_name;
-            }
-        }
-        
-        // Handle photo upload
-        $photo_path = '';
-        if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
-            $upload_dir = '../uploads/candidates/photos/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
-            }
-            $file_ext = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
-            $file_name = 'photo_' . time() . '_' . uniqid() . '.' . $file_ext;
-            $target_path = $upload_dir . $file_name;
-            
-            if (move_uploaded_file($_FILES['photo']['tmp_name'], $target_path)) {
-                $photo_path = 'uploads/candidates/photos/' . $file_name;
-            }
-        }
-        
-        // Generate candidate code
-        $year = date('Y');
-        $stmt = mysqli_prepare($conn, "SELECT COUNT(*) as count FROM candidates WHERE YEAR(created_at) = ?");
-        mysqli_stmt_bind_param($stmt, "i", $year);
-        mysqli_stmt_execute($stmt);
-        $res = mysqli_stmt_get_result($stmt);
-        $row = mysqli_fetch_assoc($res);
-        $count = $row['count'] + 1;
-        $candidate_code = "CAN-{$year}-" . str_pad($count, 4, '0', STR_PAD_LEFT);
-        
-        $insert_stmt = mysqli_prepare($conn, "
-            INSERT INTO candidates (
-                hiring_request_id, candidate_code, first_name, last_name, email, phone,
-                alternate_phone, current_location, preferred_location, total_experience,
-                relevant_experience, current_ctc, expected_ctc, notice_period,
-                notice_period_negotiable, current_company, qualification, skills,
-                resume_path, photo_path, source, referred_by, remarks, status,
-                created_by, created_by_name
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', ?, ?)
-        ");
-
-        mysqli_stmt_bind_param(
-            $insert_stmt,
-            "issssssssddddiissssssssis",
-            $hiring_request_id,
-            $candidate_code,
-            $first_name,
-            $last_name,
-            $email,
-            $phone,
-            $alternate_phone,
-            $current_location,
-            $preferred_location,
-            $total_experience,
-            $relevant_experience,
-            $current_ctc,
-            $expected_ctc,
-            $notice_period,
-            $notice_period_negotiable,
-            $current_company,
-            $qualification,
-            $skills,
-            $resume_path,
-            $photo_path,
-            $source,
-            $referred_by,
-            $remarks,
-            $current_employee_id,
-            $current_employee['full_name']
-        );
-        
-        if (mysqli_stmt_execute($insert_stmt)) {
-            $candidate_id = mysqli_insert_id($conn);
-            
-            logActivity(
-                $conn,
-                'CREATE',
-                'candidate',
-                "Added new candidate: {$first_name} {$last_name} ({$candidate_code})",
-                $candidate_id,
-                $candidate_code,
-                null,
-                json_encode($_POST)
-            );
-            
-            $message = "Candidate added successfully!";
-            $messageType = "success";
-        } else {
-            $message = "Error adding candidate: " . mysqli_error($conn);
-            $messageType = "danger";
-        }
-    }
-    
-    // Update Candidate Status
-    elseif ($_POST['action'] === 'update_status') {
-        $candidate_id = (int)$_POST['candidate_id'];
-        $status = mysqli_real_escape_string($conn, $_POST['status']);
-        $remarks = mysqli_real_escape_string($conn, $_POST['remarks'] ?? '');
-        
-        $update_stmt = mysqli_prepare($conn, "UPDATE candidates SET status = ?, remarks = CONCAT(remarks, '\n[', NOW(), '] ', ?) WHERE id = ?");
-        mysqli_stmt_bind_param($update_stmt, "ssi", $status, $remarks, $candidate_id);
-        
-        if (mysqli_stmt_execute($update_stmt)) {
-            logActivity(
-                $conn,
-                'UPDATE',
-                'candidate',
-                "Updated candidate status to {$status}",
-                $candidate_id,
-                null,
-                null,
-                json_encode(['status' => $status, 'remarks' => $remarks])
-            );
-            
-            $message = "Candidate status updated successfully!";
-            $messageType = "success";
-        } else {
-            $message = "Error updating status: " . mysqli_error($conn);
-            $messageType = "danger";
-        }
-    }
-    
-    // Schedule Interview
-    elseif ($_POST['action'] === 'schedule_interview') {
-        $candidate_id = (int)$_POST['candidate_id'];
-        $hiring_request_id = (int)$_POST['hiring_request_id'];
-        $interview_round = mysqli_real_escape_string($conn, $_POST['interview_round']);
-        $round_number = (int)$_POST['round_number'];
-        $interview_date = mysqli_real_escape_string($conn, $_POST['interview_date']);
-        $interview_time = mysqli_real_escape_string($conn, $_POST['interview_time']);
-        $interview_duration = (int)$_POST['interview_duration'];
-        $interview_mode = mysqli_real_escape_string($conn, $_POST['interview_mode']);
-        $interview_link = !empty($_POST['interview_link']) ? mysqli_real_escape_string($conn, $_POST['interview_link']) : null;
-        $location = !empty($_POST['location']) ? mysqli_real_escape_string($conn, $_POST['location']) : null;
-        $interviewer_id = (int)$_POST['interviewer_id'];
-        
-        // Get interviewer name
-        $int_stmt = mysqli_prepare($conn, "SELECT full_name FROM employees WHERE id = ?");
-        mysqli_stmt_bind_param($int_stmt, "i", $interviewer_id);
-        mysqli_stmt_execute($int_stmt);
-        $int_res = mysqli_stmt_get_result($int_stmt);
-        $int_row = mysqli_fetch_assoc($int_res);
-        $interviewer_name = $int_row['full_name'];
-        
-        // Generate interview number
-        $interview_no = "INT-" . date('Ymd') . "-" . str_pad($candidate_id, 4, '0', STR_PAD_LEFT) . "-R{$round_number}";
-        
-        $insert_stmt = mysqli_prepare($conn, "
-            INSERT INTO interviews (
-                interview_no, candidate_id, hiring_request_id, interview_round, round_number,
-                interview_date, interview_time, interview_duration, interview_mode,
-                interview_link, location, interviewer_id, interviewer_name,
-                created_by, created_by_name
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        
-        mysqli_stmt_bind_param($insert_stmt, "siisississssiis", 
-            $interview_no, $candidate_id, $hiring_request_id, $interview_round, $round_number,
-            $interview_date, $interview_time, $interview_duration, $interview_mode,
-            $interview_link, $location, $interviewer_id, $interviewer_name,
-            $current_employee_id, $current_employee['full_name']
-        );
-        
-        if (mysqli_stmt_execute($insert_stmt)) {
-            // Update candidate status to Interview Scheduled
-            mysqli_query($conn, "UPDATE candidates SET status = 'Interview Scheduled' WHERE id = {$candidate_id}");
-            
-            logActivity(
-                $conn,
-                'CREATE',
-                'interview',
-                "Scheduled {$interview_round} for candidate ID: {$candidate_id}",
-                $candidate_id,
-                $interview_no,
-                null,
-                json_encode($_POST)
-            );
-            
-            $message = "Interview scheduled successfully!";
-            $messageType = "success";
-        } else {
-            $message = "Error scheduling interview: " . mysqli_error($conn);
-            $messageType = "danger";
-        }
-    }
+// ---------------- HELPERS ----------------
+function e($v) {
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 }
 
-// ---------------- FILTERS ----------------
-$status_filter = $_GET['status'] ?? 'all';
-$hiring_filter = isset($_GET['hiring_id']) ? (int)$_GET['hiring_id'] : 0;
-$search = trim($_GET['search'] ?? '');
-
-// Build query with permissions
-$query = "
-    SELECT c.*, 
-           h.request_no, h.position_title, h.department, h.designation as hiring_designation,
-           (SELECT COUNT(*) FROM interviews WHERE candidate_id = c.id) as interview_count,
-           (SELECT MAX(round_number) FROM interviews WHERE candidate_id = c.id) as current_round
-    FROM candidates c
-    LEFT JOIN hiring_requests h ON c.hiring_request_id = h.id
-    WHERE 1=1
-";
-
-// Managers see only candidates from their requests
-if (!$isHr && $isManager) {
-    $query .= " AND h.requested_by = {$current_employee_id}";
+function getFullName($first, $last) {
+    return trim((string)$first . ' ' . (string)$last);
 }
-
-if ($status_filter !== 'all') {
-    $status_filter = mysqli_real_escape_string($conn, $status_filter);
-    $query .= " AND c.status = '{$status_filter}'";
-}
-
-if ($hiring_filter > 0) {
-    $query .= " AND c.hiring_request_id = {$hiring_filter}";
-}
-
-if (!empty($search)) {
-    $search_term = mysqli_real_escape_string($conn, $search);
-    $query .= " AND (c.first_name LIKE '%{$search_term}%' OR c.last_name LIKE '%{$search_term}%' 
-                     OR c.email LIKE '%{$search_term}%' OR c.phone LIKE '%{$search_term}%'
-                     OR c.candidate_code LIKE '%{$search_term}%')";
-}
-
-$query .= " ORDER BY c.created_at DESC";
-
-$candidates = mysqli_query($conn, $query);
-
-// Get hiring requests for dropdown
-$hiring_query = "SELECT id, request_no, position_title, department FROM hiring_requests WHERE status IN ('Approved', 'In Progress')";
-if (!$isHr && $isManager) {
-    $hiring_query .= " AND requested_by = {$current_employee_id}";
-}
-$hiring_query .= " ORDER BY created_at DESC";
-$hiring_requests = mysqli_query($conn, $hiring_query);
-
-// Get employees for interviewer dropdown
-$employees_query = "SELECT id, full_name, designation FROM employees WHERE employee_status = 'active' ORDER BY full_name";
-$employees = mysqli_query($conn, $employees_query);
-
-// Status options for candidate pipeline
-$status_options = [
-    'New' => 'New',
-    'Screening' => 'Screening',
-    'Shortlisted' => 'Shortlisted',
-    'Interview Scheduled' => 'Interview Scheduled',
-    'Interviewed' => 'Interviewed',
-    'Selected' => 'Selected',
-    'Rejected' => 'Rejected',
-    'On Hold' => 'On Hold',
-    'Offered' => 'Offered',
-    'Joined' => 'Joined',
-    'Declined' => 'Declined'
-];
-
-// Interview round options
-$interview_rounds = [
-    'Telephonic' => 'Telephonic',
-    'Technical Round 1' => 'Technical Round 1',
-    'Technical Round 2' => 'Technical Round 2',
-    'HR Round' => 'HR Round',
-    'Manager Round' => 'Manager Round',
-    'Final Round' => 'Final Round'
-];
-
-// ---------------- HELPER FUNCTIONS ----------------
-function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
 function getStatusBadge($status) {
     $classes = [
@@ -365,31 +68,441 @@ function getStatusBadge($status) {
         'Joined' => 'status-joined',
         'Declined' => 'status-declined'
     ];
+
     $class = $classes[$status] ?? 'status-new';
-    return "<span class='status-badge {$class}'><i class='bi bi-circle-fill' style='font-size:8px;'></i> {$status}</span>";
+    return "<span class='status-badge {$class}'><i class='bi bi-circle-fill' style='font-size:8px;'></i> " . e($status) . "</span>";
 }
 
-function getFullName($first, $last) {
-    return trim($first . ' ' . $last);
+function fileExistsWeb($path) {
+    if (empty($path)) return false;
+    $full = '../' . ltrim($path, '/');
+    return is_file($full);
 }
 
-// Stats for candidates
-$stats = [
-    'total' => 0,
-    'new' => 0,
-    'interview' => 0,
-    'selected' => 0
+// ---------------- STATUS / INTERVIEW OPTIONS ----------------
+$status_options = [
+    'New' => 'New',
+    'Screening' => 'Screening',
+    'Shortlisted' => 'Shortlisted',
+    'Interview Scheduled' => 'Interview Scheduled',
+    'Interviewed' => 'Interviewed',
+    'Selected' => 'Selected',
+    'Rejected' => 'Rejected',
+    'On Hold' => 'On Hold',
+    'Offered' => 'Offered',
+    'Joined' => 'Joined',
+    'Declined' => 'Declined'
 ];
 
-$stats_query = "SELECT 
-    COUNT(*) as total,
-    SUM(CASE WHEN c.status = 'New' THEN 1 ELSE 0 END) as new,
-    SUM(CASE WHEN c.status = 'Interview Scheduled' THEN 1 ELSE 0 END) as interview,
-    SUM(CASE WHEN c.status IN ('Selected', 'Offered', 'Joined') THEN 1 ELSE 0 END) as selected
-FROM candidates c";
+$interview_rounds = [
+    'Telephonic' => 'Telephonic',
+    'Technical Round 1' => 'Technical Round 1',
+    'Technical Round 2' => 'Technical Round 2',
+    'HR Round' => 'HR Round',
+    'Manager Round' => 'Manager Round',
+    'Final Round' => 'Final Round'
+];
 
-if (!$isHr && $isManager) {
-    $stats_query .= " LEFT JOIN hiring_requests h ON c.hiring_request_id = h.id WHERE h.requested_by = {$current_employee_id}";
+$message = '';
+$messageType = '';
+
+// ---------------- HANDLE CANDIDATE ACTIONS ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+
+    // Update Candidate Status
+    if ($_POST['action'] === 'update_status') {
+        $candidate_id = (int)($_POST['candidate_id'] ?? 0);
+        $status       = trim((string)($_POST['status'] ?? ''));
+        $remarks      = trim((string)($_POST['remarks'] ?? ''));
+
+        if ($candidate_id <= 0 || $status === '') {
+            $message = "Invalid candidate or status.";
+            $messageType = "danger";
+        } else {
+            // Managers can update only their own request candidates
+            $allowed = false;
+
+            if ($isHr || $isAdmin) {
+                $allowed = true;
+            } else {
+                $chk = mysqli_prepare($conn, "
+                    SELECT c.id
+                    FROM candidates c
+                    INNER JOIN hiring_requests h ON c.hiring_request_id = h.id
+                    WHERE c.id = ? AND h.requested_by = ?
+                    LIMIT 1
+                ");
+                mysqli_stmt_bind_param($chk, "ii", $candidate_id, $current_employee_id);
+                mysqli_stmt_execute($chk);
+                $chk_res = mysqli_stmt_get_result($chk);
+                $allowed = ($chk_res && mysqli_num_rows($chk_res) > 0);
+                mysqli_stmt_close($chk);
+            }
+
+            if (!$allowed) {
+                $message = "You don't have permission to update this candidate.";
+                $messageType = "danger";
+            } else {
+                $update_stmt = mysqli_prepare(
+                    $conn,
+                    "UPDATE candidates 
+                     SET status = ?, remarks = CONCAT(COALESCE(remarks, ''), '\n[', NOW(), '] ', ?) 
+                     WHERE id = ?"
+                );
+                mysqli_stmt_bind_param($update_stmt, "ssi", $status, $remarks, $candidate_id);
+
+                if (mysqli_stmt_execute($update_stmt)) {
+                    logActivity(
+                        $conn,
+                        'UPDATE',
+                        'candidate',
+                        "Updated candidate status to {$status}",
+                        $candidate_id,
+                        null,
+                        null,
+                        json_encode(['status' => $status, 'remarks' => $remarks])
+                    );
+
+                    $message = "Candidate status updated successfully!";
+                    $messageType = "success";
+                } else {
+                    $message = "Error updating status: " . mysqli_error($conn);
+                    $messageType = "danger";
+                }
+
+                mysqli_stmt_close($update_stmt);
+            }
+        }
+    }
+
+    // Delete Candidate
+    elseif ($_POST['action'] === 'delete_candidate') {
+        $candidate_id = (int)($_POST['candidate_id'] ?? 0);
+
+        if ($candidate_id <= 0) {
+            $message = "Invalid candidate selected.";
+            $messageType = "danger";
+        } else {
+            $allowed = false;
+
+            if ($isHr || $isAdmin) {
+                $allowed = true;
+            } else {
+                $chk = mysqli_prepare($conn, "
+                    SELECT c.id
+                    FROM candidates c
+                    INNER JOIN hiring_requests h ON c.hiring_request_id = h.id
+                    WHERE c.id = ? AND h.requested_by = ?
+                    LIMIT 1
+                ");
+                mysqli_stmt_bind_param($chk, "ii", $candidate_id, $current_employee_id);
+                mysqli_stmt_execute($chk);
+                $chk_res = mysqli_stmt_get_result($chk);
+                $allowed = ($chk_res && mysqli_num_rows($chk_res) > 0);
+                mysqli_stmt_close($chk);
+            }
+
+            if (!$allowed) {
+                $message = "You don't have permission to delete this candidate.";
+                $messageType = "danger";
+            } else {
+                mysqli_begin_transaction($conn);
+
+                try {
+                    $cand_stmt = mysqli_prepare($conn, "
+                        SELECT id, candidate_code, first_name, last_name, resume_path, photo_path
+                        FROM candidates
+                        WHERE id = ?
+                        LIMIT 1
+                    ");
+                    mysqli_stmt_bind_param($cand_stmt, "i", $candidate_id);
+                    mysqli_stmt_execute($cand_stmt);
+                    $cand_res = mysqli_stmt_get_result($cand_stmt);
+                    $candidate_row = mysqli_fetch_assoc($cand_res);
+                    mysqli_stmt_close($cand_stmt);
+
+                    if (!$candidate_row) {
+                        throw new Exception("Candidate not found.");
+                    }
+
+                    $del_interviews = mysqli_prepare($conn, "DELETE FROM interviews WHERE candidate_id = ?");
+                    mysqli_stmt_bind_param($del_interviews, "i", $candidate_id);
+                    mysqli_stmt_execute($del_interviews);
+                    mysqli_stmt_close($del_interviews);
+
+                    $check_offer_tbl = mysqli_query($conn, "SHOW TABLES LIKE 'offers'");
+                    if ($check_offer_tbl && mysqli_num_rows($check_offer_tbl) > 0) {
+                        $del_offer = mysqli_prepare($conn, "DELETE FROM offers WHERE candidate_id = ?");
+                        mysqli_stmt_bind_param($del_offer, "i", $candidate_id);
+                        mysqli_stmt_execute($del_offer);
+                        mysqli_stmt_close($del_offer);
+                    }
+
+                    $check_onboard_tbl = mysqli_query($conn, "SHOW TABLES LIKE 'onboarding'");
+                    if ($check_onboard_tbl && mysqli_num_rows($check_onboard_tbl) > 0) {
+                        $del_onboard = mysqli_prepare($conn, "DELETE FROM onboarding WHERE candidate_id = ?");
+                        mysqli_stmt_bind_param($del_onboard, "i", $candidate_id);
+                        mysqli_stmt_execute($del_onboard);
+                        mysqli_stmt_close($del_onboard);
+                    }
+
+                    $del_candidate = mysqli_prepare($conn, "DELETE FROM candidates WHERE id = ?");
+                    mysqli_stmt_bind_param($del_candidate, "i", $candidate_id);
+                    mysqli_stmt_execute($del_candidate);
+
+                    if (mysqli_stmt_affected_rows($del_candidate) <= 0) {
+                        mysqli_stmt_close($del_candidate);
+                        throw new Exception("Unable to delete candidate.");
+                    }
+                    mysqli_stmt_close($del_candidate);
+
+                    if (!empty($candidate_row['resume_path'])) {
+                        $resume_file = '../' . ltrim($candidate_row['resume_path'], '/');
+                        if (is_file($resume_file)) {
+                            @unlink($resume_file);
+                        }
+                    }
+
+                    if (!empty($candidate_row['photo_path'])) {
+                        $photo_file = '../' . ltrim($candidate_row['photo_path'], '/');
+                        if (is_file($photo_file)) {
+                            @unlink($photo_file);
+                        }
+                    }
+
+                    logActivity(
+                        $conn,
+                        'DELETE',
+                        'candidate',
+                        "Deleted candidate: " . trim(($candidate_row['first_name'] ?? '') . ' ' . ($candidate_row['last_name'] ?? '')) . " (" . ($candidate_row['candidate_code'] ?? '') . ")",
+                        $candidate_id,
+                        $candidate_row['candidate_code'] ?? null,
+                        json_encode($candidate_row),
+                        null
+                    );
+
+                    mysqli_commit($conn);
+                    $message = "Candidate deleted successfully!";
+                    $messageType = "success";
+                } catch (Throwable $e) {
+                    mysqli_rollback($conn);
+                    $message = "Error deleting candidate: " . $e->getMessage();
+                    $messageType = "danger";
+                }
+            }
+        }
+    }
+
+    // Schedule Interview
+    elseif ($_POST['action'] === 'schedule_interview') {
+        $candidate_id        = (int)($_POST['candidate_id'] ?? 0);
+        $hiring_request_id   = (int)($_POST['hiring_request_id'] ?? 0);
+        $interview_round     = trim((string)($_POST['interview_round'] ?? ''));
+        $round_number        = (int)($_POST['round_number'] ?? 1);
+        $interview_date      = trim((string)($_POST['interview_date'] ?? ''));
+        $interview_time      = trim((string)($_POST['interview_time'] ?? ''));
+        $interview_duration  = (int)($_POST['interview_duration'] ?? 30);
+        $interview_mode      = trim((string)($_POST['interview_mode'] ?? ''));
+        $interview_link      = trim((string)($_POST['interview_link'] ?? ''));
+        $location            = trim((string)($_POST['location'] ?? ''));
+        $interviewer_id      = (int)($_POST['interviewer_id'] ?? 0);
+
+        if ($candidate_id <= 0 || $hiring_request_id <= 0 || $interviewer_id <= 0 || $interview_round === '' || $interview_date === '' || $interview_time === '' || $interview_mode === '') {
+            $message = "Please fill all required interview fields.";
+            $messageType = "danger";
+        } else {
+            $allowed = false;
+
+            if ($isHr || $isAdmin) {
+                $allowed = true;
+            } else {
+                $chk = mysqli_prepare($conn, "
+                    SELECT c.id
+                    FROM candidates c
+                    INNER JOIN hiring_requests h ON c.hiring_request_id = h.id
+                    WHERE c.id = ? AND h.requested_by = ?
+                    LIMIT 1
+                ");
+                mysqli_stmt_bind_param($chk, "ii", $candidate_id, $current_employee_id);
+                mysqli_stmt_execute($chk);
+                $chk_res = mysqli_stmt_get_result($chk);
+                $allowed = ($chk_res && mysqli_num_rows($chk_res) > 0);
+                mysqli_stmt_close($chk);
+            }
+
+            if (!$allowed) {
+                $message = "You don't have permission to schedule interview for this candidate.";
+                $messageType = "danger";
+            } else {
+                $int_stmt = mysqli_prepare($conn, "SELECT full_name FROM employees WHERE id = ? LIMIT 1");
+                mysqli_stmt_bind_param($int_stmt, "i", $interviewer_id);
+                mysqli_stmt_execute($int_stmt);
+                $int_res = mysqli_stmt_get_result($int_stmt);
+                $int_row = mysqli_fetch_assoc($int_res);
+                mysqli_stmt_close($int_stmt);
+
+                $interviewer_name = $int_row['full_name'] ?? '';
+                $interview_no = "INT-" . date('Ymd') . "-" . str_pad($candidate_id, 4, '0', STR_PAD_LEFT) . "-R{$round_number}";
+
+                $insert_stmt = mysqli_prepare($conn, "
+                    INSERT INTO interviews (
+                        interview_no,
+                        candidate_id,
+                        hiring_request_id,
+                        interview_round,
+                        round_number,
+                        interview_date,
+                        interview_time,
+                        interview_duration,
+                        interview_mode,
+                        interview_link,
+                        location,
+                        interviewer_id,
+                        interviewer_name,
+                        created_by,
+                        created_by_name
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+
+                mysqli_stmt_bind_param(
+                    $insert_stmt,
+                    "siisississssiis",
+                    $interview_no,
+                    $candidate_id,
+                    $hiring_request_id,
+                    $interview_round,
+                    $round_number,
+                    $interview_date,
+                    $interview_time,
+                    $interview_duration,
+                    $interview_mode,
+                    $interview_link,
+                    $location,
+                    $interviewer_id,
+                    $interviewer_name,
+                    $current_employee_id,
+                    $current_employee['full_name']
+                );
+
+                if (mysqli_stmt_execute($insert_stmt)) {
+                    mysqli_query($conn, "UPDATE candidates SET status = 'Interview Scheduled' WHERE id = " . (int)$candidate_id);
+
+                    logActivity(
+                        $conn,
+                        'CREATE',
+                        'interview',
+                        "Scheduled {$interview_round} for candidate ID: {$candidate_id}",
+                        $candidate_id,
+                        $interview_no,
+                        null,
+                        json_encode($_POST)
+                    );
+
+                    $message = "Interview scheduled successfully!";
+                    $messageType = "success";
+                } else {
+                    $message = "Error scheduling interview: " . mysqli_error($conn);
+                    $messageType = "danger";
+                }
+
+                mysqli_stmt_close($insert_stmt);
+            }
+        }
+    }
+}
+
+// ---------------- FILTERS ----------------
+$status_filter = $_GET['status'] ?? 'all';
+$hiring_filter = isset($_GET['hiring_id']) ? (int)$_GET['hiring_id'] : 0;
+$search        = trim((string)($_GET['search'] ?? ''));
+
+// ---------------- FETCH CANDIDATES ----------------
+$query = "
+    SELECT c.*,
+           h.request_no,
+           h.position_title,
+           h.department,
+           h.designation AS hiring_designation,
+           (SELECT COUNT(*) FROM interviews i WHERE i.candidate_id = c.id) AS interview_count,
+           (SELECT MAX(i2.round_number) FROM interviews i2 WHERE i2.candidate_id = c.id) AS current_round
+    FROM candidates c
+    LEFT JOIN hiring_requests h ON c.hiring_request_id = h.id
+    WHERE 1 = 1
+";
+
+if (!$isHr && !$isAdmin && $isManager) {
+    $query .= " AND h.requested_by = " . (int)$current_employee_id;
+}
+
+if ($status_filter !== 'all') {
+    $status_filter_escaped = mysqli_real_escape_string($conn, $status_filter);
+    $query .= " AND c.status = '{$status_filter_escaped}'";
+}
+
+if ($hiring_filter > 0) {
+    $query .= " AND c.hiring_request_id = " . (int)$hiring_filter;
+}
+
+if ($search !== '') {
+    $search_term = mysqli_real_escape_string($conn, $search);
+    $query .= " AND (
+        c.first_name LIKE '%{$search_term}%'
+        OR c.last_name LIKE '%{$search_term}%'
+        OR c.email LIKE '%{$search_term}%'
+        OR c.phone LIKE '%{$search_term}%'
+        OR c.candidate_code LIKE '%{$search_term}%'
+        OR h.position_title LIKE '%{$search_term}%'
+        OR h.request_no LIKE '%{$search_term}%'
+    )";
+}
+
+$query .= " ORDER BY c.created_at DESC";
+$candidates = mysqli_query($conn, $query);
+
+// ---------------- HIRING REQUESTS FOR FILTER ----------------
+$hiring_query = "
+    SELECT hr.id, hr.request_no, hr.position_title, hr.department
+    FROM hiring_requests hr
+    WHERE hr.status IN ('Approved', 'In Progress')
+";
+
+if (!$isHr && !$isAdmin && $isManager) {
+    $hiring_query .= " AND hr.requested_by = " . (int)$current_employee_id;
+}
+
+$hiring_query .= " ORDER BY hr.created_at DESC";
+$hiring_requests = mysqli_query($conn, $hiring_query);
+
+// ---------------- EMPLOYEES FOR INTERVIEWER DROPDOWN ----------------
+$employees_query = "
+    SELECT id, full_name, designation
+    FROM employees
+    WHERE employee_status = 'active'
+    ORDER BY full_name
+";
+$employees = mysqli_query($conn, $employees_query);
+
+// ---------------- STATS ----------------
+$stats = [
+    'total'     => 0,
+    'new'       => 0,
+    'interview' => 0,
+    'selected'  => 0
+];
+
+$stats_query = "
+    SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN c.status = 'New' THEN 1 ELSE 0 END) AS new,
+        SUM(CASE WHEN c.status = 'Interview Scheduled' THEN 1 ELSE 0 END) AS interview,
+        SUM(CASE WHEN c.status IN ('Selected', 'Offered', 'Joined') THEN 1 ELSE 0 END) AS selected
+    FROM candidates c
+";
+
+if (!$isHr && !$isAdmin && $isManager) {
+    $stats_query .= "
+        LEFT JOIN hiring_requests h ON c.hiring_request_id = h.id
+        WHERE h.requested_by = " . (int)$current_employee_id;
 }
 
 $stats_res = mysqli_query($conn, $stats_query);
@@ -406,33 +519,27 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
     <title>Candidates - TEK-C Hiring</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <!-- Favicon -->
     <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
     <link rel="manifest" href="assets/fav/site.webmanifest">
 
-    <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    
-    <!-- DataTables -->
-    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
-    
-    <!-- Select2 -->
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 
-    <!-- TEK-C Custom Styles -->
-    <link href="assets/css/layout-styles.css" rel="stylesheet" />
-    <link href="assets/css/topbar.css" rel="stylesheet" />
-    <link href="assets/css/footer.css" rel="stylesheet" />
+    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet">
+
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet">
+
+    <link href="assets/css/layout-styles.css" rel="stylesheet">
+    <link href="assets/css/topbar.css" rel="stylesheet">
+    <link href="assets/css/footer.css" rel="stylesheet">
 
     <style>
         .content-scroll { flex: 1 1 auto; overflow: auto; padding: 22px; }
-        
+
         .panel {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -441,21 +548,21 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             padding: 16px;
             height: 100%;
         }
-        
+
         .panel-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             margin-bottom: 10px;
         }
-        
+
         .panel-title {
             font-weight: 900;
             font-size: 18px;
             color: #1f2937;
             margin: 0;
         }
-        
+
         .panel-menu {
             width: 36px;
             height: 36px;
@@ -467,7 +574,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             color: #6b7280;
         }
 
-        /* Stats Cards */
         .stat-card {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -479,7 +585,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             align-items: center;
             gap: 14px;
         }
-        
+
         .stat-ic {
             width: 46px;
             height: 46px;
@@ -490,18 +596,18 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             font-size: 20px;
             flex: 0 0 auto;
         }
-        
+
         .stat-ic.blue { background: var(--blue); }
         .stat-ic.green { background: #10b981; }
         .stat-ic.yellow { background: #f59e0b; }
         .stat-ic.purple { background: #8b5cf6; }
-        
+
         .stat-label {
             color: #4b5563;
             font-weight: 750;
             font-size: 13px;
         }
-        
+
         .stat-value {
             font-size: 30px;
             font-weight: 900;
@@ -509,7 +615,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             margin-top: 2px;
         }
 
-        /* Filter Card */
         .filter-card {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -519,7 +624,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             margin-bottom: 20px;
         }
 
-        /* Buttons */
         .btn-add {
             background: var(--blue);
             color: white;
@@ -535,6 +639,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             text-decoration: none;
             white-space: nowrap;
         }
+
         .btn-add:hover { background: #2a8bc9; color: #fff; }
 
         .btn-filter {
@@ -551,12 +656,12 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             box-shadow: 0 8px 18px rgba(16, 185, 129, 0.18);
             white-space: nowrap;
         }
+
         .btn-filter:hover { background: #0da271; color: #fff; }
 
-        /* Table Styles */
         .table-responsive { overflow-x: hidden !important; }
         table.dataTable { width: 100% !important; }
-        
+
         .table thead th {
             font-size: 11px;
             color: #6b7280;
@@ -565,7 +670,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             padding: 10px 10px !important;
             white-space: normal !important;
         }
-        
+
         .table td {
             vertical-align: top;
             border-color: var(--border);
@@ -576,7 +681,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             word-break: break-word;
         }
 
-        /* Candidate Avatar */
         .candidate-avatar {
             width: 38px;
             height: 38px;
@@ -591,6 +695,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             font-size: 16px;
             flex: 0 0 auto;
         }
+
         .candidate-avatar img {
             width: 100%;
             height: 100%;
@@ -604,7 +709,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             margin-bottom: 2px;
             line-height: 1.2;
         }
-        
+
         .candidate-code {
             font-size: 11px;
             color: #6b7280;
@@ -612,13 +717,12 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             line-height: 1.2;
         }
 
-        /* Role Info */
         .role-info {
             display: flex;
             flex-direction: column;
             gap: 3px;
         }
-        
+
         .position-text {
             font-size: 12px;
             font-weight: 800;
@@ -628,8 +732,9 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             gap: 6px;
             line-height: 1.2;
         }
+
         .position-text i { color: var(--blue); font-size: 13px; }
-        
+
         .department-badge {
             background: rgba(45, 156, 219, .1);
             color: var(--blue);
@@ -644,7 +749,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             width: fit-content;
         }
 
-        /* Contact Info */
         .contact-info {
             font-size: 11px;
             color: #6b7280;
@@ -654,9 +758,9 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             margin-top: 2px;
             line-height: 1.2;
         }
+
         .contact-info i { font-size: 11px; }
 
-        /* Status Badges */
         .status-badge {
             padding: 3px 8px;
             border-radius: 20px;
@@ -669,7 +773,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             gap: 6px;
             white-space: nowrap;
         }
-        
+
         .status-new { background: rgba(45, 156, 219, .12); color: var(--blue); border: 1px solid rgba(45, 156, 219, .22); }
         .status-screening { background: rgba(107, 114, 128, .12); color: #6b7280; border: 1px solid rgba(107, 114, 128, .22); }
         .status-shortlisted { background: rgba(139, 92, 246, .12); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, .22); }
@@ -682,7 +786,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
         .status-joined { background: rgba(16, 185, 129, .12); color: #10b981; border: 1px solid rgba(16, 185, 129, .22); }
         .status-declined { background: rgba(239, 68, 68, .12); color: #ef4444; border: 1px solid rgba(239, 68, 68, .22); }
 
-        /* Action Buttons */
         .btn-action {
             background: transparent;
             border: 1px solid var(--border);
@@ -696,71 +799,86 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             align-items: center;
             justify-content: center;
         }
+
         .btn-action:hover { background: var(--bg); color: var(--blue); }
         .btn-action.success:hover { background: #d1fae5; color: #065f46; border-color: #065f46; }
         .btn-action.warning:hover { background: #fef3c7; color: #92400e; border-color: #92400e; }
 
-        /* Experience/CTC Info */
+        .delete-btn {
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+
+        .delete-btn:hover {
+            background: #fee2e2;
+            color: #b91c1c;
+            border-color: #ef4444;
+        }
+
         .exp-info {
             font-size: 12px;
             font-weight: 700;
             color: #2d3748;
         }
+
         .ctc-info {
             font-size: 10px;
             color: #6b7280;
             font-weight: 600;
         }
 
-        /* Pipeline Stages */
         .pipeline-stages {
             display: flex;
             gap: 4px;
             margin-top: 4px;
         }
+
         .stage-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
             background: #d1d5db;
         }
+
         .stage-dot.completed { background: #10b981; }
         .stage-dot.current { background: #3b82f6; width: 10px; height: 10px; }
 
-        /* Modal Styles */
         .modal-content {
             border-radius: var(--radius);
             border: none;
             box-shadow: var(--shadow);
         }
+
         .modal-header {
             border-bottom: 1px solid var(--border);
             padding: 16px 20px;
         }
+
         .modal-title {
             font-weight: 900;
             font-size: 18px;
             color: #1f2937;
         }
+
         .modal-body { padding: 20px; }
+
         .modal-footer {
             border-top: 1px solid var(--border);
             padding: 16px 20px;
         }
 
-        /* Form Labels */
         .form-label {
             font-weight: 800;
             font-size: 12px;
             color: #4b5563;
             margin-bottom: 4px;
         }
+
         .required:after {
             content: " *";
             color: #ef4444;
         }
 
-        /* Alert Styles */
         .alert {
             border-radius: var(--radius);
             border: none;
@@ -768,45 +886,50 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             margin-bottom: 20px;
         }
 
-        /* Actions Column Width */
-        th.actions-col, td.actions-col { width: 140px !important; white-space: nowrap !important; }
+        th.actions-col,
+        td.actions-col {
+            width: 220px !important;
+            white-space: nowrap !important;
+        }
+
+        .dataTables_wrapper .dataTables_filter input,
+        .dataTables_wrapper .dataTables_length select {
+            border-radius: 10px !important;
+        }
+
+        @media (max-width: 767px) {
+            .content-scroll { padding: 14px; }
+            .stat-value { font-size: 24px; }
+            th.actions-col,
+            td.actions-col { width: auto !important; }
+        }
     </style>
 </head>
 <body>
 <div class="app">
     <?php include 'includes/sidebar.php'; ?>
-    
+
     <main class="main" aria-label="Main">
         <?php include 'includes/topbar.php'; ?>
 
         <div class="content-scroll">
             <div class="container-fluid maxw">
 
-                <!-- Flash Messages -->
                 <?php if (!empty($message)): ?>
-                    <div class="alert alert-<?php echo $messageType; ?> alert-dismissible fade show" role="alert">
+                    <div class="alert alert-<?php echo e($messageType); ?> alert-dismissible fade show" role="alert">
                         <i class="bi bi-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>-fill me-2"></i>
                         <?php echo e($message); ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 <?php endif; ?>
 
-                <!-- Header -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
                     <div>
                         <h1 class="h3 fw-bold text-dark mb-1">Candidates</h1>
                         <p class="text-muted mb-0">Manage candidate pipeline and interviews</p>
                     </div>
-                    <div class="d-flex gap-2">
-                        <?php if ($isHr): ?>
-                        <button class="btn-add" data-bs-toggle="modal" data-bs-target="#addCandidateModal">
-                            <i class="bi bi-person-plus"></i> Add Candidate
-                        </button>
-                        <?php endif; ?>
-                    </div>
                 </div>
 
-                <!-- Stats Cards -->
                 <div class="row g-3 mb-3">
                     <div class="col-12 col-md-6 col-xl-3">
                         <div class="stat-card">
@@ -817,6 +940,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             </div>
                         </div>
                     </div>
+
                     <div class="col-12 col-md-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-ic green"><i class="bi bi-star-fill"></i></div>
@@ -826,6 +950,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             </div>
                         </div>
                     </div>
+
                     <div class="col-12 col-md-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-ic yellow"><i class="bi bi-camera-video-fill"></i></div>
@@ -835,6 +960,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             </div>
                         </div>
                     </div>
+
                     <div class="col-12 col-md-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-ic purple"><i class="bi bi-check-circle-fill"></i></div>
@@ -846,7 +972,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                     </div>
                 </div>
 
-                <!-- Filter Card -->
                 <div class="filter-card mb-4">
                     <form method="GET" class="row g-3 align-items-end">
                         <div class="col-md-3">
@@ -854,162 +979,186 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             <select name="status" class="form-select form-select-sm">
                                 <option value="all">All Status</option>
                                 <?php foreach ($status_options as $key => $value): ?>
-                                    <option value="<?php echo $key; ?>" <?php echo $status_filter === $key ? 'selected' : ''; ?>>
-                                        <?php echo $value; ?>
+                                    <option value="<?php echo e($key); ?>" <?php echo $status_filter === $key ? 'selected' : ''; ?>>
+                                        <?php echo e($value); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
+
                         <div class="col-md-4">
                             <label class="form-label">Hiring Request</label>
                             <select name="hiring_id" class="form-select form-select-sm">
-                                <option value="0">All Requests</option>
-                                <?php 
-                                mysqli_data_seek($hiring_requests, 0);
-                                while ($hr = mysqli_fetch_assoc($hiring_requests)): ?>
-                                    <option value="<?php echo $hr['id']; ?>" <?php echo $hiring_filter == $hr['id'] ? 'selected' : ''; ?>>
-                                        <?php echo e($hr['request_no']); ?> - <?php echo e($hr['position_title']); ?>
-                                    </option>
-                                <?php endwhile; ?>
+                                <option value="0">All Hiring Requests</option>
+                                <?php if ($hiring_requests): ?>
+                                    <?php while ($hr = mysqli_fetch_assoc($hiring_requests)): ?>
+                                        <option value="<?php echo (int)$hr['id']; ?>" <?php echo $hiring_filter === (int)$hr['id'] ? 'selected' : ''; ?>>
+                                            <?php echo e($hr['request_no'] . ' - ' . $hr['position_title']); ?>
+                                        </option>
+                                    <?php endwhile; ?>
+                                <?php endif; ?>
                             </select>
                         </div>
+
                         <div class="col-md-3">
                             <label class="form-label">Search</label>
-                            <input type="text" name="search" class="form-control form-control-sm" 
-                                   placeholder="Name, Email, Phone..." value="<?php echo e($search); ?>">
+                            <input type="text" name="search" class="form-control form-control-sm" value="<?php echo e($search); ?>" placeholder="Name, email, phone, code...">
                         </div>
-                        <div class="col-md-2">
-                            <button type="submit" class="btn-filter w-100">
-                                <i class="bi bi-funnel"></i> Filter
+
+                        <div class="col-md-2 d-flex gap-2">
+                            <button type="submit" class="btn-filter w-100 justify-content-center">
+                                <i class="bi bi-funnel-fill"></i> Filter
                             </button>
+                            <a href="candidates.php" class="btn btn-light border w-100 d-flex align-items-center justify-content-center">
+                                Reset
+                            </a>
                         </div>
                     </form>
                 </div>
 
-                <!-- Candidates Table -->
                 <div class="panel">
                     <div class="panel-header">
-                        <h3 class="panel-title">Candidate Pipeline</h3>
-                        <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
+                        <h2 class="panel-title">Candidate List</h2>
+                        <button class="panel-menu" type="button" title="Candidates">
+                            <i class="bi bi-people"></i>
+                        </button>
                     </div>
 
                     <div class="table-responsive">
-                        <table id="candidatesTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
+                        <table id="candidatesTable" class="table align-middle">
                             <thead>
                                 <tr>
                                     <th>Candidate</th>
+                                    <th>Role / Request</th>
                                     <th>Contact</th>
-                                    <th>Position</th>
-                                    <th>Experience</th>
+                                    <th>Experience / CTC</th>
                                     <th>Status</th>
-                                    <th>Source</th>
-                                    <th>Applied</th>
-                                    <th class="text-end actions-col">Actions</th>
+                                    <th>Pipeline</th>
+                                    <th>Created</th>
+                                    <th class="actions-col">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php if (mysqli_num_rows($candidates) === 0): ?>
-                                   
-                                <?php else: ?>
-                                    <?php 
-                                    mysqli_data_seek($candidates, 0);
-                                    while ($candidate = mysqli_fetch_assoc($candidates)): 
-                                    ?>
+                                <?php if ($candidates && mysqli_num_rows($candidates) > 0): ?>
+                                    <?php while ($row = mysqli_fetch_assoc($candidates)): ?>
+                                        <?php
+                                            $fullName = getFullName($row['first_name'] ?? '', $row['last_name'] ?? '');
+                                            $initials = strtoupper(substr((string)($row['first_name'] ?? 'C'), 0, 1) . substr((string)($row['last_name'] ?? ''), 0, 1));
+                                            $interview_count = (int)($row['interview_count'] ?? 0);
+                                            $current_round = (int)($row['current_round'] ?? 0);
+                                            $next_round = max(1, $current_round + 1);
+                                        ?>
                                         <tr>
                                             <td>
-                                                <div class="d-flex align-items-center gap-2">
+                                                <div class="d-flex align-items-start gap-2">
                                                     <div class="candidate-avatar">
-                                                        <?php if (!empty($candidate['photo_path'])): ?>
-                                                            <img src="../<?php echo e($candidate['photo_path']); ?>" alt="Photo">
+                                                        <?php if (!empty($row['photo_path']) && fileExistsWeb($row['photo_path'])): ?>
+                                                            <img src="../<?php echo e(ltrim($row['photo_path'], '/')); ?>" alt="<?php echo e($fullName); ?>">
                                                         <?php else: ?>
-                                                            <?php echo strtoupper(substr($candidate['first_name'] ?? '', 0, 1) . substr($candidate['last_name'] ?? '', 0, 1)); ?>
+                                                            <?php echo e($initials ?: 'C'); ?>
                                                         <?php endif; ?>
                                                     </div>
                                                     <div>
-                                                        <div class="candidate-name"><?php echo e(getFullName($candidate['first_name'], $candidate['last_name'])); ?></div>
-                                                        <div class="candidate-code"><i class="bi bi-hash"></i> <?php echo e($candidate['candidate_code'] ?? ''); ?></div>
-                                                        <?php if (($candidate['interview_count'] ?? 0) > 0): ?>
-                                                            <div class="pipeline-stages">
-                                                                <small class="text-info">
-                                                                    <i class="bi bi-camera-video"></i> Round <?php echo ($candidate['current_round'] ?? 0); ?>/<?php echo ($candidate['interview_count'] ?? 0); ?>
-                                                                </small>
-                                                            </div>
-                                                        <?php endif; ?>
+                                                        <div class="candidate-name"><?php echo e($fullName); ?></div>
+                                                        <div class="candidate-code"><?php echo e($row['candidate_code'] ?? '-'); ?></div>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td>
-                                                <div class="contact-info"><i class="bi bi-envelope"></i> <?php echo e($candidate['email'] ?? ''); ?></div>
-                                                <div class="contact-info"><i class="bi bi-telephone"></i> <?php echo e($candidate['phone'] ?? ''); ?></div>
-                                                <?php if (!empty($candidate['current_location'])): ?>
-                                                    <div class="contact-info"><i class="bi bi-geo-alt"></i> <?php echo e($candidate['current_location']); ?></div>
-                                                <?php endif; ?>
-                                            </td>
+
                                             <td>
                                                 <div class="role-info">
                                                     <div class="position-text">
-                                                        <i class="bi bi-briefcase"></i> 
-                                                        <?php echo e($candidate['position_title'] ?? 'N/A'); ?>
+                                                        <i class="bi bi-briefcase-fill"></i>
+                                                        <?php echo e($row['position_title'] ?? '-'); ?>
                                                     </div>
-                                                    <?php if (!empty($candidate['department'])): ?>
-                                                        <div class="department-badge">
-                                                            <i class="bi bi-building"></i> <?php echo e($candidate['department']); ?>
-                                                        </div>
-                                                    <?php endif; ?>
+                                                    <div class="department-badge">
+                                                        <i class="bi bi-diagram-3"></i>
+                                                        <?php echo e($row['department'] ?? '-'); ?>
+                                                    </div>
+                                                    <div class="candidate-code mt-1">
+                                                        Request: <?php echo e($row['request_no'] ?? '-'); ?>
+                                                    </div>
                                                 </div>
                                             </td>
+
                                             <td>
-                                                <?php if (!empty($candidate['total_experience'])): ?>
-                                                    <div class="exp-info"><?php echo number_format($candidate['total_experience'], 1); ?> years</div>
-                                                    <div class="ctc-info">
-                                                        ₹<?php echo number_format($candidate['expected_ctc'] ?? 0, 2); ?> L
-                                                    </div>
-                                                <?php else: ?>
-                                                    <span class="text-muted">Fresher</span>
-                                                <?php endif; ?>
+                                                <div class="contact-info">
+                                                    <i class="bi bi-envelope"></i>
+                                                    <?php echo e($row['email'] ?? '-'); ?>
+                                                </div>
+                                                <div class="contact-info">
+                                                    <i class="bi bi-telephone"></i>
+                                                    <?php echo e($row['phone'] ?? '-'); ?>
+                                                </div>
                                             </td>
-                                            <td><?php echo getStatusBadge($candidate['status'] ?? 'New'); ?></td>
+
                                             <td>
-                                                <span class="fw-bold"><?php echo e($candidate['source'] ?? 'N/A'); ?></span>
-                                                <?php if (!empty($candidate['referred_by'])): ?>
-                                                    <br><small class="text-muted">Ref: <?php echo e($candidate['referred_by']); ?></small>
-                                                <?php endif; ?>
+                                                <div class="exp-info">
+                                                    <?php echo e($row['total_experience'] !== null ? number_format((float)$row['total_experience'], 1) . ' yrs' : '-'); ?>
+                                                </div>
+                                                <div class="ctc-info">
+                                                    Current: <?php echo e($row['current_ctc'] !== null ? number_format((float)$row['current_ctc'], 2) : '-'); ?>
+                                                </div>
+                                                <div class="ctc-info">
+                                                    Expected: <?php echo e($row['expected_ctc'] !== null ? number_format((float)$row['expected_ctc'], 2) : '-'); ?>
+                                                </div>
                                             </td>
-                                            <td data-order="<?php echo strtotime($candidate['created_at']); ?>">
-                                                <?php echo date('d M Y', strtotime($candidate['created_at'])); ?>
+
+                                            <td><?php echo getStatusBadge($row['status'] ?? 'New'); ?></td>
+
+                                            <td>
+                                                <div class="candidate-code">Interviews: <?php echo $interview_count; ?></div>
+                                                <div class="pipeline-stages">
+                                                    <span class="stage-dot <?php echo $interview_count >= 1 ? 'completed' : ($next_round == 1 ? 'current' : ''); ?>"></span>
+                                                    <span class="stage-dot <?php echo $interview_count >= 2 ? 'completed' : ($next_round == 2 ? 'current' : ''); ?>"></span>
+                                                    <span class="stage-dot <?php echo $interview_count >= 3 ? 'completed' : ($next_round == 3 ? 'current' : ''); ?>"></span>
+                                                    <span class="stage-dot <?php echo $interview_count >= 4 ? 'completed' : ($next_round == 4 ? 'current' : ''); ?>"></span>
+                                                    <span class="stage-dot <?php echo $interview_count >= 5 ? 'completed' : ($next_round >= 5 ? 'current' : ''); ?>"></span>
+                                                </div>
                                             </td>
-                                            <td class="text-end actions-col">
-                                                <button class="btn-action" onclick="viewCandidate(<?php echo $candidate['id']; ?>)" title="View">
+
+                                            <td>
+                                                <?php echo !empty($row['created_at']) ? date('d-m-Y', strtotime($row['created_at'])) : '-'; ?>
+                                            </td>
+
+                                            <td class="actions-col">
+                                                <a href="view-candidate.php?id=<?php echo (int)$row['id']; ?>" class="btn-action" title="View">
                                                     <i class="bi bi-eye"></i>
+                                                </a>
+
+                                                <button type="button"
+                                                        class="btn-action success"
+                                                        title="Schedule Interview"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#scheduleInterviewModal"
+                                                        data-candidate-id="<?php echo (int)$row['id']; ?>"
+                                                        data-hiring-request-id="<?php echo (int)$row['hiring_request_id']; ?>"
+                                                        data-candidate-name="<?php echo e($fullName); ?>"
+                                                        data-next-round="<?php echo $next_round; ?>">
+                                                    <i class="bi bi-calendar-plus"></i>
                                                 </button>
-                                                
-                                                <?php if (!in_array($candidate['status'] ?? '', ['Rejected', 'Joined', 'Declined'])): ?>
-                                                    <button class="btn-action warning" 
-                                                            onclick="openStatusModal(<?php echo $candidate['id']; ?>, '<?php echo e(addslashes(getFullName($candidate['first_name'], $candidate['last_name']))); ?>', '<?php echo $candidate['status'] ?? 'New'; ?>')" 
-                                                            title="Update Status">
-                                                        <i class="bi bi-arrow-repeat"></i>
-                                                    </button>
-                                                    
-                                                    <?php if (!in_array($candidate['status'] ?? '', ['Interview Scheduled', 'Selected', 'Offered'])): ?>
-                                                        <button class="btn-action success" 
-                                                                onclick="openInterviewModal(<?php echo $candidate['id']; ?>, <?php echo $candidate['hiring_request_id'] ?? 0; ?>, '<?php echo e(addslashes(getFullName($candidate['first_name'], $candidate['last_name']))); ?>', <?php echo ($candidate['current_round'] ?? 0) + 1; ?>)" 
-                                                                title="Schedule Interview">
-                                                            <i class="bi bi-camera-video"></i>
-                                                        </button>
-                                                    <?php endif; ?>
-                                                <?php endif; ?>
-                                                
-                                                <?php if (($candidate['status'] ?? '') === 'Selected' && $isHr): ?>
-                                                    <a href="offer-approval.php?candidate_id=<?php echo $candidate['id']; ?>" class="btn-action success" title="Create Offer">
-                                                        <i class="bi bi-file-text"></i>
-                                                    </a>
-                                                <?php endif; ?>
-                                                
-                                                <?php if (!empty($candidate['resume_path'])): ?>
-                                                    <a href="../<?php echo e($candidate['resume_path']); ?>" target="_blank" class="btn-action" title="Download Resume">
-                                                        <i class="bi bi-file-pdf"></i>
-                                                    </a>
-                                                <?php endif; ?>
+
+                                                <button type="button"
+                                                        class="btn-action warning"
+                                                        title="Update Status"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#statusModal"
+                                                        data-candidate-id="<?php echo (int)$row['id']; ?>"
+                                                        data-candidate-name="<?php echo e($fullName); ?>"
+                                                        data-status="<?php echo e($row['status'] ?? 'New'); ?>">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                </button>
+
+                                                <button type="button"
+                                                        class="btn-action delete-btn"
+                                                        title="Delete Candidate"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#deleteCandidateModal"
+                                                        data-candidate-id="<?php echo (int)$row['id']; ?>"
+                                                        data-candidate-name="<?php echo e($fullName); ?>"
+                                                        data-candidate-code="<?php echo e($row['candidate_code'] ?? '-'); ?>">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
                                             </td>
                                         </tr>
                                     <?php endwhile; ?>
@@ -1019,205 +1168,84 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                     </div>
                 </div>
 
+                <?php include 'includes/footer.php'; ?>
             </div>
         </div>
-
-        <?php include 'includes/footer.php'; ?>
     </main>
 </div>
 
-<!-- Add Candidate Modal (HR only) -->
-<?php if ($isHr): ?>
-<div class="modal fade" id="addCandidateModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+<!-- Status Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST" enctype="multipart/form-data">
-                <input type="hidden" name="action" value="add_candidate">
-                
+            <form method="POST" action="candidates.php">
+                <input type="hidden" name="action" value="update_status">
+                <input type="hidden" name="candidate_id" id="status_candidate_id">
+
                 <div class="modal-header">
-                    <h5 class="modal-title">Add New Candidate</h5>
+                    <h5 class="modal-title">Update Candidate Status</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                
+
                 <div class="modal-body">
+                    <p class="mb-3">Update status for <strong class="candidate-name-holder" id="status_candidate_name">Candidate</strong></p>
+
                     <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label required">Hiring Request</label>
-                            <select name="hiring_request_id" class="form-select" required>
-                                <option value="">Select Position</option>
-                                <?php 
-                                mysqli_data_seek($hiring_requests, 0);
-                                while ($hr = mysqli_fetch_assoc($hiring_requests)): ?>
-                                    <option value="<?php echo $hr['id']; ?>">
-                                        <?php echo e($hr['request_no']); ?> - <?php echo e($hr['position_title']); ?> (<?php echo e($hr['department']); ?>)
-                                    </option>
-                                <?php endwhile; ?>
+                        <div class="col-md-12">
+                            <label class="form-label required">Status</label>
+                            <select name="status" class="form-select form-select-sm" required>
+                                <?php foreach ($status_options as $key => $value): ?>
+                                    <option value="<?php echo e($key); ?>"><?php echo e($value); ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
-                        
-                        <div class="col-md-6">
-                            <label class="form-label required">First Name</label>
-                            <input type="text" name="first_name" class="form-control" required>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <label class="form-label required">Last Name</label>
-                            <input type="text" name="last_name" class="form-control" required>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <label class="form-label required">Email</label>
-                            <input type="email" name="email" class="form-control" required>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <label class="form-label required">Phone</label>
-                            <input type="text" name="phone" class="form-control" required>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <label class="form-label">Alternate Phone</label>
-                            <input type="text" name="alternate_phone" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <label class="form-label">Current Location</label>
-                            <input type="text" name="current_location" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <label class="form-label">Preferred Location</label>
-                            <input type="text" name="preferred_location" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">Total Exp (years)</label>
-                            <input type="number" name="total_experience" class="form-control" step="0.5" min="0">
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">Relevant Exp</label>
-                            <input type="number" name="relevant_experience" class="form-control" step="0.5" min="0">
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">Current CTC (₹ LPA)</label>
-                            <input type="number" name="current_ctc" class="form-control" step="0.1" min="0">
-                        </div>
-                        
-                        <div class="col-md-3">
-                            <label class="form-label">Expected CTC (₹ LPA)</label>
-                            <input type="number" name="expected_ctc" class="form-control" step="0.1" min="0">
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label class="form-label">Notice Period (days)</label>
-                            <input type="number" name="notice_period" class="form-control" min="0">
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label class="form-label">Current Company</label>
-                            <input type="text" name="current_company" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label class="form-label">Qualification</label>
-                            <input type="text" name="qualification" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <div class="form-check mt-4">
-                                <input class="form-check-input" type="checkbox" name="notice_period_negotiable" id="noticePeriodNegotiable">
-                                <label class="form-check-label" for="noticePeriodNegotiable">
-                                    Notice Period Negotiable
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div class="col-12">
-                            <label class="form-label">Skills</label>
-                            <textarea name="skills" class="form-control" rows="2" placeholder="Comma separated skills"></textarea>
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label class="form-label">Source</label>
-                            <select name="source" class="form-select">
-                                <option value="LinkedIn">LinkedIn</option>
-                                <option value="Naukri">Naukri</option>
-                                <option value="Indeed">Indeed</option>
-                                <option value="Referral">Referral</option>
-                                <option value="Company Website">Company Website</option>
-                                <option value="Consultant">Consultant</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label class="form-label">Referred By</label>
-                            <input type="text" name="referred_by" class="form-control">
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label class="form-label">Upload Resume</label>
-                            <input type="file" name="resume" class="form-control" accept=".pdf,.doc,.docx">
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label class="form-label">Upload Photo</label>
-                            <input type="file" name="photo" class="form-control" accept="image/*">
-                        </div>
-                        
-                        <div class="col-12">
+
+                        <div class="col-md-12">
                             <label class="form-label">Remarks</label>
-                            <textarea name="remarks" class="form-control" rows="2"></textarea>
+                            <textarea name="remarks" class="form-control form-control-sm" rows="3" placeholder="Add notes..."></textarea>
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-add">Add Candidate</button>
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i> Update Status
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-<?php endif; ?>
 
-<!-- Update Status Modal -->
-<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+<!-- Delete Candidate Modal -->
+<div class="modal fade" id="deleteCandidateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST">
-                <input type="hidden" name="action" value="update_status">
-                <input type="hidden" name="candidate_id" id="status_candidate_id">
-                
+            <form method="POST" action="candidates.php">
+                <input type="hidden" name="action" value="delete_candidate">
+                <input type="hidden" name="candidate_id" id="delete_candidate_id">
+
                 <div class="modal-header">
-                    <h5 class="modal-title">Update Candidate Status</h5>
+                    <h5 class="modal-title">Delete Candidate</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                
+
                 <div class="modal-body">
-                    <p class="mb-3">Update status for <strong id="status_candidate_name"></strong></p>
-                    
-                    <div class="mb-3">
-                        <label class="form-label required">New Status</label>
-                        <select name="status" class="form-select" required>
-                            <?php foreach ($status_options as $key => $value): ?>
-                                <option value="<?php echo $key; ?>"><?php echo $value; ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                    <div class="alert alert-danger mb-3">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        This action will permanently delete the candidate and related records.
                     </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Remarks</label>
-                        <textarea name="remarks" class="form-control" rows="2" placeholder="Add any remarks..."></textarea>
-                    </div>
+
+                    <p class="mb-1"><strong>Name:</strong> <span id="delete_candidate_name">-</span></p>
+                    <p class="mb-0"><strong>Candidate Code:</strong> <span id="delete_candidate_code">-</span></p>
                 </div>
-                
+
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-add">Update Status</button>
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-1"></i> Delete
+                    </button>
                 </div>
             </form>
         </div>
@@ -1225,32 +1253,32 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 </div>
 
 <!-- Schedule Interview Modal -->
-<div class="modal fade" id="interviewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+<div class="modal fade" id="scheduleInterviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST">
+            <form method="POST" action="candidates.php">
                 <input type="hidden" name="action" value="schedule_interview">
                 <input type="hidden" name="candidate_id" id="interview_candidate_id">
                 <input type="hidden" name="hiring_request_id" id="interview_hiring_id">
-                <input type="hidden" name="round_number" id="interview_round">
-                
+                <input type="hidden" name="round_number" id="interview_round" value="1">
+
                 <div class="modal-header">
-                    <h5 class="modal-title">Schedule Interview</h5>
+                    <h5 class="modal-title fw-bold">Schedule Interview</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                
+
                 <div class="modal-body">
-                    <p class="mb-3">Schedule interview for <strong id="interview_candidate_name"></strong></p>
-                    
+                    <p class="mb-3">Schedule interview for <strong class="candidate-name-holder" id="interview_candidate_name">Candidate</strong></p>
+
                     <div class="mb-3">
                         <label class="form-label required">Interview Round</label>
-                        <select name="interview_round" class="form-select" required>
+                        <select name="interview_round" class="form-select select2" required>
                             <?php foreach ($interview_rounds as $key => $value): ?>
-                                <option value="<?php echo $key; ?>"><?php echo $value; ?></option>
+                                <option value="<?php echo e($key); ?>"><?php echo e($value); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    
+
                     <div class="row g-2 mb-3">
                         <div class="col-md-6">
                             <label class="form-label required">Date</label>
@@ -1261,63 +1289,61 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             <input type="time" name="interview_time" class="form-control" required>
                         </div>
                     </div>
-                    
+
                     <div class="row g-2 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label required">Duration</label>
-                            <select name="interview_duration" class="form-select" required>
-                                <option value="30">30 minutes</option>
-                                <option value="45">45 minutes</option>
-                                <option value="60" selected>1 hour</option>
-                                <option value="90">1.5 hours</option>
-                                <option value="120">2 hours</option>
-                            </select>
+                            <label class="form-label required">Duration (Minutes)</label>
+                            <input type="number" name="interview_duration" class="form-control" min="5" value="30" required>
                         </div>
+
                         <div class="col-md-6">
                             <label class="form-label required">Mode</label>
                             <select name="interview_mode" class="form-select" required>
+                                <option value="">Select Mode</option>
                                 <option value="Online">Online</option>
                                 <option value="In-Person">In-Person</option>
-                                <option value="Telephonic">Telephonic</option>
+                                <option value="Phone">Phone</option>
                             </select>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label class="form-label required">Interviewer</label>
-                        <select name="interviewer_id" class="form-select" required>
+                        <select name="interviewer_id" class="form-select select2" required>
                             <option value="">Select Interviewer</option>
-                            <?php 
-                            mysqli_data_seek($employees, 0);
-                            while ($emp = mysqli_fetch_assoc($employees)): ?>
-                                <option value="<?php echo $emp['id']; ?>">
-                                    <?php echo e($emp['full_name']); ?> (<?php echo e($emp['designation']); ?>)
-                                </option>
-                            <?php endwhile; ?>
+                            <?php if ($employees): ?>
+                                <?php mysqli_data_seek($employees, 0); ?>
+                                <?php while ($emp = mysqli_fetch_assoc($employees)): ?>
+                                    <option value="<?php echo (int)$emp['id']; ?>">
+                                        <?php echo e($emp['full_name']); ?> (<?php echo e($emp['designation']); ?>)
+                                    </option>
+                                <?php endwhile; ?>
+                            <?php endif; ?>
                         </select>
                     </div>
-                    
+
                     <div class="mb-3" id="onlineLinkField">
                         <label class="form-label">Meeting Link</label>
-                        <input type="url" name="interview_link" class="form-control" placeholder="https://meet.google.com/...">
+                        <input type="url" name="interview_link" class="form-control" placeholder="https://meet.google.com/">
                     </div>
-                    
+
                     <div class="mb-3" id="locationField" style="display:none;">
                         <label class="form-label">Location</label>
                         <input type="text" name="location" class="form-control" placeholder="Office address">
                     </div>
                 </div>
-                
+
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-add">Schedule Interview</button>
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-calendar-check me-1"></i> Schedule Interview
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- JavaScript -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
@@ -1329,7 +1355,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
 <script>
 $(document).ready(function() {
-    // Initialize DataTable
     $('#candidatesTable').DataTable({
         responsive: true,
         autoWidth: false,
@@ -1346,15 +1371,13 @@ $(document).ready(function() {
         }
     });
 
-    // Initialize Select2 for dropdowns
     $('.select2').select2({
         theme: 'bootstrap-5',
         width: '100%',
         dropdownParent: $('.modal')
     });
 
-    // Show/hide location/link based on interview mode
-    $('select[name="interview_mode"]').change(function() {
+    $('select[name="interview_mode"]').on('change', function() {
         if ($(this).val() === 'Online') {
             $('#onlineLinkField').show();
             $('#locationField').hide();
@@ -1373,50 +1396,84 @@ $(document).ready(function() {
         }
     });
 
-    // Auto-focus search
     setTimeout(function() {
         $('.dataTables_filter input').focus();
     }, 400);
 });
 
-function viewCandidate(id) {
-    window.location.href = 'view-candidate.php?id=' + id;
-}
+document.addEventListener('DOMContentLoaded', function () {
+    const deleteModal = document.getElementById('deleteCandidateModal');
+    if (deleteModal) {
+        deleteModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            if (!button) return;
 
-function openStatusModal(id, name, currentStatus) {
-    $('#status_candidate_id').val(id);
-    $('#status_candidate_name').text(name);
-    $('select[name="status"]').val(currentStatus);
-    new bootstrap.Modal(document.getElementById('statusModal')).show();
-}
+            document.getElementById('delete_candidate_id').value = button.getAttribute('data-candidate-id') || '';
+            document.getElementById('delete_candidate_name').textContent = button.getAttribute('data-candidate-name') || '-';
+            document.getElementById('delete_candidate_code').textContent = button.getAttribute('data-candidate-code') || '-';
+        });
+    }
 
-function openInterviewModal(id, hiringId, name, round) {
-    $('#interview_candidate_id').val(id);
-    $('#interview_hiring_id').val(hiringId);
-    $('#interview_candidate_name').text(name);
-    $('#interview_round').val(round);
-    
-    // Set default round selection based on round number
-    if (round === 1) $('select[name="interview_round"]').val('Telephonic');
-    else if (round === 2) $('select[name="interview_round"]').val('Technical Round 1');
-    else if (round === 3) $('select[name="interview_round"]').val('Technical Round 2');
-    else if (round === 4) $('select[name="interview_round"]').val('HR Round');
-    else if (round === 5) $('select[name="interview_round"]').val('Manager Round');
-    else if (round >= 6) $('select[name="interview_round"]').val('Final Round');
-    
-    // Reset form fields
-    $('input[name="interview_date"]').val('');
-    $('input[name="interview_time"]').val('');
-    $('select[name="interview_duration"]').val('60');
-    $('select[name="interview_mode"]').val('Online').trigger('change');
-    $('input[name="interview_link"]').val('');
-    $('input[name="location"]').val('');
-    $('select[name="interviewer_id"]').val('');
-    
-    new bootstrap.Modal(document.getElementById('interviewModal')).show();
-}
+    const scheduleModal = document.getElementById('scheduleInterviewModal');
+    if (scheduleModal) {
+        scheduleModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            if (!button) return;
+
+            const candidateId = button.getAttribute('data-candidate-id') || '';
+            const hiringRequestId = button.getAttribute('data-hiring-request-id') || '';
+            const candidateName = button.getAttribute('data-candidate-name') || '';
+            const nextRound = button.getAttribute('data-next-round') || '1';
+
+            const candidateInput = document.getElementById('interview_candidate_id');
+            const hiringInput = document.getElementById('interview_hiring_id');
+            const roundInput = document.getElementById('interview_round');
+            const nameHolder = document.getElementById('interview_candidate_name');
+            const roundSelect = scheduleModal.querySelector('select[name="interview_round"]');
+
+            if (candidateInput) candidateInput.value = candidateId;
+            if (hiringInput) hiringInput.value = hiringRequestId;
+            if (roundInput) roundInput.value = nextRound;
+            if (nameHolder) nameHolder.textContent = candidateName;
+
+            if (roundSelect) {
+                if (parseInt(nextRound, 10) === 1) roundSelect.value = 'Telephonic';
+                else if (parseInt(nextRound, 10) === 2) roundSelect.value = 'Technical Round 1';
+                else if (parseInt(nextRound, 10) === 3) roundSelect.value = 'Technical Round 2';
+                else if (parseInt(nextRound, 10) === 4) roundSelect.value = 'HR Round';
+                else if (parseInt(nextRound, 10) === 5) roundSelect.value = 'Manager Round';
+                else roundSelect.value = 'Final Round';
+
+                $(roundSelect).trigger('change');
+            }
+        });
+    }
+
+    const statusModal = document.getElementById('statusModal');
+    if (statusModal) {
+        statusModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            if (!button) return;
+
+            const candidateId = button.getAttribute('data-candidate-id') || '';
+            const candidateName = button.getAttribute('data-candidate-name') || '';
+            const status = button.getAttribute('data-status') || '';
+
+            const candidateInput = document.getElementById('status_candidate_id');
+            const statusInput = statusModal.querySelector('select[name="status"]');
+            const nameHolder = document.getElementById('status_candidate_name');
+
+            if (candidateInput) candidateInput.value = candidateId;
+            if (statusInput) statusInput.value = status;
+            if (nameHolder) nameHolder.textContent = candidateName;
+        });
+    }
+});
 </script>
-
 </body>
 </html>
 <?php
+if (isset($conn) && $conn) {
+    mysqli_close($conn);
+}
+?>

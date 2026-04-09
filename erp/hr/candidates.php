@@ -907,12 +907,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             </thead>
                             <tbody>
                                 <?php if (mysqli_num_rows($candidates) === 0): ?>
-                                    <tr>
-                                        <td colspan="8" class="text-center py-4 text-muted">
-                                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
-                                            No candidates found
-                                        </td>
-                                    </tr>
+                                    
                                 <?php else: ?>
                                     <?php 
                                     mysqli_data_seek($candidates, 0);

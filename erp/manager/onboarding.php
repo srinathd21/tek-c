@@ -62,6 +62,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $department = mysqli_real_escape_string($conn, $_POST['department']);
         $designation = mysqli_real_escape_string($conn, $_POST['designation']);
         
+        // Get reporting_to_name
+        $reporting_to_name = null;
+        if ($reporting_to) {
+            $rm_query = "SELECT full_name FROM employees WHERE id = ?";
+            $rm_stmt = mysqli_prepare($conn, $rm_query);
+            mysqli_stmt_bind_param($rm_stmt, "i", $reporting_to);
+            mysqli_stmt_execute($rm_stmt);
+            $rm_res = mysqli_stmt_get_result($rm_stmt);
+            $rm_row = mysqli_fetch_assoc($rm_res);
+            $reporting_to_name = $rm_row['full_name'] ?? null;
+            mysqli_stmt_close($rm_stmt);
+        }
+        
         // Generate onboarding number
         $year = date('Y');
         $month = date('m');
@@ -80,14 +93,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $insert_stmt = mysqli_prepare($conn, "
                 INSERT INTO onboarding (
                     onboarding_no, candidate_id, offer_id, hiring_request_id,
-                    joining_date, reporting_time, reporting_to, department, designation,
+                    joining_date, reporting_time, reporting_to, reporting_to_name, department, designation,
                     status, created_by, created_by_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?)
             ");
             
             mysqli_stmt_bind_param(
                 $insert_stmt,
-                "siiisssssis",
+                "siiissssssis",
                 $onboarding_no,
                 $candidate_id,
                 $offer_id,
@@ -95,6 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $joining_date,
                 $reporting_time,
                 $reporting_to,
+                $reporting_to_name,
                 $department,
                 $designation,
                 $current_employee_id,
@@ -107,8 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $onboarding_id = mysqli_insert_id($conn);
             
-            // Update candidate status to 'Joined'
-            mysqli_query($conn, "UPDATE candidates SET status = 'Joined' WHERE id = {$candidate_id}");
+            // Update candidate status to 'Onboarding'
+            mysqli_query($conn, "UPDATE candidates SET status = 'Onboarding' WHERE id = {$candidate_id}");
             
             // Update offer status if needed
             mysqli_query($conn, "UPDATE offers SET status = 'Accepted' WHERE id = {$offer_id}");
@@ -221,17 +235,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($document_types as $doc_type) {
             if (isset($_FILES['doc_' . $doc_type]) && $_FILES['doc_' . $doc_type]['error'] === UPLOAD_ERR_OK) {
                 $file = $_FILES['doc_' . $doc_type];
-                $file_ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-                $file_name = 'doc_' . $onboarding_id . '_' . $doc_type . '_' . time() . '.' . $file_ext;
-                $file_path = $upload_dir . $file_name;
-                
-                if (move_uploaded_file($file['tmp_name'], $file_path)) {
-                    $documents[$doc_type] = [
-                        'file' => 'uploads/onboarding/documents/' . $file_name,
-                        'name' => $file['name'],
-                        'uploaded_at' => date('Y-m-d H:i:s'),
-                        'uploaded_by' => $current_employee_id
-                    ];
+                $file_ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                $allowed = ['pdf', 'jpg', 'jpeg', 'png'];
+                if (in_array($file_ext, $allowed)) {
+                    $file_name = 'doc_' . $onboarding_id . '_' . $doc_type . '_' . time() . '.' . $file_ext;
+                    $file_path = $upload_dir . $file_name;
+                    
+                    if (move_uploaded_file($file['tmp_name'], $file_path)) {
+                        $documents[$doc_type] = [
+                            'file' => 'uploads/onboarding/documents/' . $file_name,
+                            'name' => $file['name'],
+                            'uploaded_at' => date('Y-m-d H:i:s'),
+                            'uploaded_by' => $current_employee_id
+                        ];
+                    }
                 }
             }
         }
@@ -387,16 +404,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     elseif (isset($_POST['action']) && $_POST['action'] === 'complete_onboarding') {
         $onboarding_id = (int)$_POST['onboarding_id'];
         
-        // Get onboarding details
+        // Get complete onboarding details with all candidate and offer information
         $details_query = "
-            SELECT o.*, c.first_name, c.last_name, c.email, c.phone, c.current_location,
-                   c.total_experience, c.current_company, h.department, h.designation,
-                   h.requested_by as reporting_manager_id
+            SELECT 
+                o.*,
+                c.id as candidate_id,
+                c.first_name, 
+                c.last_name, 
+                c.email, 
+                c.phone as mobile_number,
+                c.current_location,
+                c.total_experience, 
+                c.current_company,
+                c.resume_path,
+                c.photo_path as candidate_photo,
+                c.source,
+                c.status as candidate_status,
+                h.id as hiring_request_id,
+                h.department, 
+                h.designation,
+                h.requested_by as reporting_manager_id,
+                h.location,
+                offr.id as offer_id,
+                offr.offer_no,
+                offr.ctc as offer_ctc,
+                offr.basic_salary,
+                offr.hra,
+                offr.conveyance,
+                offr.medical,
+                offr.special_allowance,
+                offr.bonus,
+                offr.other_benefits,
+                offr.offer_document
             FROM onboarding o
             JOIN candidates c ON o.candidate_id = c.id
             JOIN hiring_requests h ON o.hiring_request_id = h.id
+            LEFT JOIN offers offr ON o.offer_id = offr.id
             WHERE o.id = ?
         ";
+        
         $details_stmt = mysqli_prepare($conn, $details_query);
         mysqli_stmt_bind_param($details_stmt, "i", $onboarding_id);
         mysqli_stmt_execute($details_stmt);
@@ -411,47 +457,182 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_begin_transaction($conn);
             
             try {
-                // Create username from email
-                $email_parts = explode('@', $details['email']);
-                $username = $email_parts[0];
+                // Get existing documents from onboarding documents_json
+                $documents = [];
+                if (!empty($details['documents_json'])) {
+                    $documents = json_decode($details['documents_json'], true);
+                }
                 
-                // Generate random password
-                $password = bin2hex(random_bytes(4)); // 8 character password
+                // Prepare file paths for uploaded documents
+                $photo_path = '';
+                $passbook_photo_path = '';
+                
+                // Get photo from documents if exists
+                if (!empty($documents['photo'])) {
+                    $photo_path = $documents['photo']['file'];
+                } elseif (!empty($details['candidate_photo'])) {
+                    $photo_path = $details['candidate_photo'];
+                }
+                
+                // Get passbook photo from documents if exists (store in uploads)
+                if (!empty($documents['bank'])) {
+                    $passbook_photo_path = $documents['bank']['file'];
+                }
+                
+                // Generate username from email or name
+                if (!empty($details['email'])) {
+                    $email_parts = explode('@', $details['email']);
+                    $username = strtolower(preg_replace('/[^a-z0-9]/', '', $email_parts[0]));
+                } else {
+                    $username = strtolower(preg_replace('/[^a-z0-9]/', '', $details['first_name'] . $details['last_name']));
+                }
+                
+                // Ensure username is unique
+                $username_original = $username;
+                $counter = 1;
+                while (true) {
+                    $check_stmt = mysqli_prepare($conn, "SELECT id FROM employees WHERE username = ?");
+                    mysqli_stmt_bind_param($check_stmt, "s", $username);
+                    mysqli_stmt_execute($check_stmt);
+                    mysqli_stmt_store_result($check_stmt);
+                    if (mysqli_stmt_num_rows($check_stmt) == 0) {
+                        mysqli_stmt_close($check_stmt);
+                        break;
+                    }
+                    mysqli_stmt_close($check_stmt);
+                    $username = $username_original . $counter;
+                    $counter++;
+                }
+                
+                // Generate random password (12 characters)
+                $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+                $password = '';
+                for ($i = 0; $i < 12; $i++) {
+                    $password .= $chars[random_int(0, strlen($chars) - 1)];
+                }
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
                 
-                // Insert into employees table
+                // Determine reporting_to - prioritize onboarding reporting_to, then hiring request's reporting_manager_id
+                $reporting_to = null;
+                if (!empty($details['reporting_to'])) {
+                    $reporting_to = $details['reporting_to'];
+                } elseif (!empty($details['reporting_manager_id'])) {
+                    $reporting_to = $details['reporting_manager_id'];
+                }
+                
+                // Get reporting manager name if reporting_to exists
+                $reporting_manager_name = null;
+                if ($reporting_to) {
+                    $rm_query = "SELECT full_name FROM employees WHERE id = ?";
+                    $rm_stmt = mysqli_prepare($conn, $rm_query);
+                    mysqli_stmt_bind_param($rm_stmt, "i", $reporting_to);
+                    mysqli_stmt_execute($rm_stmt);
+                    $rm_res = mysqli_stmt_get_result($rm_stmt);
+                    $rm_row = mysqli_fetch_assoc($rm_res);
+                    $reporting_manager_name = $rm_row['full_name'] ?? null;
+                    mysqli_stmt_close($rm_stmt);
+                } elseif (!empty($details['reporting_to_name'])) {
+                    $reporting_manager_name = $details['reporting_to_name'];
+                }
+                
+                // Determine employee status
+                $employee_status = 'active';
+                
+                // Full name
+                $full_name = trim($details['first_name'] . ' ' . $details['last_name']);
+                
+                // Determine employee code - use generated from onboarding or create new
+                $employee_code = $details['employee_code'];
+                if (empty($employee_code)) {
+                    // Generate employee code based on department
+                    $dept_code = '';
+                    switch($details['department']) {
+                        case 'PM': $dept_code = 'PM'; break;
+                        case 'CM': $dept_code = 'CM'; break;
+                        case 'IFM': $dept_code = 'IF'; break;
+                        case 'QS': $dept_code = 'QS'; break;
+                        case 'HR': $dept_code = 'HR'; break;
+                        case 'ACCOUNTS': $dept_code = 'AC'; break;
+                        default: $dept_code = 'EM';
+                    }
+                    
+                    $seq_query = "SELECT COUNT(*) as count FROM employees WHERE employee_code LIKE '{$dept_code}%'";
+                    $seq_result = mysqli_query($conn, $seq_query);
+                    $seq_row = mysqli_fetch_assoc($seq_result);
+                    $seq_num = str_pad($seq_row['count'] + 1, 4, '0', STR_PAD_LEFT);
+                    $employee_code = $dept_code . $seq_num;
+                }
+                
+                // Prepare work location and site name
+                $work_location = !empty($details['current_location']) ? $details['current_location'] : (!empty($details['location']) ? $details['location'] : null);
+                $site_name = $work_location;
+                
+                // Prepare date fields
+                $date_of_joining = $details['joining_date'] ?? date('Y-m-d');
+                
+                // Insert into employees table - create variables for all values first
+                $full_name_val = $full_name;
+                $employee_code_val = $employee_code;
+                $photo_path_val = $photo_path;
+                $mobile_number_val = $details['mobile_number'] ?? null;
+                $email_val = $details['email'] ?? null;
+                $date_of_joining_val = $date_of_joining;
+                $department_val = $details['department'];
+                $designation_val = $details['designation'];
+                $reporting_manager_name_val = $reporting_manager_name;
+                $reporting_to_val = $reporting_to;
+                $work_location_val = $work_location;
+                $site_name_val = $site_name;
+                $employee_status_val = $employee_status;
+                $username_val = $username;
+                $password_val = $hashed_password;
+                $passbook_photo_path_val = $passbook_photo_path;
+                
                 $emp_insert = mysqli_prepare($conn, "
                     INSERT INTO employees (
-                        full_name, employee_code, date_of_birth, gender, blood_group,
-                        mobile_number, email, current_address, emergency_contact_name,
-                        emergency_contact_phone, date_of_joining, department, designation,
-                        reporting_to, reporting_manager, work_location, employee_status,
-                        username, password, created_at
-                    ) VALUES (?, ?, NULL, NULL, NULL, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 'active', ?, ?, NOW())
+                        full_name, 
+                        employee_code, 
+                        photo, 
+                        mobile_number, 
+                        email, 
+                        date_of_joining, 
+                        department, 
+                        designation,
+                        reporting_manager, 
+                        reporting_to,
+                        work_location, 
+                        site_name, 
+                        employee_status,
+                        username, 
+                        password,
+                        passbook_photo,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                 ");
-                
-                $full_name = $details['first_name'] . ' ' . $details['last_name'];
-                $reporting_to = $details['reporting_to'] ?? $details['reporting_manager_id'];
                 
                 mysqli_stmt_bind_param(
                     $emp_insert,
-                    "sssssssssssss",
-                    $full_name,
-                    $details['employee_code'],
-                    $details['phone'],
-                    $details['email'],
-                    $details['current_location'],
-                    $details['joining_date'],
-                    $details['department'],
-                    $details['designation'],
-                    $reporting_to,
-                    $details['department'],
-                    $username,
-                    $hashed_password
+                    "ssssssssssssssss",
+                    $full_name_val,
+                    $employee_code_val,
+                    $photo_path_val,
+                    $mobile_number_val,
+                    $email_val,
+                    $date_of_joining_val,
+                    $department_val,
+                    $designation_val,
+                    $reporting_manager_name_val,
+                    $reporting_to_val,
+                    $work_location_val,
+                    $site_name_val,
+                    $employee_status_val,
+                    $username_val,
+                    $password_val,
+                    $passbook_photo_path_val
                 );
                 
                 if (!mysqli_stmt_execute($emp_insert)) {
-                    throw new Exception("Failed to create employee record: " . mysqli_error($conn));
+                    throw new Exception("Failed to create employee record: " . mysqli_stmt_error($emp_insert));
                 }
                 
                 $employee_id = mysqli_insert_id($conn);
@@ -461,27 +642,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     UPDATE onboarding 
                     SET status = 'Completed',
                         completed_at = CURDATE(),
-                        completed_by = ?
+                        completed_by = ?,
+                        employee_code = ?
                     WHERE id = ?
                 ");
-                mysqli_stmt_bind_param($update_onboarding, "ii", $current_employee_id, $onboarding_id);
+                mysqli_stmt_bind_param($update_onboarding, "isi", $current_employee_id, $employee_code, $onboarding_id);
                 mysqli_stmt_execute($update_onboarding);
+                
+                // Update candidate status to 'Joined'
+                $update_candidate = mysqli_prepare($conn, "UPDATE candidates SET status = 'Joined' WHERE id = ?");
+                mysqli_stmt_bind_param($update_candidate, "i", $details['candidate_id']);
+                mysqli_stmt_execute($update_candidate);
+                
+                // Update offer status if exists
+                if (!empty($details['offer_id'])) {
+                    $update_offer = mysqli_prepare($conn, "UPDATE offers SET status = 'Accepted' WHERE id = ?");
+                    mysqli_stmt_bind_param($update_offer, "i", $details['offer_id']);
+                    mysqli_stmt_execute($update_offer);
+                }
                 
                 // Log activity
                 logActivity(
                     $conn,
                     'CREATE',
                     'employee',
-                    "Created employee from onboarding: {$details['employee_code']}",
+                    "Created employee from onboarding: {$employee_code}",
                     $employee_id,
                     null,
                     null,
-                    json_encode(['onboarding_id' => $onboarding_id])
+                    json_encode([
+                        'onboarding_id' => $onboarding_id,
+                        'employee_code' => $employee_code,
+                        'username' => $username
+                    ])
                 );
                 
                 mysqli_commit($conn);
                 
-                $message = "Employee created successfully! Employee Code: {$details['employee_code']}, Username: {$username}, Password: {$password}";
+                // Store credentials in session for display
+                $_SESSION['last_onboarding_credentials'] = [
+                    'employee_code' => $employee_code,
+                    'username' => $username,
+                    'password' => $password,
+                    'full_name' => $full_name
+                ];
+                
+                $message = "Employee created successfully!";
                 $messageType = "success";
                 
             } catch (Exception $e) {
@@ -500,7 +706,7 @@ $date_from = $_GET['date_from'] ?? '';
 $date_to = $_GET['date_to'] ?? '';
 $search = trim($_GET['search'] ?? '');
 
-// Build main query
+// Build query
 $query = "
     SELECT 
         o.*,
@@ -533,33 +739,37 @@ $query = "
 
 // Filter by status
 if ($status_filter !== 'all') {
-    $status_filter = mysqli_real_escape_string($conn, $status_filter);
-    $query .= " AND o.status = '{$status_filter}'";
+    $status_filter_escaped = mysqli_real_escape_string($conn, $status_filter);
+    $query .= " AND o.status = '{$status_filter_escaped}'";
 }
 
 // Filter by department
 if (!empty($department_filter)) {
-    $department_filter = mysqli_real_escape_string($conn, $department_filter);
-    $query .= " AND o.department = '{$department_filter}'";
+    $department_filter_escaped = mysqli_real_escape_string($conn, $department_filter);
+    $query .= " AND o.department = '{$department_filter_escaped}'";
 }
 
 // Filter by date range
 if (!empty($date_from)) {
-    $query .= " AND DATE(o.joining_date) >= '" . mysqli_real_escape_string($conn, $date_from) . "'";
+    $date_from_escaped = mysqli_real_escape_string($conn, $date_from);
+    $query .= " AND DATE(o.joining_date) >= '{$date_from_escaped}'";
 }
 if (!empty($date_to)) {
-    $query .= " AND DATE(o.joining_date) <= '" . mysqli_real_escape_string($conn, $date_to) . "'";
+    $date_to_escaped = mysqli_real_escape_string($conn, $date_to);
+    $query .= " AND DATE(o.joining_date) <= '{$date_to_escaped}'";
 }
 
 // Search
 if (!empty($search)) {
     $search_term = mysqli_real_escape_string($conn, $search);
-    $query .= " AND (c.first_name LIKE '%{$search_term}%' 
-                    OR c.last_name LIKE '%{$search_term}%' 
-                    OR c.email LIKE '%{$search_term}%'
-                    OR c.candidate_code LIKE '%{$search_term}%'
-                    OR o.onboarding_no LIKE '%{$search_term}%'
-                    OR h.position_title LIKE '%{$search_term}%')";
+    $query .= " AND (
+        c.first_name LIKE '%{$search_term}%'
+        OR c.last_name LIKE '%{$search_term}%'
+        OR c.email LIKE '%{$search_term}%'
+        OR c.candidate_code LIKE '%{$search_term}%'
+        OR o.onboarding_no LIKE '%{$search_term}%'
+        OR h.position_title LIKE '%{$search_term}%'
+    )";
 }
 
 // Managers see only onboarding from their requests
@@ -567,103 +777,93 @@ if (!$isHr && !$isAdmin && $isManager) {
     $query .= " AND h.requested_by = " . (int)$current_employee_id;
 }
 
-// Add ORDER BY after all WHERE conditions
 $query .= " ORDER BY o.joining_date DESC, o.created_at DESC";
 
 $onboardings = mysqli_query($conn, $query);
-if (!$onboardings) {
-    error_log("Main query failed: " . mysqli_error($conn));
-    error_log("Query: " . $query);
-    $onboardings = false;
-}
 
 // Get accepted candidates for new onboarding
 $candidates_query = "
-    SELECT c.id, c.first_name, c.last_name, c.candidate_code, c.email, c.phone,
-           o.id as offer_id, o.offer_no, o.ctc, o.expected_joining_date,
-           h.id as hiring_id, h.position_title, h.department, h.designation,
-           h.requested_by, h.requested_by_name
+    SELECT 
+        c.id,
+        c.first_name,
+        c.last_name,
+        c.candidate_code,
+        c.email,
+        c.phone,
+        o.id AS offer_id,
+        o.offer_no,
+        o.ctc,
+        o.expected_joining_date,
+        h.id AS hiring_id,
+        h.position_title,
+        h.department,
+        h.designation,
+        h.requested_by,
+        h.requested_by_name
     FROM candidates c
     JOIN offers o ON c.id = o.candidate_id
     JOIN hiring_requests h ON c.hiring_request_id = h.id
     LEFT JOIN onboarding ob ON ob.candidate_id = c.id
-    WHERE c.status = 'Accepted' 
+    WHERE c.status = 'Accepted'
       AND o.status = 'Accepted'
       AND ob.id IS NULL
 ";
 
-// Add manager filter if needed (MUST BE BEFORE ORDER BY)
 if (!$isHr && !$isAdmin && $isManager) {
     $candidates_query .= " AND h.requested_by = " . (int)$current_employee_id;
 }
 
-// Add ORDER BY after all WHERE conditions
-$candidates_query .= " ORDER BY o.response_date DESC";
+$candidates_query .= " ORDER BY COALESCE(o.response_date, o.updated_at, o.created_at) DESC, c.id DESC";
 
 $candidates_result = mysqli_query($conn, $candidates_query);
-if (!$candidates_result) {
-    error_log("Candidates query failed: " . mysqli_error($conn));
-    error_log("Query: " . $candidates_query);
-    $candidates_result = false;
-}
 
 // Get reporting managers for dropdown
-$managers_query = "
-    SELECT id, full_name, designation, department 
-    FROM employees 
-    WHERE employee_status = 'active' 
-      AND designation IN ('Manager', 'Team Lead', 'Director', 'Vice President', 'General Manager')
-    ORDER BY full_name
-";
-$managers_result = mysqli_query($conn, $managers_query);
-if (!$managers_result) {
-    error_log("Managers query failed: " . mysqli_error($conn));
-    $managers_result = false;
+if ($isHr || $isAdmin) {
+    $managers_query = "
+        SELECT id, full_name, designation, department
+        FROM employees
+        WHERE employee_status = 'active'
+          AND designation IN ('Manager', 'Team Lead', 'Director', 'Vice President', 'General Manager')
+        ORDER BY full_name
+    ";
+} else {
+    $managers_query = "
+        SELECT id, full_name, designation, department
+        FROM employees
+        WHERE employee_status = 'active'
+          AND id = " . (int)$current_employee_id . "
+        ORDER BY full_name
+    ";
 }
+
+$managers_result = mysqli_query($conn, $managers_query);
 
 // Get departments for filter
 $dept_query = "SELECT DISTINCT department FROM hiring_requests ORDER BY department";
 $dept_result = mysqli_query($conn, $dept_query);
-if (!$dept_result) {
-    error_log("Departments query failed: " . mysqli_error($conn));
-    $dept_result = false;
-}
 
 // Get statistics
 $stats_query = "
     SELECT 
         COUNT(*) as total_count,
-        COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending_count,
-        COUNT(CASE WHEN status = 'In Progress' THEN 1 END) as in_progress_count,
-        COUNT(CASE WHEN status = 'Completed' THEN 1 END) as completed_count,
-        COUNT(CASE WHEN status = 'Cancelled' THEN 1 END) as cancelled_count,
-        COUNT(CASE WHEN joining_date >= CURDATE() AND joining_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) THEN 1 END) as upcoming_joining,
-        COUNT(CASE WHEN joining_date < CURDATE() AND status != 'Completed' THEN 1 END) as overdue_joining,
-        AVG(CASE WHEN status = 'Completed' THEN DATEDIFF(completed_at, joining_date) END) as avg_onboarding_days
+        COUNT(CASE WHEN o.status = 'Pending' THEN 1 END) as pending_count,
+        COUNT(CASE WHEN o.status = 'In Progress' THEN 1 END) as in_progress_count,
+        COUNT(CASE WHEN o.status = 'Completed' THEN 1 END) as completed_count,
+        COUNT(CASE WHEN o.status = 'Cancelled' THEN 1 END) as cancelled_count,
+        COUNT(CASE WHEN o.joining_date >= CURDATE() AND o.joining_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) THEN 1 END) as upcoming_joining,
+        COUNT(CASE WHEN o.joining_date < CURDATE() AND o.status != 'Completed' THEN 1 END) as overdue_joining,
+        AVG(CASE WHEN o.status = 'Completed' THEN DATEDIFF(o.completed_at, o.joining_date) END) as avg_onboarding_days
     FROM onboarding o
 ";
 
 if (!$isHr && !$isAdmin && $isManager) {
-    $stats_query .= " WHERE o.hiring_request_id IN (SELECT id FROM hiring_requests WHERE requested_by = " . (int)$current_employee_id . ")";
+    $stats_query .= " WHERE o.hiring_request_id IN (
+        SELECT id FROM hiring_requests WHERE requested_by = " . (int)$current_employee_id . "
+    )";
 }
 
 $stats_result = mysqli_query($conn, $stats_query);
-if (!$stats_result) {
-    error_log("Stats query failed: " . mysqli_error($conn));
-    $stats = [
-        'total_count' => 0,
-        'pending_count' => 0,
-        'in_progress_count' => 0,
-        'completed_count' => 0,
-        'cancelled_count' => 0,
-        'upcoming_joining' => 0,
-        'overdue_joining' => 0,
-        'avg_onboarding_days' => 0
-    ];
-} else {
-    $stats = mysqli_fetch_assoc($stats_result);
-}
-
+$stats = mysqli_fetch_assoc($stats_result);
 // ---------------- HELPER FUNCTIONS ----------------
 function e($v)
 {
@@ -679,7 +879,7 @@ function formatCurrency($amount)
 
 function formatDate($date)
 {
-    if (!$date || $date === '0000-00-00')
+    if (!$date || $date == '0000-00-00')
         return '—';
     return date('d M Y', strtotime($date));
 }
@@ -769,7 +969,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             border-radius: var(--radius);
             box-shadow: var(--shadow);
             padding: 16px;
-            height: 100%;
+            
         }
 
         .panel-header {
@@ -839,10 +1039,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
         .stat-ic.overdue {
             background: #ef4444;
-        }
-
-        .stat-ic.total {
-            background: #6b7280;
         }
 
         .stat-label {
@@ -962,6 +1158,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             align-items: center;
             gap: 8px;
             white-space: nowrap;
+            text-decoration: none;
         }
 
         .btn-danger-custom:hover {
@@ -1248,52 +1445,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             width: 150px !important;
             white-space: nowrap !important;
         }
-
-        /* Timeline */
-        .onboarding-timeline {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin: 10px 0;
-        }
-
-        .timeline-step {
-            flex: 1;
-            text-align: center;
-            position: relative;
-        }
-
-        .timeline-step .step-icon {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: #e5e7eb;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 5px;
-            color: #6b7280;
-        }
-
-        .timeline-step.completed .step-icon {
-            background: #10b981;
-            color: white;
-        }
-
-        .timeline-step.active .step-icon {
-            background: #3b82f6;
-            color: white;
-        }
-
-        .timeline-step .step-label {
-            font-size: 10px;
-            font-weight: 700;
-            color: #6b7280;
-        }
-
-        .timeline-step.completed .step-label {
-            color: #10b981;
-        }
     </style>
 </head>
 
@@ -1311,7 +1462,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                     <?php if (!empty($message)): ?>
                         <div class="alert alert-<?php echo $messageType; ?> alert-dismissible fade show" role="alert">
                             <i class="bi bi-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>-fill me-2"></i>
-                            <?php echo e($message); ?>
+                            <?php echo $message; ?>
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
                     <?php endif; ?>
@@ -1411,17 +1562,12 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 <select name="department" class="form-select form-select-sm">
                                     <option value="">All Departments</option>
                                     <?php 
-                                    if ($dept_result && mysqli_num_rows($dept_result) > 0):
-                                        mysqli_data_seek($dept_result, 0);
-                                        while ($dept = mysqli_fetch_assoc($dept_result)): 
-                                    ?>
+                                    mysqli_data_seek($dept_result, 0);
+                                    while ($dept = mysqli_fetch_assoc($dept_result)): ?>
                                         <option value="<?php echo e($dept['department']); ?>" <?php echo $department_filter === $dept['department'] ? 'selected' : ''; ?>>
                                             <?php echo e($dept['department']); ?>
                                         </option>
-                                    <?php 
-                                        endwhile;
-                                    endif; 
-                                    ?>
+                                    <?php endwhile; ?>
                                 </select>
                             </div>
 
@@ -1458,7 +1604,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                             <h3 class="panel-title">
                                 <i class="bi bi-person-check"></i> Onboarding List
                             </h3>
-                            <span class="badge bg-secondary"><?php echo $onboardings ? mysqli_num_rows($onboardings) : 0; ?> records</span>
+                            <span class="badge bg-secondary"><?php echo mysqli_num_rows($onboardings); ?> records</span>
                         </div>
 
                         <div class="table-responsive">
@@ -1476,28 +1622,25 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php if (!$onboardings || mysqli_num_rows($onboardings) === 0): ?>
+                                    <?php if (mysqli_num_rows($onboardings) === 0): ?>
                                         <tr>
-                                            <td colspan="8" class="text-center py-4 text-muted">
-                                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                                                No onboarding records found
-                                            </td>
+                                            <td colspan="8" class="text-center py-4">No onboarding records found</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php while ($item = mysqli_fetch_assoc($onboardings)): 
                                             // Calculate progress
                                             $checklist_items = [
-                                                'id_card_issued' => $item['id_card_issued'] ?? 0,
-                                                'email_created' => $item['email_created'] ?? 0,
-                                                'system_access_given' => $item['system_access_given'] ?? 0,
-                                                'biometric_enrolled' => $item['biometric_enrolled'] ?? 0,
-                                                'orientation_completed' => $item['orientation_completed'] ?? 0,
-                                                'training_completed' => $item['training_completed'] ?? 0,
-                                                'welcome_kit_issued' => $item['welcome_kit_issued'] ?? 0
+                                                'id_card_issued' => $item['id_card_issued'],
+                                                'email_created' => $item['email_created'],
+                                                'system_access_given' => $item['system_access_given'],
+                                                'biometric_enrolled' => $item['biometric_enrolled'],
+                                                'orientation_completed' => $item['orientation_completed'],
+                                                'training_completed' => $item['training_completed'],
+                                                'welcome_kit_issued' => $item['welcome_kit_issued']
                                             ];
                                             $completed_count = array_sum($checklist_items);
                                             $total_items = count($checklist_items);
-                                            $progress_percentage = ($total_items > 0) ? ($completed_count / $total_items) * 100 : 0;
+                                            $progress_percentage = ($completed_count / $total_items) * 100;
                                             
                                             // Check if date is upcoming or overdue
                                             $today = date('Y-m-d');
@@ -1523,6 +1666,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                     <div class="joining-date mt-1">
                                                         <i class="bi bi-calendar"></i> Created: <?php echo formatDate($item['created_at']); ?>
                                                     </div>
+                                                 </div>
                                                 </td>
 
                                                 <td>
@@ -1531,7 +1675,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                             <?php if (!empty($item['candidate_photo'])): ?>
                                                                 <img src="../<?php echo e($item['candidate_photo']); ?>" alt="Photo">
                                                             <?php else: ?>
-                                                                <?php echo getInitials($item['candidate_name'] ?? ''); ?>
+                                                                <?php echo getInitials($item['candidate_name']); ?>
                                                             <?php endif; ?>
                                                         </div>
                                                         <div>
@@ -1548,13 +1692,14 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                             </div>
                                                         </div>
                                                     </div>
+                                                 </div>
                                                 </td>
 
                                                 <td>
                                                     <div class="position-info">
                                                         <div class="position-text">
                                                             <i class="bi bi-briefcase"></i>
-                                                            <?php echo e($item['position_title'] ?? 'N/A'); ?>
+                                                            <?php echo e($item['position_title']); ?>
                                                         </div>
                                                         <?php if (!empty($item['department'])): ?>
                                                             <div class="department-badge">
@@ -1567,6 +1712,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                             </div>
                                                         <?php endif; ?>
                                                     </div>
+                                                 </div>
                                                 </td>
 
                                                 <td>
@@ -1577,15 +1723,17 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                         <?php endif; ?>
                                                     </div>
                                                     <?php echo $joining_icon; ?>
+                                                 </div>
                                                 </td>
 
                                                 <td>
                                                     <?php if (!empty($item['reporting_to_name'])): ?>
-                                                        <div class="fw-bold"><?php echo e($item['reporting_to_name']); ?></div>
-                                                        <div class="small text-muted"><?php echo e($item['reporting_to_designation'] ?: ''); ?></div>
+                                                        <div class="requester-name fw-bold"><?php echo e($item['reporting_to_name']); ?></div>
+                                                        <div class="requester-designation small text-muted"><?php echo e($item['reporting_to_designation'] ?: ''); ?></div>
                                                     <?php else: ?>
                                                         <span class="text-muted">—</span>
                                                     <?php endif; ?>
+                                                 </div>
                                                 </td>
 
                                                 <td>
@@ -1599,9 +1747,10 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                         </div>
                                                     </div>
                                                     <div class="checklist-count">
-                                                        <i class="bi bi-check-circle"></i> ID: <?php echo $checklist_items['id_card_issued'] ? 'Yes' : 'No'; ?> | 
-                                                        Email: <?php echo $checklist_items['email_created'] ? 'Yes' : 'No'; ?>
+                                                        <i class="bi bi-check-circle"></i> ID: <?php echo $item['id_card_issued'] ? 'Yes' : 'No'; ?> | 
+                                                        Email: <?php echo $item['email_created'] ? 'Yes' : 'No'; ?>
                                                     </div>
+                                                 </div>
                                                 </td>
 
                                                 <td>
@@ -1612,6 +1761,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                             <i class="bi bi-calendar-check"></i> <?php echo formatDate($item['completed_at']); ?>
                                                         </div>
                                                     <?php endif; ?>
+                                                 </div>
                                                 </td>
 
                                                 <td class="text-end actions-col">
@@ -1620,7 +1770,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                     </a>
 
                                                     <?php if ($item['status'] !== 'Completed' && $item['status'] !== 'Cancelled'): ?>
-                                                        <button class="btn-action edit" onclick="openEditModal(<?php echo $item['id']; ?>)" title="Edit Details">
+                                                        <button class="btn-action edit" onclick="openEditModal(<?php echo htmlspecialchars(json_encode($item)); ?>)" title="Edit Details">
                                                             <i class="bi bi-pencil"></i>
                                                         </button>
                                                         
@@ -1639,12 +1789,9 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                         </button>
                                                     <?php endif; ?>
 
-                                                    <?php if ($item['status'] === 'Completed' && !empty($item['employee_code'])): ?>
-                                                        <a href="../employee-view.php?code=<?php echo $item['employee_code']; ?>" class="btn-action" title="View Employee">
-                                                            <i class="bi bi-person"></i>
-                                                        </a>
-                                                    <?php endif; ?>
-                                                </td>
+                                                   
+                                                 </div>
+                                                </tr>
                                             </tr>
                                         <?php endwhile; ?>
                                     <?php endif; ?>
@@ -1680,9 +1827,8 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 <select name="candidate_id" class="form-select select2" id="candidate_select" required>
                                     <option value="">Choose candidate who accepted offer...</option>
                                     <?php 
-                                    if ($candidates_result && mysqli_num_rows($candidates_result) > 0):
-                                        mysqli_data_seek($candidates_result, 0);
-                                        while ($candidate = mysqli_fetch_assoc($candidates_result)): 
+                                    mysqli_data_seek($candidates_result, 0);
+                                    while ($candidate = mysqli_fetch_assoc($candidates_result)): 
                                     ?>
                                         <option value="<?php echo $candidate['id']; ?>" 
                                                 data-offer-id="<?php echo $candidate['offer_id']; ?>"
@@ -1696,10 +1842,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                             (<?php echo e($candidate['candidate_code']); ?>) - <?php echo e($candidate['position_title']); ?>
                                             (Offer: <?php echo e($candidate['offer_no']); ?>)
                                         </option>
-                                    <?php 
-                                        endwhile;
-                                    endif; 
-                                    ?>
+                                    <?php endwhile; ?>
                                 </select>
                                 <input type="hidden" name="offer_id" id="offer_id">
                                 <input type="hidden" name="hiring_request_id" id="hiring_request_id">
@@ -1733,17 +1876,13 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 <select name="reporting_to" class="form-select">
                                     <option value="">Select Manager</option>
                                     <?php 
-                                    if ($managers_result && mysqli_num_rows($managers_result) > 0):
-                                        mysqli_data_seek($managers_result, 0);
-                                        while ($manager = mysqli_fetch_assoc($managers_result)): 
+                                    mysqli_data_seek($managers_result, 0);
+                                    while ($manager = mysqli_fetch_assoc($managers_result)): 
                                     ?>
                                         <option value="<?php echo $manager['id']; ?>">
                                             <?php echo e($manager['full_name']); ?> (<?php echo e($manager['designation']); ?>)
                                         </option>
-                                    <?php 
-                                        endwhile;
-                                    endif; 
-                                    ?>
+                                    <?php endwhile; ?>
                                 </select>
                             </div>
                         </div>
@@ -1864,6 +2003,100 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
         </div>
     </div>
 
+    <!-- Checklist Modal -->
+    <div class="modal fade" id="checklistModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST">
+                    <input type="hidden" name="action" value="update_checklist">
+                    <input type="hidden" name="onboarding_id" id="checklist_onboarding_id">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">Onboarding Checklist</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="checklist-item">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="id_card_issued" id="chk_id_card">
+                                <label class="form-check-label" for="chk_id_card">
+                                    <strong>ID Card Issued</strong>
+                                    <br><small class="text-muted">Employee ID card has been issued</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="checklist-item">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="email_created" id="chk_email">
+                                <label class="form-check-label" for="chk_email">
+                                    <strong>Email Account Created</strong>
+                                    <br><small class="text-muted">Company email address created</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="checklist-item">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="system_access_given" id="chk_system">
+                                <label class="form-check-label" for="chk_system">
+                                    <strong>System Access Granted</strong>
+                                    <br><small class="text-muted">Access to systems, drives, and software</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="checklist-item">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="biometric_enrolled" id="chk_biometric">
+                                <label class="form-check-label" for="chk_biometric">
+                                    <strong>Biometric Enrolled</strong>
+                                    <br><small class="text-muted">Biometric attendance registered</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="checklist-item">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="orientation_completed" id="chk_orientation">
+                                <label class="form-check-label" for="chk_orientation">
+                                    <strong>Orientation Completed</strong>
+                                    <br><small class="text-muted">Company orientation session attended</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="checklist-item">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="training_completed" id="chk_training">
+                                <label class="form-check-label" for="chk_training">
+                                    <strong>Training Completed</strong>
+                                    <br><small class="text-muted">Role-specific training completed</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="checklist-item">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="welcome_kit_issued" id="chk_welcome">
+                                <label class="form-check-label" for="chk_welcome">
+                                    <strong>Welcome Kit Issued</strong>
+                                    <br><small class="text-muted">Welcome kit / onboarding kit provided</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-primary-custom">Update Checklist</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Complete Onboarding Modal -->
     <div class="modal fade" id="completeModal" tabindex="-1">
         <div class="modal-dialog">
@@ -1937,6 +2170,80 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
         </div>
     </div>
 
+    <!-- Credentials Modal (Shown after successful employee creation) -->
+    <div class="modal fade" id="credentialsModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title text-white">
+                        <i class="bi bi-check-circle-fill me-2"></i> Employee Created Successfully!
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        Please save these credentials and share them with the employee.
+                    </div>
+                    
+                    <div class="card mb-3 border">
+                        <div class="card-body">
+                            <h6 class="card-title text-muted mb-3">Login Credentials</h6>
+                            <div class="mb-3">
+                                <label class="fw-bold text-dark mb-1">Employee Code:</label>
+                                <div class="input-group">
+                                    <input type="text" id="cred_employee_code" class="form-control bg-light" readonly>
+                                    <button class="btn btn-outline-primary copy-btn" data-copy="cred_employee_code">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="fw-bold text-dark mb-1">Username:</label>
+                                <div class="input-group">
+                                    <input type="text" id="cred_username" class="form-control bg-light" readonly>
+                                    <button class="btn btn-outline-primary copy-btn" data-copy="cred_username">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <label class="fw-bold text-dark mb-1">Password:</label>
+                                <div class="input-group">
+                                    <input type="text" id="cred_password" class="form-control bg-light" readonly>
+                                    <button class="btn btn-outline-primary copy-btn" data-copy="cred_password">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" id="togglePasswordVisibility">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Important:</strong> 
+                        <ul class="mb-0 mt-2">
+                            <li>The employee will need to change their password on first login</li>
+                            <li>Share these credentials securely with the employee</li>
+                            <li>You can view the employee details in the Employee Directory</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="employees.php" class="btn-primary-custom">
+                        <i class="bi bi-people"></i> View Employee Directory
+                    </a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-lg"></i> Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -1970,7 +2277,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             });
 
             // Initialize Select2
-            $('#candidate_select').select2({
+            $('.select2').select2({
                 theme: 'bootstrap-5',
                 dropdownParent: $('#createOnboardingModal'),
                 width: '100%'
@@ -1981,6 +2288,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                 var selected = $(this).find(':selected');
                 var offerId = selected.data('offer-id');
                 var hiringId = selected.data('hiring-id');
+                var position = selected.data('position');
                 var department = selected.data('department');
                 var designation = selected.data('designation');
                 var joiningDate = selected.data('joining-date');
@@ -1988,7 +2296,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                 $('#offer_id').val(offerId);
                 $('#hiring_request_id').val(hiringId);
                 $('#department').val(department);
-                $('#designation').val(designation);
+                $('#designation').val(designation || position);
                 
                 if (joiningDate) {
                     $('#joining_date').val(joiningDate);
@@ -2005,8 +2313,8 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
             new bootstrap.Modal(document.getElementById('createOnboardingModal')).show();
         }
 
-        function openEditModal(id) {
-            $('#status_onboarding_id').val(id);
+        function openEditModal(item) {
+            $('#status_onboarding_id').val(item.id);
             new bootstrap.Modal(document.getElementById('statusModal')).show();
         }
 
@@ -2032,6 +2340,47 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
         function exportToExcel() {
             window.location.href = 'export-onboarding.php?' + window.location.search.substring(1);
         }
+
+        // Check for credentials in session and show modal
+        <?php if (isset($_SESSION['last_onboarding_credentials'])): ?>
+            $(document).ready(function() {
+                var creds = <?php echo json_encode($_SESSION['last_onboarding_credentials']); ?>;
+                $('#cred_employee_code').val(creds.employee_code);
+                $('#cred_username').val(creds.username);
+                $('#cred_password').val(creds.password);
+                
+                var credentialsModal = new bootstrap.Modal(document.getElementById('credentialsModal'));
+                credentialsModal.show();
+                
+                // Copy functionality
+                $('.copy-btn').click(function() {
+                    var targetId = $(this).data('copy');
+                    var textToCopy = $('#' + targetId).val();
+                    
+                    navigator.clipboard.writeText(textToCopy).then(function() {
+                        var originalHtml = $(this).html();
+                        $(this).html('<i class="bi bi-check"></i>');
+                        setTimeout(function() {
+                            $(this).html(originalHtml);
+                        }.bind(this), 2000);
+                    }.bind(this));
+                });
+                
+                // Toggle password visibility
+                $('#togglePasswordVisibility').click(function() {
+                    var passwordInput = $('#cred_password');
+                    var icon = $(this).find('i');
+                    if (passwordInput.attr('type') === 'password') {
+                        passwordInput.attr('type', 'text');
+                        icon.removeClass('bi-eye').addClass('bi-eye-slash');
+                    } else {
+                        passwordInput.attr('type', 'password');
+                        icon.removeClass('bi-eye-slash').addClass('bi-eye');
+                    }
+                });
+            });
+            <?php unset($_SESSION['last_onboarding_credentials']); ?>
+        <?php endif; ?>
     </script>
 </body>
 
