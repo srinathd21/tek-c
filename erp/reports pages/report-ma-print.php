@@ -16,26 +16,12 @@ if (empty($_SESSION['employee_id'])) {
   header("Location: ../login.php");
   exit;
 }
-$employeeId    = (int)($_SESSION['employee_id'] ?? 0);
-$designation   = strtolower(trim((string)($_SESSION['designation'] ?? '')));
-$sessionRole   = strtolower(trim((string)($_SESSION['role'] ?? '')));
-$MODE_STRING   = (isset($_GET['mode']) && $_GET['mode'] === 'string');
+
+$employeeId  = (int)($_SESSION['employee_id'] ?? 0);
+$designation = strtolower(trim((string)($_SESSION['designation'] ?? '')));
+$MODE_STRING = (isset($_GET['mode']) && $_GET['mode'] === 'string');
 $forceDownload = (isset($_GET['dl']) && $_GET['dl'] == '1');
 
-function normalizeAccessRole(string $designation, string $sessionRole = ''): string {
-  $d = strtolower(trim($designation));
-  $r = strtolower(trim($sessionRole));
-
-  if (in_array($r, ['admin', 'administrator', 'super admin'], true)) return 'admin';
-  if (in_array($d, ['admin', 'administrator', 'director', 'vice president', 'general manager'], true)) return 'admin';
-  if ($d === 'manager') return 'manager';
-  if ($d === 'team lead') return 'tl';
-  if (in_array($d, ['project engineer grade 1', 'project engineer grade 2', 'sr. engineer', 'engineer', 'project engineer'], true)) return 'engineer';
-
-  return 'employee';
-}
-
-$accessRole = normalizeAccessRole($designation, $sessionRole);
 $conn = get_db_connection();
 if (!$conn) die("DB connection failed");
 
@@ -84,7 +70,11 @@ function split_widths($total, $parts){
   $out[count($out)-1] = round($out[count($out)-1] + $diff, 1);
   return $out;
 }
-
+function scope_level($designationLower){
+  if (in_array($designationLower, ['director','vice president','general manager'], true)) return 'all';
+  if ($designationLower === 'manager') return 'manager';
+  return 'self';
+}
 function get_any($arr, $keys, $default=''){
   foreach ($keys as $k){
     if (isset($arr[$k]) && trim((string)$arr[$k]) !== '') return $arr[$k];
@@ -109,46 +99,66 @@ function safe_filename_part($s){
 $viewId = isset($_GET['view']) ? (int)$_GET['view'] : 0;
 if ($viewId <= 0) die("Invalid MA id");
 
-$sql = "
-  SELECT
-    r.*,
-    s.project_name,
-    s.project_location,
-    s.project_type,
-    s.manager_employee_id,
-    s.team_lead_employee_id,
-    c.client_name
-  FROM ma_reports r
-  INNER JOIN sites s ON s.id = r.site_id
-  INNER JOIN clients c ON c.id = s.client_id
-  WHERE r.id = ?
-  LIMIT 1
-";
-$st = mysqli_prepare($conn, $sql);
-if (!$st) die(mysqli_error($conn));
-mysqli_stmt_bind_param($st, "i", $viewId);
+$scope = scope_level($designation);
+
+if ($scope === 'all') {
+  $sql = "
+    SELECT
+      r.*,
+      s.project_name, s.project_location, s.project_type,
+      s.manager_employee_id,
+      c.client_name
+    FROM ma_reports r
+    INNER JOIN sites s ON s.id = r.site_id
+    INNER JOIN clients c ON c.id = s.client_id
+    WHERE r.id = ?
+    LIMIT 1
+  ";
+  $st = mysqli_prepare($conn, $sql);
+  if (!$st) die(mysqli_error($conn));
+  mysqli_stmt_bind_param($st, "i", $viewId);
+
+} elseif ($scope === 'manager') {
+  $sql = "
+    SELECT
+      r.*,
+      s.project_name, s.project_location, s.project_type,
+      s.manager_employee_id,
+      c.client_name
+    FROM ma_reports r
+    INNER JOIN sites s ON s.id = r.site_id
+    INNER JOIN clients c ON c.id = s.client_id
+    WHERE r.id = ? AND s.manager_employee_id = ?
+    LIMIT 1
+  ";
+  $st = mysqli_prepare($conn, $sql);
+  if (!$st) die(mysqli_error($conn));
+  mysqli_stmt_bind_param($st, "ii", $viewId, $employeeId);
+
+} else {
+  $sql = "
+    SELECT
+      r.*,
+      s.project_name, s.project_location, s.project_type,
+      s.manager_employee_id,
+      c.client_name
+    FROM ma_reports r
+    INNER JOIN sites s ON s.id = r.site_id
+    INNER JOIN clients c ON c.id = s.client_id
+    WHERE r.id = ? AND r.employee_id = ?
+    LIMIT 1
+  ";
+  $st = mysqli_prepare($conn, $sql);
+  if (!$st) die(mysqli_error($conn));
+  mysqli_stmt_bind_param($st, "ii", $viewId, $employeeId);
+}
+
 mysqli_stmt_execute($st);
 $res = mysqli_stmt_get_result($st);
 $row = mysqli_fetch_assoc($res);
 mysqli_stmt_close($st);
 
-if (!$row) die("MA not found");
-
-$canAccess = false;
-
-if ($accessRole === 'admin') {
-  $canAccess = true;
-} elseif ($accessRole === 'manager') {
-  $canAccess = ((int)($row['manager_employee_id'] ?? 0) === $employeeId);
-} elseif ($accessRole === 'tl') {
-  $canAccess = ((int)($row['team_lead_employee_id'] ?? 0) === $employeeId);
-} else {
-  $canAccess = ((int)($row['employee_id'] ?? 0) === $employeeId);
-}
-
-if (!$canAccess) {
-  die("MA not found or not allowed");
-}
+if (!$row) die("MA not found or not allowed");
 
 // Prepared by (from employees table)
 $preparedName = '';

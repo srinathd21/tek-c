@@ -23,25 +23,10 @@ if (!$conn) die("DB connection failed");
 $employeeId     = (int)($_SESSION['employee_id'] ?? 0);
 $designationRaw = (string)($_SESSION['designation'] ?? '');
 $designation    = strtolower(trim($designationRaw));
-$sessionRole    = strtolower(trim((string)($_SESSION['role'] ?? '')));
 
 $MODE_STRING    = (isset($_GET['mode']) && $_GET['mode'] === 'string');
 $forceDownload  = (isset($_GET['dl']) && $_GET['dl'] == '1');
 
-function normalizeAccessRole(string $designation, string $sessionRole = ''): string {
-    $d = strtolower(trim($designation));
-    $r = strtolower(trim($sessionRole));
-
-    if (in_array($r, ['admin', 'administrator', 'super admin'], true)) return 'admin';
-    if (in_array($d, ['admin', 'administrator', 'director', 'vice president', 'general manager'], true)) return 'admin';
-    if ($d === 'manager') return 'manager';
-    if ($d === 'team lead') return 'tl';
-    if (in_array($d, ['project engineer grade 1', 'project engineer grade 2', 'sr. engineer', 'engineer', 'project engineer'], true)) return 'engineer';
-
-    return 'employee';
-}
-
-$accessRole = normalizeAccessRole($designationRaw, $sessionRole);
 // ---------------- helpers ----------------
 function clean_text($s){
     if (is_array($s)) {
@@ -76,6 +61,11 @@ function fmt_dmy_dash($ymd){
     return $t ? date('d-m-Y', $t) : $ymd;
 }
 
+function roleScope(string $designationLower): string {
+    if (in_array($designationLower, ['director','vice president','general manager'], true)) return 'all';
+    if ($designationLower === 'manager') return 'manager';
+    return 'self';
+}
 
 // Safe filename helpers
 function safe_filename_site($s){
@@ -109,47 +99,47 @@ if ($companyResult) {
 $viewId = isset($_GET['view']) ? (int)$_GET['view'] : 0;
 if ($viewId <= 0) die("Invalid DAR id");
 
+$scope = roleScope($designation);
+
+$scopeCond = "";
+$types = "i";
+$params = [$viewId];
+
+if ($scope === 'self') {
+    $scopeCond = " AND r.employee_id = ? ";
+    $types .= "i";
+    $params[] = $employeeId;
+} elseif ($scope === 'manager') {
+    $scopeCond = " AND r.site_id IN (SELECT id FROM sites WHERE manager_employee_id = ?) ";
+    $types .= "i";
+    $params[] = $employeeId;
+}
+
 $sql = "
   SELECT
     r.*,
     s.project_name,
     s.project_location,
-    s.manager_employee_id,
-    s.team_lead_employee_id,
     c.client_name
   FROM dar_reports r
   INNER JOIN sites s ON s.id = r.site_id
   INNER JOIN clients c ON c.id = s.client_id
   WHERE r.id = ?
+  $scopeCond
   LIMIT 1
 ";
 
 $st = mysqli_prepare($conn, $sql);
 if (!$st) die("SQL Error: " . mysqli_error($conn));
 
-mysqli_stmt_bind_param($st, "i", $viewId);
+mysqli_stmt_bind_param($st, $types, ...$params);
 mysqli_stmt_execute($st);
 $res = mysqli_stmt_get_result($st);
 $row = mysqli_fetch_assoc($res);
 mysqli_stmt_close($st);
 
-if (!$row) die("DAR not found");
+if (!$row) die("DAR not found or not allowed");
 
-$canAccess = false;
-
-if ($accessRole === 'admin') {
-    $canAccess = true;
-} elseif ($accessRole === 'manager') {
-    $canAccess = ((int)($row['manager_employee_id'] ?? 0) === $employeeId);
-} elseif ($accessRole === 'tl') {
-    $canAccess = ((int)($row['team_lead_employee_id'] ?? 0) === $employeeId);
-} else {
-    $canAccess = ((int)($row['employee_id'] ?? 0) === $employeeId);
-}
-
-if (!$canAccess) {
-    die("DAR not found or not allowed");
-}
 // Header fields
 $division     = clean_text($row['division'] ?? '');
 $incharge     = clean_text($row['incharge'] ?? '');

@@ -54,7 +54,10 @@
     </div>
 
 
-
+  <!-- Today Reports -->
+    <a class="side-link" href="emp-reports.php">
+      <i class="bi bi-check2-square"></i><span class="label">Today Reports</span>
+    </a>
 
 
     <!-- QUOTATION MANAGEMENT - NEW SECTION -->

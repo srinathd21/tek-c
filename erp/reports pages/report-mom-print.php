@@ -25,23 +25,7 @@ if (empty($_SESSION['employee_id'])) {
     header("Location: ../login.php");
     exit;
 }
-$designation = strtolower(trim((string)($_SESSION['designation'] ?? '')));
-$sessionRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
 
-function normalizeAccessRole(string $designation, string $sessionRole = ''): string {
-    $d = strtolower(trim($designation));
-    $r = strtolower(trim($sessionRole));
-
-    if (in_array($r, ['admin', 'administrator', 'super admin'], true)) return 'admin';
-    if (in_array($d, ['admin', 'administrator', 'director', 'vice president', 'general manager'], true)) return 'admin';
-    if ($d === 'manager') return 'manager';
-    if ($d === 'team lead') return 'tl';
-    if (in_array($d, ['project engineer grade 1', 'project engineer grade 2', 'sr. engineer', 'engineer', 'project engineer'], true)) return 'engineer';
-
-    return 'employee';
-}
-
-$accessRole = normalizeAccessRole($designation, $sessionRole);
 $MODE_STRING   = (isset($_GET['mode']) && $_GET['mode'] === 'string');
 $forceDownload = (isset($_GET['dl']) && $_GET['dl'] == '1');
 
@@ -105,29 +89,23 @@ $viewId = isset($_GET['view']) ? (int)$_GET['view'] : 0;
 if ($viewId <= 0) die("Invalid MOM id");
 
 $sql = "
- SELECT
-   m.*,
-   s.project_name,
-   s.manager_employee_id,
-   s.team_lead_employee_id,
-   c.client_name,
-   e.full_name as prepared_name
+ SELECT m.*, s.project_name, c.client_name, e.full_name as prepared_name
  FROM mom_reports m
  JOIN sites s ON s.id = m.site_id
  JOIN clients c ON c.id = s.client_id
  LEFT JOIN employees e ON e.id = m.prepared_by
- WHERE m.id = ?
+ WHERE m.id = ? AND m.employee_id = ?
  LIMIT 1
 ";
 $st = mysqli_prepare($conn, $sql);
 if (!$st) die(mysqli_error($conn));
-mysqli_stmt_bind_param($st, "i", $viewId);
+mysqli_stmt_bind_param($st, "ii", $viewId, $employeeId);
 mysqli_stmt_execute($st);
 $res = mysqli_stmt_get_result($st);
 $row = mysqli_fetch_assoc($res);
 mysqli_stmt_close($st);
+if (!$row) die("MOM not found or not allowed");
 
-if (!$row) die("MOM not found");
 // Map data
 $data = [];
 $data['project_name']   = clean_text($row['project_name'] ?? 'Project');
@@ -154,21 +132,7 @@ $data['short_forms']     = [
 $data['amended_points']  = decode_rows($row['amended_points_json'] ?? []);
 $data['next_meeting_date']  = clean_text(!empty($row['next_meeting_date']) ? dmy_dash($row['next_meeting_date']) : '');
 $data['next_meeting_place'] = clean_text($row['next_meeting_place'] ?? '');
-$canAccess = false;
 
-if ($accessRole === 'admin') {
-    $canAccess = true;
-} elseif ($accessRole === 'manager') {
-    $canAccess = ((int)($row['manager_employee_id'] ?? 0) === $employeeId);
-} elseif ($accessRole === 'tl') {
-    $canAccess = ((int)($row['team_lead_employee_id'] ?? 0) === $employeeId);
-} else {
-    $canAccess = ((int)($row['employee_id'] ?? 0) === $employeeId);
-}
-
-if (!$canAccess) {
-    die("You are not allowed to view this MOM");
-}
 // sensible defaults
 if (count($data['agenda']) === 0) {
   $data['agenda'] = [['item' => 'Review previous MOM'], ['item' => 'Project update']];

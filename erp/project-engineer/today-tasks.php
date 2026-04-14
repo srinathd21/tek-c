@@ -1,8 +1,10 @@
 <?php
-// today-tasks.php — My Projects + Today's ALL Reports task status + 4 Stats
-// ✅ Mobile: table -> cards
-// ✅ Optional filter: ?site_id=123 (used by my-sites.php "Reports" button)
-// ✅ Added: Print/View PDF + Download PDF + Send Mail (auto-attach PDF)
+// employee-pending-tasks.php
+// Pending + Completed task page for logged-in employee
+// Same UI/template style as today-tasks.php
+// Mobile responsive card design
+// Shows remarks + completed task actions in desktop and mobile
+// Action buttons changed to small square icon buttons
 
 session_start();
 require_once 'includes/db-config.php';
@@ -46,6 +48,13 @@ function safeFileNamePart(string $s): string {
   $s = preg_replace('/[^a-zA-Z0-9_\- ]+/', '', $s);
   $s = trim(preg_replace('/\s+/', ' ', $s));
   return $s === '' ? 'Report' : $s;
+}
+
+function tableExists(mysqli $conn, string $table): bool {
+  $safe = mysqli_real_escape_string($conn, $table);
+  $sql = "SHOW TABLES LIKE '{$safe}'";
+  $res = mysqli_query($conn, $sql);
+  return $res && mysqli_num_rows($res) > 0;
 }
 
 /**
@@ -182,8 +191,6 @@ $reportTypes = [
     'noField' => 'doc_no',
     'submitUrl' => 'checklist.php?site_id={sid}',
     'openUrl'   => 'checklist.php?site_id={sid}',
-
-    // ✅ FIXED: your real file name
     'printFile' => 'report-checklist-print.php',
   ],
   [
@@ -226,6 +233,11 @@ $todayReports = [];
 $latestAnyCreatedAt = null;
 
 foreach ($reportTypes as $rt) {
+  if (!tableExists($conn, $rt['table'])) {
+    $todayReports[$rt['key']] = [];
+    continue;
+  }
+
   [$bySite, $latestCreatedAt] = fetchTodayBySite($conn, $employeeId, $rt['table'], $rt['dateField'], $rt['noField']);
   $todayReports[$rt['key']] = $bySite;
 
@@ -236,17 +248,104 @@ foreach ($reportTypes as $rt) {
   }
 }
 
-// ---------------- Stats ----------------
-$totalProjects = count($sites);
-$totalTasks = $totalProjects * count($reportTypes);
-
-$completedCount = 0;
-foreach ($sites as $s) {
-  $sid = (int)$s['id'];
-  foreach ($reportTypes as $rt) {
-    if (isset($todayReports[$rt['key']][$sid])) $completedCount++;
+// ---------------- Load remarks if table exists ----------------
+$remarksMap = [];
+if (tableExists($conn, 'employee_report_remarks')) {
+  $sql = "
+    SELECT site_id, report_key, remark
+    FROM employee_report_remarks
+    WHERE report_date = ? AND employee_id = ?
+  ";
+  $st = mysqli_prepare($conn, $sql);
+  if ($st) {
+    mysqli_stmt_bind_param($st, "si", $todayYmd, $employeeId);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+    while ($row = mysqli_fetch_assoc($res)) {
+      $key = (int)$row['site_id'] . '_' . (string)$row['report_key'];
+      $remarksMap[$key] = $row['remark'] ?? '';
+    }
+    mysqli_stmt_close($st);
   }
 }
+
+// ---------------- Build task list ----------------
+$taskRows = [];
+$completedCount = 0;
+
+foreach ($sites as $s) {
+  $sid = (int)$s['id'];
+  $clientEmail = trim((string)($s['client_email'] ?? ''));
+
+  foreach ($reportTypes as $rt) {
+    $isDone = isset($todayReports[$rt['key']][$sid]);
+    $rep = $isDone ? $todayReports[$rt['key']][$sid] : null;
+
+    if ($isDone) {
+      $completedCount++;
+    }
+
+    $remarkKey = $sid . '_' . $rt['key'];
+
+    $printUrl = '';
+    $downloadUrl = '';
+    $mailUrl = '';
+
+    if ($isDone && $rep && !empty($rt['printFile'])) {
+      $rid = (int)($rep['id'] ?? 0);
+      $printUrl = $rt['printFile'] . '?view=' . urlencode((string)$rid);
+      $downloadUrl = $rt['printFile'] . '?view=' . urlencode((string)$rid) . '&dl=1';
+
+      $projectName = (string)($s['project_name'] ?? 'Project');
+      $safeProject = safeFileNamePart($projectName);
+      $pdfName = strtoupper($rt['key']) . '_' . $safeProject . '_' . $todayYmd . '.pdf';
+
+      $mailSubject = "TEK-C " . strtoupper($rt['key']) . " - " . $projectName . " - " . date('d M Y');
+      $mailBody =
+"Dear Team,
+
+Please find attached the " . strtoupper($rt['key']) . " for:
+
+Project: {$projectName}
+Date: " . date('d M Y') . "
+Report No: " . ($rep['doc_no'] ?? '') . "
+
+Regards,
+{$employeeName}";
+
+      $mailUrl = 'mail-compose.php?'
+        . 'to=' . urlencode($clientEmail)
+        . '&subject=' . urlencode($mailSubject)
+        . '&body=' . urlencode($mailBody)
+        . '&pdf=' . urlencode($downloadUrl)
+        . '&pdf_name=' . urlencode($pdfName);
+    }
+
+    $taskRows[] = [
+      'site_id' => $sid,
+      'project_name' => $s['project_name'] ?? '',
+      'project_location' => $s['project_location'] ?? '',
+      'client_name' => $s['client_name'] ?? '',
+      'client_email' => $clientEmail,
+      'report_key' => $rt['key'],
+      'report_label' => $rt['label'],
+      'report_icon' => $rt['icon'],
+      'submit_url' => str_replace('{sid}', (string)$sid, $rt['submitUrl']),
+      'open_url' => str_replace('{sid}', (string)$sid, $rt['openUrl']),
+      'is_done' => $isDone,
+      'doc_no' => $rep['doc_no'] ?? '',
+      'created_at' => $rep['created_at'] ?? '',
+      'print_url' => $printUrl,
+      'download_url' => $downloadUrl,
+      'mail_url' => $mailUrl,
+      'remark' => $remarksMap[$remarkKey] ?? '',
+    ];
+  }
+}
+
+// ---------------- Stats ----------------
+$totalProjects = count($sites);
+$totalTasks = count($taskRows);
 $pendingCount = max(0, $totalTasks - $completedCount);
 $latestSubmitTime = fmtTime($latestAnyCreatedAt);
 
@@ -256,7 +355,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Today Tasks - TEK-C</title>
+  <title>Employee Tasks - TEK-C</title>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
@@ -350,15 +449,20 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
     .btn-action{
       background: transparent;
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 12px;
+      border-radius: 8px;
+      width: 36px;
+      height: 36px;
+      padding: 0;
       color: #374151;
       font-size: 13px;
       font-weight: 1000;
       text-decoration:none;
       display:inline-flex;
       align-items:center;
-      gap:8px;
+      justify-content:center;
+      gap:0;
+      line-height:1;
+      flex:0 0 36px;
     }
     .btn-action.primary{
       background: var(--blue);
@@ -385,10 +489,33 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
     .task-sub{ color:#6b7280; font-weight:800; font-size:12px; margin-top:6px; }
     .task-kv{ margin-top:10px; display:grid; gap:8px; }
     .task-row{ display:flex; gap:10px; align-items:flex-start; }
-    .task-key{ flex:0 0 86px; color:#6b7280; font-weight:1000; font-size:12px; }
+    .task-key{ flex:0 0 92px; color:#6b7280; font-weight:1000; font-size:12px; }
     .task-val{ flex:1 1 auto; font-weight:900; color:#111827; font-size:13px; line-height:1.25; }
-    .task-actions{ margin-top:12px; display:grid; gap:8px; }
-    .task-actions a{ width:100%; justify-content:center; }
+    .task-actions{ margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+    .task-actions a{ justify-content:center; }
+
+    .remark-box{
+      margin-top:12px;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px dashed #f59e0b;
+      background:#fffaf0;
+    }
+    .remark-title{
+      font-size:11px;
+      font-weight:1000;
+      color:#b45309;
+      text-transform:uppercase;
+      margin-bottom:4px;
+      letter-spacing:.3px;
+    }
+    .remark-text{
+      font-size:13px;
+      font-weight:900;
+      color:#111827;
+      line-height:1.35;
+      white-space:pre-wrap;
+    }
 
     @media (max-width: 991.98px){
       .main{ margin-left:0 !important; width:100% !important; max-width:100% !important; }
@@ -399,6 +526,13 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
       .content-scroll{ padding:12px 10px 12px !important; }
       .container-fluid.maxw{ padding-left:6px !important; padding-right:6px !important; }
       .panel{ padding:12px !important; margin-bottom:12px; border-radius:14px; }
+      .btn-action{
+        width:34px;
+        height:34px;
+        flex:0 0 34px;
+        border-radius:8px;
+        font-size:12px;
+      }
     }
   </style>
 </head>
@@ -414,7 +548,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
 
         <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
           <div>
-            <h1 class="h-title">Today Tasks</h1>
+            <h1 class="h-title">Employee Tasks</h1>
             <p class="h-sub">
               Your report task status for <?php echo e(date('d M Y')); ?> (<?php echo e($todayYmd); ?>)
               <?php if ($filterSiteId > 0 && !empty($sites[0])): ?>
@@ -425,13 +559,13 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
           <div class="d-flex gap-2 flex-wrap">
             <span class="badge-pill"><i class="bi bi-person"></i> <?php echo e($employeeName); ?></span>
             <span class="badge-pill"><i class="bi bi-award"></i> <?php echo e($empRow['designation'] ?? ($_SESSION['designation'] ?? '')); ?></span>
-            <a class="btn-action" href="today-tasks.php<?php echo $filterSiteId>0 ? ('?site_id='.e($filterSiteId)) : ''; ?>">
-              <i class="bi bi-arrow-clockwise"></i> Refresh
+            <a class="btn-action" href="employee-pending-tasks.php<?php echo $filterSiteId>0 ? ('?site_id='.e($filterSiteId)) : ''; ?>" title="Refresh">
+              <i class="bi bi-arrow-clockwise"></i>
             </a>
           </div>
         </div>
 
-        <!-- 4 Stats -->
+        <!-- Stats -->
         <div class="row g-3 mb-3">
           <div class="col-12 col-md-6 col-xl-3">
             <div class="stat-card">
@@ -477,7 +611,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         <!-- Task List -->
         <div class="panel">
           <div style="font-weight:1000; font-size:14px; color:#111827;">My Projects — All Reports Task</div>
-          <div class="small-muted">Status is based on your submissions today (<?php echo e($todayYmd); ?>).</div>
+          <div class="small-muted">Pending and completed reports are shown below. If a remark is given, it will be shown in both desktop and mobile.</div>
           <hr style="border-color:#eef2f7;">
 
           <?php if (empty($sites)): ?>
@@ -486,65 +620,20 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
             </div>
           <?php else: ?>
 
-            <!-- ✅ Mobile cards -->
+            <!-- Mobile cards -->
             <div class="d-block d-md-none">
               <div class="d-grid gap-3">
-                <?php foreach ($sites as $s): ?>
-                  <?php
-                    $sid = (int)$s['id'];
-                    $clientEmail = trim((string)($s['client_email'] ?? ''));
-
-                    foreach ($reportTypes as $rt):
-                      $isDone = isset($todayReports[$rt['key']][$sid]);
-                      $rep = $isDone ? $todayReports[$rt['key']][$sid] : null;
-
-                      $submitUrl = str_replace('{sid}', (string)$sid, $rt['submitUrl']);
-                      $openUrl   = str_replace('{sid}', (string)$sid, $rt['openUrl']);
-
-                      $printUrl = '';
-                      $downloadUrl = '';
-                      $mailUrl = '';
-
-                      if ($isDone && $rep && !empty($rt['printFile'])) {
-                        $rid = (int)($rep['id'] ?? 0);
-                        $printUrl = $rt['printFile'] . '?view=' . urlencode((string)$rid);
-                        $downloadUrl = $rt['printFile'] . '?view=' . urlencode((string)$rid) . '&dl=1';
-
-                        $projectName = (string)($s['project_name'] ?? 'Project');
-                        $safeProject = safeFileNamePart($projectName);
-                        $pdfName = strtoupper($rt['key']) . '_' . $safeProject . '_' . $todayYmd . '.pdf';
-
-                        $mailSubject = "TEK-C " . strtoupper($rt['key']) . " - " . $projectName . " - " . date('d M Y');
-                        $mailBody =
-"Dear Team,
-
-Please find attached the " . strtoupper($rt['key']) . " for:
-
-Project: {$projectName}
-Date: " . date('d M Y') . "
-Report No: " . ($rep['doc_no'] ?? '') . "
-
-Regards,
-{$employeeName}";
-
-                        $mailUrl = 'mail-compose.php?'
-                          . 'to=' . urlencode($clientEmail)
-                          . '&subject=' . urlencode($mailSubject)
-                          . '&body=' . urlencode($mailBody)
-                          . '&pdf=' . urlencode($downloadUrl)
-                          . '&pdf_name=' . urlencode($pdfName);
-                      }
-                  ?>
+                <?php foreach ($taskRows as $row): ?>
                   <div class="task-card">
                     <div class="task-top">
                       <div style="flex:1 1 auto;">
-                        <h3 class="task-title"><?php echo e($s['project_name']); ?></h3>
+                        <h3 class="task-title"><?php echo e($row['project_name']); ?></h3>
                         <div class="task-sub">
-                          <i class="bi bi-geo-alt"></i> <?php echo e($s['project_location']); ?>
-                          &nbsp;•&nbsp; <i class="bi bi-person-badge"></i> <?php echo e($s['client_name']); ?>
+                          <i class="bi bi-geo-alt"></i> <?php echo e($row['project_location']); ?>
+                          &nbsp;•&nbsp; <i class="bi bi-person-badge"></i> <?php echo e($row['client_name']); ?>
                         </div>
                       </div>
-                      <?php if ($isDone): ?>
+                      <?php if ($row['is_done']): ?>
                         <span class="status-badge status-green"><i class="bi bi-check2-circle"></i> Completed</span>
                       <?php else: ?>
                         <span class="status-badge status-yellow"><i class="bi bi-hourglass-split"></i> Pending</span>
@@ -554,43 +643,60 @@ Regards,
                     <div class="task-kv">
                       <div class="task-row">
                         <div class="task-key">Task</div>
-                        <div class="task-val"><i class="bi <?php echo e($rt['icon']); ?> me-1"></i> <?php echo e($rt['label']); ?></div>
+                        <div class="task-val"><i class="bi <?php echo e($row['report_icon']); ?> me-1"></i> <?php echo e($row['report_label']); ?></div>
                       </div>
-                      <div class="task-row">
-                        <div class="task-key">Report No</div>
-                        <div class="task-val"><?php echo $isDone ? e($rep['doc_no'] ?? '—') : '—'; ?></div>
-                      </div>
+
+                      <?php if ($row['is_done']): ?>
+                        <div class="task-row">
+                          <div class="task-key">Completed</div>
+                          <div class="task-val">No: <?php echo e($row['doc_no'] ?: '—'); ?></div>
+                        </div>
+                      <?php else: ?>
+                        <div class="task-row">
+                          <div class="task-key">Status</div>
+                          <div class="task-val">Not submitted yet</div>
+                        </div>
+                      <?php endif; ?>
                     </div>
 
+                    <?php if (trim((string)$row['remark']) !== ''): ?>
+                      <div class="remark-box">
+                        <div class="remark-title"><i class="bi bi-chat-left-text me-1"></i> Remark</div>
+                        <div class="remark-text"><?php echo e($row['remark']); ?></div>
+                      </div>
+                    <?php endif; ?>
+
                     <div class="task-actions">
-                      <?php if ($isDone): ?>
-                        <a class="btn-action" href="<?php echo e($openUrl); ?>"><i class="bi bi-box-arrow-up-right"></i> Open</a>
-                        <?php if ($printUrl !== ''): ?>
-                          <a class="btn-action" href="<?php echo e($printUrl); ?>" target="_blank" rel="noopener noreferrer">
-                            <i class="bi bi-printer"></i> Print
+                      <?php if ($row['is_done']): ?>
+                        <a class="btn-action" href="<?php echo e($row['open_url']); ?>" title="Open">
+                          <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
+                        <?php if ($row['print_url'] !== ''): ?>
+                          <a class="btn-action" href="<?php echo e($row['print_url']); ?>" target="_blank" rel="noopener noreferrer" title="Print">
+                            <i class="bi bi-printer"></i>
                           </a>
-                          <a class="btn-action" href="<?php echo e($downloadUrl); ?>" rel="noopener noreferrer">
-                            <i class="bi bi-download"></i> Download
+                          <a class="btn-action" href="<?php echo e($row['download_url']); ?>" rel="noopener noreferrer" title="Download">
+                            <i class="bi bi-download"></i>
                           </a>
-                          <a class="btn-action primary" href="<?php echo e($mailUrl); ?>">
-                            <i class="bi bi-envelope"></i> Send Mail
+                          <a class="btn-action primary" href="<?php echo e($row['mail_url']); ?>" title="Send Mail">
+                            <i class="bi bi-envelope"></i>
                           </a>
                         <?php endif; ?>
                       <?php else: ?>
-                        <a class="btn-action primary" href="<?php echo e($submitUrl); ?>"><i class="bi bi-plus-circle"></i> Submit</a>
+                        <a class="btn-action primary" href="<?php echo e($row['submit_url']); ?>" title="Submit Report">
+                          <i class="bi bi-plus-circle"></i>
+                        </a>
+                        <a class="btn-action" href="<?php echo e($row['open_url']); ?>" title="Open Page">
+                          <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
                       <?php endif; ?>
                     </div>
                   </div>
-                  <?php endforeach; ?>
                 <?php endforeach; ?>
-              </div>
-
-              <div class="small-muted mt-3">
-                Note: Completed means you submitted that report today for that project.
               </div>
             </div>
 
-            <!-- ✅ Desktop table -->
+            <!-- Desktop table -->
             <div class="d-none d-md-block">
               <div class="table-responsive">
                 <table class="table align-middle mb-0">
@@ -602,108 +708,77 @@ Regards,
                       <th>Client</th>
                       <th>Task</th>
                       <th>Status</th>
-                      <th class="text-end" style="min-width:520px;">Action</th>
+                      <th>Remark</th>
+                      <th class="text-end" style="min-width:320px;">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <?php
-                      $i = 1;
-                      foreach ($sites as $s):
-                        $sid = (int)$s['id'];
-                        $clientEmail = trim((string)($s['client_email'] ?? ''));
-
-                        foreach ($reportTypes as $rt):
-                          $isDone = isset($todayReports[$rt['key']][$sid]);
-                          $rep = $isDone ? $todayReports[$rt['key']][$sid] : null;
-
-                          $submitUrl = str_replace('{sid}', (string)$sid, $rt['submitUrl']);
-                          $openUrl   = str_replace('{sid}', (string)$sid, $rt['openUrl']);
-
-                          $printUrl = '';
-                          $downloadUrl = '';
-                          $mailUrl = '';
-
-                          if ($isDone && $rep && !empty($rt['printFile'])) {
-                            $rid = (int)($rep['id'] ?? 0);
-                            $printUrl = $rt['printFile'] . '?view=' . urlencode((string)$rid);
-                            $downloadUrl = $rt['printFile'] . '?view=' . urlencode((string)$rid) . '&dl=1';
-
-                            $projectName = (string)($s['project_name'] ?? 'Project');
-                            $safeProject = safeFileNamePart($projectName);
-                            $pdfName = strtoupper($rt['key']) . '_' . $safeProject . '_' . $todayYmd . '.pdf';
-
-                            $mailSubject = "TEK-C " . strtoupper($rt['key']) . " - " . $projectName . " - " . date('d M Y');
-                            $mailBody =
-"Dear Team,
-
-Please find attached the " . strtoupper($rt['key']) . " for:
-
-Project: {$projectName}
-Date: " . date('d M Y') . "
-Report No: " . ($rep['doc_no'] ?? '') . "
-
-Regards,
-{$employeeName}";
-
-                            $mailUrl = 'mail-compose.php?'
-                              . 'to=' . urlencode($clientEmail)
-                              . '&subject=' . urlencode($mailSubject)
-                              . '&body=' . urlencode($mailBody)
-                              . '&pdf=' . urlencode($downloadUrl)
-                              . '&pdf_name=' . urlencode($pdfName);
-                          }
-                    ?>
+                    <?php $i = 1; foreach ($taskRows as $row): ?>
                       <tr>
                         <td style="font-weight:1000;"><?php echo $i++; ?></td>
-                        <td style="font-weight:1000; color:#111827;"><?php echo e($s['project_name']); ?></td>
-                        <td><?php echo e($s['project_location']); ?></td>
+                        <td style="font-weight:1000; color:#111827;"><?php echo e($row['project_name']); ?></td>
+                        <td><?php echo e($row['project_location']); ?></td>
                         <td>
-                          <?php echo e($s['client_name']); ?>
-                          <?php if ($clientEmail !== ''): ?>
-                            <div class="small-muted"><?php echo e($clientEmail); ?></div>
+                          <?php echo e($row['client_name']); ?>
+                          <?php if (!empty($row['client_email'])): ?>
+                            <div class="small-muted"><?php echo e($row['client_email']); ?></div>
                           <?php endif; ?>
                         </td>
-                        <td style="font-weight:1000;"><i class="bi <?php echo e($rt['icon']); ?> me-1"></i> <?php echo e($rt['label']); ?></td>
+                        <td style="font-weight:1000;"><i class="bi <?php echo e($row['report_icon']); ?> me-1"></i> <?php echo e($row['report_label']); ?></td>
                         <td>
-                          <?php if ($isDone): ?>
+                          <?php if ($row['is_done']): ?>
                             <span class="status-badge status-green"><i class="bi bi-check2-circle"></i> Completed</span>
                           <?php else: ?>
                             <span class="status-badge status-yellow"><i class="bi bi-hourglass-split"></i> Pending</span>
                           <?php endif; ?>
                         </td>
+                        <td>
+                          <?php if (trim((string)$row['remark']) !== ''): ?>
+                            <div class="remark-text"><?php echo e($row['remark']); ?></div>
+                          <?php else: ?>
+                            <span class="small-muted">No remark</span>
+                          <?php endif; ?>
+                        </td>
                         <td class="text-end">
-                          <?php if ($isDone): ?>
-                            <div class="d-flex justify-content-end gap-2 flex-wrap">
+                          <?php if ($row['is_done']): ?>
+                            <div class="d-flex justify-content-end gap-2 flex-wrap align-items-center">
                               <span class="small-muted align-self-center">
-                                No: <b style="color:#111827;"><?php echo e($rep['doc_no'] ?? ''); ?></b>
+                                Completed &nbsp; No: <b style="color:#111827;"><?php echo e($row['doc_no'] ?: ''); ?></b>
                               </span>
-
-                              <a class="btn-action" href="<?php echo e($openUrl); ?>"><i class="bi bi-box-arrow-up-right"></i> Open</a>
-
-                              <?php if ($printUrl !== ''): ?>
-                                <a class="btn-action" href="<?php echo e($printUrl); ?>" target="_blank" rel="noopener noreferrer">
-                                  <i class="bi bi-printer"></i> Print
+                              <a class="btn-action" href="<?php echo e($row['open_url']); ?>" title="Open">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                              </a>
+                              <?php if ($row['print_url'] !== ''): ?>
+                                <a class="btn-action" href="<?php echo e($row['print_url']); ?>" target="_blank" rel="noopener noreferrer" title="Print">
+                                  <i class="bi bi-printer"></i>
                                 </a>
-                                <a class="btn-action" href="<?php echo e($downloadUrl); ?>" rel="noopener noreferrer">
-                                  <i class="bi bi-download"></i> Download
+                                <a class="btn-action" href="<?php echo e($row['download_url']); ?>" rel="noopener noreferrer" title="Download">
+                                  <i class="bi bi-download"></i>
                                 </a>
-                                <a class="btn-action primary" href="<?php echo e($mailUrl); ?>">
-                                  <i class="bi bi-envelope"></i> Send Mail
+                                <a class="btn-action primary" href="<?php echo e($row['mail_url']); ?>" title="Send Mail">
+                                  <i class="bi bi-envelope"></i>
                                 </a>
                               <?php endif; ?>
                             </div>
                           <?php else: ?>
-                            <a class="btn-action primary" href="<?php echo e($submitUrl); ?>"><i class="bi bi-plus-circle"></i> Submit</a>
+                            <div class="d-flex justify-content-end gap-2 flex-wrap">
+                              <a class="btn-action primary" href="<?php echo e($row['submit_url']); ?>" title="Submit">
+                                <i class="bi bi-plus-circle"></i>
+                              </a>
+                              <a class="btn-action" href="<?php echo e($row['open_url']); ?>" title="Open">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                              </a>
+                            </div>
                           <?php endif; ?>
                         </td>
                       </tr>
-                    <?php endforeach; endforeach; ?>
+                    <?php endforeach; ?>
                   </tbody>
                 </table>
               </div>
 
               <div class="small-muted mt-2">
-                Note: Completed means you submitted that report today for that project.
+                Note: Desktop and mobile both show completed actions and remarks.
               </div>
             </div>
 

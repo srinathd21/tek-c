@@ -11,8 +11,6 @@ if (empty($_SESSION['employee_id'])) {
 }
 
 $employeeId    = (int)($_SESSION['employee_id'] ?? 0);
-$designation   = strtolower(trim((string)($_SESSION['designation'] ?? '')));
-$sessionRole   = strtolower(trim((string)($_SESSION['role'] ?? '')));
 $MODE_STRING   = (isset($_GET['mode']) && $_GET['mode'] === 'string');
 $forceDownload = (isset($_GET['dl']) && $_GET['dl'] == '1');
 
@@ -21,22 +19,6 @@ if (!$conn) die("DB connection failed");
 
 $viewId = isset($_GET['view']) ? (int)$_GET['view'] : 0;
 if ($viewId <= 0) die("Invalid DPR id");
-
-// ---------------- ROLE HELPERS ----------------
-function normalizeAccessRole(string $designation, string $sessionRole = ''): string {
-  $d = strtolower(trim($designation));
-  $r = strtolower(trim($sessionRole));
-
-  if (in_array($r, ['admin', 'administrator', 'super admin'], true)) return 'admin';
-  if (in_array($d, ['admin', 'administrator', 'director', 'vice president', 'general manager'], true)) return 'admin';
-  if ($d === 'manager') return 'manager';
-  if ($d === 'team lead') return 'tl';
-  if (in_array($d, ['project engineer grade 1', 'project engineer grade 2', 'sr. engineer', 'engineer', 'project engineer'], true)) return 'engineer';
-
-  return 'employee';
-}
-
-$accessRole = normalizeAccessRole($designation, $sessionRole);
 
 // ---------------- COMPANY (for footer / header branding) ----------------
 $companyName = 'TEK-C Construction Pvt. Ltd.';
@@ -65,6 +47,7 @@ function clean_text($s){
   $s = preg_replace('/\s+/', ' ', $s);
   $s = trim($s);
 
+  // Convert to Windows-1252 for PDF compatibility
   $converted = @iconv('UTF-8', 'windows-1252//TRANSLIT//IGNORE', $s);
   return ($converted !== false) ? $converted : $s;
 }
@@ -186,46 +169,27 @@ function rfc5987_encode($str){
   return "UTF-8''" . rawurlencode($str);
 }
 
-// ---------------- load DPR with access control ----------------
+// ---------------- load DPR ----------------
 $sql = "
   SELECT
     r.*,
     s.project_name, s.project_location, s.project_type,
     s.manager_employee_id,
-    s.team_lead_employee_id,
     c.client_name
   FROM dpr_reports r
   INNER JOIN sites s ON s.id = r.site_id
   INNER JOIN clients c ON c.id = s.client_id
-  WHERE r.id = ?
+  WHERE r.id = ? AND r.employee_id = ?
   LIMIT 1
 ";
 $st = mysqli_prepare($conn, $sql);
 if (!$st) die(mysqli_error($conn));
-mysqli_stmt_bind_param($st, "i", $viewId);
+mysqli_stmt_bind_param($st, "ii", $viewId, $employeeId);
 mysqli_stmt_execute($st);
 $res = mysqli_stmt_get_result($st);
 $row = mysqli_fetch_assoc($res);
 mysqli_stmt_close($st);
-
-if (!$row) die("DPR not found");
-
-// ---------------- permission check ----------------
-$canAccess = false;
-
-if ($accessRole === 'admin') {
-  $canAccess = true;
-} elseif ($accessRole === 'manager') {
-  $canAccess = ((int)($row['manager_employee_id'] ?? 0) === $employeeId);
-} elseif ($accessRole === 'tl') {
-  $canAccess = ((int)($row['team_lead_employee_id'] ?? 0) === $employeeId);
-} else {
-  $canAccess = ((int)($row['employee_id'] ?? 0) === $employeeId);
-}
-
-if (!$canAccess) {
-  die("You are not allowed to view this DPR");
-}
+if (!$row) die("DPR not found or not allowed");
 
 // PMC name (manager name if exists)
 $pmcName = 'UKB Construction Management Pvt Ltd';
@@ -379,9 +343,10 @@ class DPRPDF extends FPDF {
 
   function SetMeta($meta){ $this->meta = $meta; }
 
+
   function Header(){
     $this->SetLineWidth(0.3);
-
+    
     $this->outerW = $this->GetPageWidth() - 10;
     $outerH = $this->GetPageHeight() - 10;
     $this->Rect($this->outerX, $this->outerY, $this->outerW, $outerH);
@@ -416,6 +381,7 @@ class DPRPDF extends FPDF {
       ['Client',  $this->meta['client_name'] ?? ''],
       ['PMC',     $this->meta['pmc_name'] ?? ''],
       ['DPR No / Date', $this->meta['dpr_no'] . ' / ' . trim((string)($this->meta['dpr_date'] ?? ''))],
+      
     ];
 
     for($i=0;$i<4;$i++){
@@ -454,7 +420,7 @@ class DPRPDF extends FPDF {
     }
     return $ellipsis;
   }
-
+  
   function MultiCellFit($w, $h, $txt, $border=1, $align='L'){
     $txt = trim((string)$txt);
     if ($txt === '') {
@@ -502,7 +468,7 @@ $pdf->AddPage();
 
 // Geometry for Portrait A4 (210mm width)
 $X0 = 5;
-$W  = $pdf->GetPageWidth() - 10;
+$W  = $pdf->GetPageWidth() - 10; // 200mm
 
 $wL  = 12;
 $wS  = 35;
@@ -519,6 +485,7 @@ $segH = $h*3;
 $pdf->EnsureSpace($segH + $gap);
 $yA = $pdf->GetY();
 
+// Draw left label for A
 $pdf->SetFillColor(220,220,220);
 $pdf->SetFont($pdf->ff, 'B', 11);
 $pdf->SetXY($X0, $yA);
@@ -560,6 +527,7 @@ $segH = $h*2;
 $pdf->EnsureSpace($segH + $gap);
 $yB = $pdf->GetY();
 
+// Draw left label for B
 $pdf->SetFillColor(220,220,220);
 $pdf->SetFont($pdf->ff, 'B', 11);
 $pdf->SetXY($X0, $yB);
@@ -567,7 +535,11 @@ $pdf->Cell($wL, $segH, 'B.', 1, 0, 'C', true);
 $pdf->Cell($wS, $segH, 'Site', 1, 0, 'C', true);
 
 $half = $avail / 2;
-$colWidth = $avail / 4;
+
+$opt  = 43;
+$opt1 = 71.5;
+$opt2 = 56.5;
+$opt3 = $avail - ($opt + $opt1 + $opt2);
 
 $pdf->SetXY($xR, $yB);
 $pdf->SetFont($pdf->ff, 'B', 10);
@@ -584,6 +556,9 @@ $wRain = ($wVal === 'rainy');
 $cNorm = ($sVal === 'normal');
 $cSl   = ($sVal === 'slushy');
 
+// total available width
+$colWidth = $avail / 4;
+
 $pdf->SetX($xR);
 $pdf->SetFillColor(255,255,102);
 
@@ -597,11 +572,12 @@ $pdf->SetY($yB + $segH + $gap);
 // ========================= C. Manpower =========================
 $pdf->SetFont($pdf->ff,'B',10);
 $rowCount = count($data['manpower']);
-$totalRows = $rowCount + 2;
+$totalRows = $rowCount + 2; // +2 for header row and total row
 $segH = $h * $totalRows;
 $pdf->EnsureSpace($segH + $gap);
 $yC = $pdf->GetY();
 
+// Draw left label for C (spanning full height)
 $pdf->SetFillColor(220,220,220);
 $pdf->SetFont($pdf->ff, 'B', 11);
 $pdf->SetXY($X0, $yC);
@@ -632,7 +608,8 @@ if (empty($data['manpower'])) {
     $pdf->Cell($wQty,      $h, $pdf->FitText($wQty,      $row['qty']),      1, 0, 'C');
     $pdf->Cell($wRemark,   $h, $pdf->FitText($wRemark,   $row['remark']),   1, 1, 'L');
   }
-
+  
+  // Total Manpower row
   $pdf->SetFont($pdf->ff, 'B', 9);
   $pdf->SetX($xR);
   $pdf->Cell($wAgency + $wCategory, $h, 'Total Manpower', 1, 0, 'R');
@@ -647,11 +624,12 @@ $pdf->SetY($yC + $segH + $gap);
 // ========================= D. Machinery =========================
 $pdf->SetFont($pdf->ff,'B',10);
 $rowCount = count($data['machinery']);
-$totalRows = $rowCount + 1;
+$totalRows = $rowCount + 1; // +1 for header row
 $segH = $h * $totalRows;
 $pdf->EnsureSpace($segH + $gap);
 $yD = $pdf->GetY();
 
+// Draw left label for D (spanning full height)
 $pdf->SetFillColor(220,220,220);
 $pdf->SetFont($pdf->ff, 'B', 11);
 $pdf->SetXY($X0, $yD);
@@ -687,11 +665,12 @@ $pdf->SetY($yD + $segH + $gap);
 // ========================= E. Material =========================
 $pdf->SetFont($pdf->ff,'B',10);
 $rowCount = count($data['material']);
-$totalRows = $rowCount + 1;
+$totalRows = $rowCount + 1; // +1 for header row
 $segH = $h * $totalRows;
 $pdf->EnsureSpace($segH + $gap);
 $yE = $pdf->GetY();
 
+// Draw left label for E (spanning full height)
 $pdf->SetFillColor(220,220,220);
 $pdf->SetFont($pdf->ff, 'B', 11);
 $pdf->SetXY($X0, $yE);
@@ -729,19 +708,22 @@ $pdf->SetY($yE + $segH + $gap);
 // ========================= F. Work Progress =========================
 $pdf->SetFont($pdf->ff,'B',10);
 
-$yF = $pdf->GetY();
+$yF = $pdf->GetY(); // start position
 
+// WIDTHS
 list($wTask, $wDuration, $wStart, $wEnd, $wIn, $wDelay, $wReasons)
     = split_widths($avail, [0.28, 0.10, 0.12, 0.12, 0.08, 0.08, 0.22]);
 
 $pdf->SetXY($xR, $yF);
 $pdf->SetFont($pdf->ff, 'B', 9);
 
+// ================= HEADER ROW 1 =================
 $pdf->Cell($wTask, $h*2, 'Task', 1, 0, 'C');
 $pdf->Cell($wDuration + $wStart + $wEnd, $h, 'Weekly Schedule', 1, 0, 'C');
 $pdf->Cell($wIn + $wDelay, $h, 'Status', 1, 0, 'C');
 $pdf->Cell($wReasons, $h*2, 'Reasons', 1, 1, 'C');
 
+// ================= HEADER ROW 2 =================
 $pdf->SetX($xR + $wTask);
 $pdf->Cell($wDuration, $h, 'Duration', 1, 0, 'C');
 $pdf->Cell($wStart,    $h, 'Start', 1, 0, 'C');
@@ -749,6 +731,7 @@ $pdf->Cell($wEnd,      $h, 'End', 1, 0, 'C');
 $pdf->Cell($wIn,       $h, 'In', 1, 0, 'C');
 $pdf->Cell($wDelay,    $h, 'Delay', 1, 1, 'C');
 
+// ================= DATA =================
 $pdf->SetFont($pdf->ff, '', 9);
 
 if (empty($data['workprog'])) {
@@ -767,6 +750,7 @@ if (empty($data['workprog'])) {
         $status = strtolower(trim($row['status'] ?? ''));
         $isDelay = in_array($status, ['delay','delayed']);
 
+        // IN
         if (!$isDelay) {
             $pdf->SetFillColor(200,255,200);
             $pdf->Cell($wIn, $h, 'X', 1, 0, 'C', true);
@@ -774,6 +758,7 @@ if (empty($data['workprog'])) {
             $pdf->Cell($wIn, $h, '', 1);
         }
 
+        // DELAY
         if ($isDelay) {
             $pdf->SetFillColor(255,200,200);
             $pdf->Cell($wDelay, $h, 'X', 1, 0, 'C', true);
@@ -785,9 +770,11 @@ if (empty($data['workprog'])) {
     }
 }
 
+// ================= GET ACTUAL HEIGHT =================
 $yEnd = $pdf->GetY();
 $actualHeight = $yEnd - $yF;
 
+// ================= DRAW LEFT LABEL AFTER =================
 $pdf->SetXY($X0, $yF);
 $pdf->SetFillColor(220,220,220);
 $pdf->SetFont($pdf->ff, 'B', 11);
@@ -795,22 +782,24 @@ $pdf->SetFont($pdf->ff, 'B', 11);
 $pdf->Cell($wL, $actualHeight, 'F.', 1, 0, 'C', true);
 $pdf->Cell($wS, $actualHeight, 'Work Progress', 1, 0, 'C', true);
 
+// move cursor
 $pdf->SetY($yEnd + $gap);
-
 // ========================= G. Constraints =========================
 $pdf->SetFont($pdf->ff,'B',10);
 $rowCount = count($data['constraints']);
-$totalRows = $rowCount + 2;
+$totalRows = $rowCount + 2; // +2 for header rows
 $segH = $h * $totalRows;
 $pdf->EnsureSpace($segH + $gap);
 $yG = $pdf->GetY();
 
+// Draw left label for G (spanning full height)
 $pdf->SetFillColor(220,220,220);
 $pdf->SetFont($pdf->ff, 'B', 11);
 $pdf->SetXY($X0, $yG);
 $pdf->Cell($wL, $segH, 'G.', 1, 0, 'C', true);
 $pdf->Cell($wS, $segH, 'Constraints', 1, 0, 'C', true);
 
+// Define column widths for Constraints in Portrait
 $wIssue = 70;
 $wStatusOpen = 18;
 $wStatusClosed = 18;
@@ -820,11 +809,13 @@ $wRemark = $avail - ($wIssue + $wStatusOpen + $wStatusClosed + $wDate);
 $pdf->SetXY($xR, $yG);
 $pdf->SetFont($pdf->ff, 'B', 9);
 
+// First header row
 $pdf->Cell($wIssue, $h, 'Issues', 1, 0, 'C');
 $pdf->Cell($wStatusOpen + $wStatusClosed, $h, 'Status', 1, 0, 'C');
 $pdf->Cell($wDate, $h, 'Date', 1, 0, 'C');
 $pdf->Cell($wRemark, $h, 'Remark', 1, 1, 'C');
 
+// Second header row
 $pdf->SetX($xR + $wIssue);
 $pdf->Cell($wStatusOpen, $h, 'Open', 1, 0, 'C');
 $pdf->Cell($wStatusClosed, $h, 'Closed', 1, 0, 'C');
@@ -839,25 +830,27 @@ if (empty($data['constraints'])) {
   foreach ($data['constraints'] as $row) {
     $pdf->SetX($xR);
     $pdf->Cell($wIssue,  $h, $pdf->FitText($wIssue,  $row['issue']),  1, 0, 'L');
-
+    
     $status = strtolower($row['status']);
     $isOpen = ($status === 'open');
     $isClosed = ($status === 'closed');
-
+    
+    // Open column - using 'V' for check (ASCII compatible)
     if ($isOpen) {
       $pdf->SetFillColor(255, 200, 200);
       $pdf->Cell($wStatusOpen, $h, 'X', 1, 0, 'C', true);
     } else {
       $pdf->Cell($wStatusOpen, $h, '', 1, 0, 'C', false);
     }
-
+    
+    // Closed column - using 'V' for check (ASCII compatible)
     if ($isClosed) {
       $pdf->SetFillColor(200, 255, 200);
       $pdf->Cell($wStatusClosed, $h, 'X', 1, 0, 'C', true);
     } else {
       $pdf->Cell($wStatusClosed, $h, '', 1, 0, 'C', false);
     }
-
+    
     $pdf->Cell($wDate,   $h, $pdf->FitText($wDate,   $row['date']),   1, 0, 'C');
     $pdf->Cell($wRemark, $h, $pdf->FitText($wRemark, $row['remark']), 1, 1, 'L');
   }
@@ -871,6 +864,7 @@ $segH = $h * 3;
 $pdf->EnsureSpace($segH + $gap);
 $yH = $pdf->GetY();
 
+// Draw left label for H (spanning full height)
 $pdf->SetFillColor(220,220,220);
 $pdf->SetFont($pdf->ff, 'B', 11);
 $pdf->SetXY($X0, $yH);

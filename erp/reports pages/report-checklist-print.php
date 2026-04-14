@@ -18,23 +18,7 @@ if (empty($_SESSION['employee_id'])) {
     header("Location: login.php");
     exit;
 }
-$designation = strtolower(trim((string)($_SESSION['designation'] ?? '')));
-$sessionRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
 
-function normalizeAccessRole(string $designation, string $sessionRole = ''): string {
-    $d = strtolower(trim($designation));
-    $r = strtolower(trim($sessionRole));
-
-    if (in_array($r, ['admin', 'administrator', 'super admin'], true)) return 'admin';
-    if (in_array($d, ['admin', 'administrator', 'director', 'vice president', 'general manager'], true)) return 'admin';
-    if ($d === 'manager') return 'manager';
-    if ($d === 'team lead') return 'tl';
-    if (in_array($d, ['project engineer grade 1', 'project engineer grade 2', 'sr. engineer', 'engineer', 'project engineer'], true)) return 'engineer';
-
-    return 'employee';
-}
-
-$accessRole = normalizeAccessRole($designation, $sessionRole);
 $employeeId    = (int)($_SESSION['employee_id'] ?? 0);
 $viewId        = isset($_GET['view']) ? (int)$_GET['view'] : 0;
 $MODE_STRING   = (isset($_GET['mode']) && $_GET['mode'] === 'string');
@@ -54,42 +38,23 @@ $companyName   = $companyData['company_name'] ?? 'TEK-C Construction Pvt. Ltd.';
 /* ================= FETCH CHECKLIST DATA ================= */
 $sql = "
 SELECT 
-    c.*,
-    s.project_name,
-    s.manager_employee_id,
-    s.team_lead_employee_id,
-    cl.client_name
+    c.*, s.project_name, cl.client_name
 FROM checklist_reports c
 JOIN sites s ON s.id = c.site_id
 JOIN clients cl ON cl.id = s.client_id
-WHERE c.id = ?
+WHERE c.id = ? AND c.employee_id = ?
 LIMIT 1
 ";
 $st = mysqli_prepare($conn, $sql);
 if (!$st) die(mysqli_error($conn));
 
-mysqli_stmt_bind_param($st, "i", $viewId);
+mysqli_stmt_bind_param($st, "ii", $viewId, $employeeId);
 mysqli_stmt_execute($st);
 $row = mysqli_fetch_assoc(mysqli_stmt_get_result($st));
 mysqli_stmt_close($st);
 
 if (!$row) die('Checklist not found');
 
-$canAccess = false;
-
-if ($accessRole === 'admin') {
-    $canAccess = true;
-} elseif ($accessRole === 'manager') {
-    $canAccess = ((int)($row['manager_employee_id'] ?? 0) === $employeeId);
-} elseif ($accessRole === 'tl') {
-    $canAccess = ((int)($row['team_lead_employee_id'] ?? 0) === $employeeId);
-} else {
-    $canAccess = ((int)($row['employee_id'] ?? 0) === $employeeId);
-}
-
-if (!$canAccess) {
-    die('Checklist not found or not allowed');
-}
 /* ================= HELPERS ================= */
 function clean_text($s){
     if (is_array($s)) {

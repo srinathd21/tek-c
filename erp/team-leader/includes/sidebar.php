@@ -25,9 +25,9 @@
       <i class="bi bi-calendar-check"></i><span class="label">Attendance</span>
     </a>
 
-    <!-- Today Task -->
-    <a class="side-link" href="today-tasks.php">
-      <i class="bi bi-check2-square"></i><span class="label">Today Task</span>
+    <!-- Today Reports -->
+    <a class="side-link" href="emp-reports.php">
+      <i class="bi bi-check2-square"></i><span class="label">Today Reports</span>
     </a>
 
     <!-- Time Management -->
