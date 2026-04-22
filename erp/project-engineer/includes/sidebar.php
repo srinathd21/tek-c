@@ -113,6 +113,9 @@
       <a class="side-sublink" href="checklist.php">
         <i class="bi bi-card-checklist"></i><span class="label">Checklist</span>
       </a>
+      <a class="side-sublink" href="sat.php">
+        <i class="bi bi-clipboard-check"></i><span class="label">SAT</span>
+      </a>
     </div>
 
     <!-- Reports -->
