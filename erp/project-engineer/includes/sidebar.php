@@ -116,6 +116,9 @@
       <a class="side-sublink" href="sat.php">
         <i class="bi bi-clipboard-check"></i><span class="label">SAT</span>
       </a>
+      <a class="side-sublink" href="dlar.php">
+        <i class="bi bi-clipboard-check"></i><span class="label">DLAR</span>
+      </a>
     </div>
 
     <!-- Reports -->
