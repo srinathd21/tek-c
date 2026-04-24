@@ -119,6 +119,9 @@
       <a class="side-sublink" href="dlar.php">
         <i class="bi bi-clipboard-check"></i><span class="label">DLAR</span>
       </a>
+      <a class="side-sublink" href="ait.php">
+        <i class="bi bi-clipboard-check"></i><span class="label">AIT</span>
+      </a>
     </div>
 
     <!-- Reports -->
