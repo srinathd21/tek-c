@@ -69,86 +69,80 @@ class PDF extends FPDF {
     protected $colWidths = [12, 28, 60, 25, 35, 28, 38, 36, 25];
     
     function Header(){
-        // Outer border
-        $this->Rect(5,5,287,200);
-        
-        $logoBoxW = 35;  // Wider box for logo
-        $metaW = 80;     // Slightly wider meta box
-        $titleW = 292 - $logoBoxW - $metaW;
-        
-        // Logo box border
-        $this->Rect(5,5,$logoBoxW,25);
-        
-        // Handle logo with proper scaling
-        $logoDisplayed = false;
-        
-        if ($this->logoPath && file_exists($this->logoPath)) {
-            // Get image dimensions
-            list($imgW, $imgH) = getimagesize($this->logoPath);
-            
-            // Calculate available space (with margins)
-            $availableW = $logoBoxW - 6;  // 3px margin each side
-            $availableH = 21;              // 25px height - 4px margins
-            
-            // Calculate scaling ratio
-            $ratioW = $availableW / $imgW;
-            $ratioH = $availableH / $imgH;
-            $ratio = min($ratioW, $ratioH);
-            
-            // Calculate final dimensions
-            $finalW = $imgW * $ratio;
-            $finalH = $imgH * $ratio;
-            
-            // Center the logo in the box
-            $xPos = 5 + (($logoBoxW - $finalW) / 2);
-            $yPos = 5 + ((25 - $finalH) / 2);
-            
-            // Only display if dimensions are reasonable
-            if ($finalW > 5 && $finalH > 5) {
-                $this->Image($this->logoPath, $xPos, $yPos, $finalW, $finalH);
-                $logoDisplayed = true;
-            }
-        }
-        
-        // If no logo found or display failed, show placeholder
-        if (!$logoDisplayed) {
-            $this->SetFont('Arial','I',8);
-            $this->SetXY(5 + 2, 5 + 8);
-            $this->Cell($logoBoxW - 4, 10, 'No Logo', 0, 0, 'C');
-        }
-        
-        // Title
-        $this->SetXY(5 + $logoBoxW, 5);
-        $this->SetFont('Arial','B',14);  // Slightly smaller font
-        $this->Cell($titleW,25,'ACTION ITEM TRACKER (AIT)',1,0,'C');
-        
-        // Meta box
-        $this->SetFont('Arial','',8);  // Smaller font for meta data
-        
-        $x = 5 + $logoBoxW + $titleW;
-        $y = 5;
-        $h = 5;
-        
-        $data = [
-            ['Project', $GLOBALS['main']['project_name']],
-            ['Client', $GLOBALS['main']['client_name']],
-            ['Architects', $GLOBALS['main']['architects']],
-            ['PMC', $GLOBALS['main']['pmc']],
-            ['AIT No', $GLOBALS['main']['ait_no']]
-        ];
-        
-        foreach ($data as $row){
-            $this->SetXY($x,$y);
-            $this->Cell(28,$h,$row[0],1,0,'L');
-            $this->SetFont('Arial','',8);
-            $this->Cell($metaW - 28,$h,clean($row[1]),1,0,'L');
-            $y += $h;
-        }
-        
-        $this->headerHeight = 35;
-        $this->SetY($this->headerHeight);
-        $this->SetX(5);
+    // Page usable width
+    $pageWidth = 287; // 297 - 10 margin
+
+    // Outer border
+    $this->Rect(5,5,$pageWidth,200);
+
+    $logoBoxW = 30;
+    $metaW = 90;
+    $titleW = $pageWidth - $logoBoxW - $metaW;
+
+    // Logo box
+    $this->Rect(5,5,$logoBoxW,25);
+
+    // --- LOGO ---
+    if ($this->logoPath && file_exists($this->logoPath)) {
+        list($imgW, $imgH) = getimagesize($this->logoPath);
+
+        $maxW = $logoBoxW - 6;
+        $maxH = 19;
+
+        $ratio = min($maxW / $imgW, $maxH / $imgH);
+
+        $w = $imgW * $ratio;
+        $h = $imgH * $ratio;
+
+        $x = 5 + ($logoBoxW - $w)/2;
+        $y = 5 + (25 - $h)/2;
+
+        $this->Image($this->logoPath, $x, $y, $w, $h);
+    } else {
+        $this->SetFont('Arial','I',9);
+        $this->SetXY(5,15);
+        $this->Cell($logoBoxW,5,'No Logo',0,0,'C');
     }
+
+    // --- TITLE ---
+    $this->SetXY(5 + $logoBoxW, 5);
+    $this->SetFont('Arial','B',14);
+    $this->Cell($titleW,25,'ACTION ITEM TRACKER (AIT)',1,0,'C');
+
+    // --- META BOX ---
+    $this->SetFont('Arial','',8);
+
+    $x = 5 + $logoBoxW + $titleW; // ✅ FIXED
+    $y = 5;
+    $h = 5;
+
+    $data = [
+        ['Project', $GLOBALS['main']['project_name']],
+        ['Client', $GLOBALS['main']['client_name']],
+        ['Architects', $GLOBALS['main']['architects']],
+        ['PMC', $GLOBALS['main']['pmc']],
+        ['AIT No', $GLOBALS['main']['ait_no']]
+    ];
+
+    foreach ($data as $row){
+        $this->SetXY($x,$y);
+        $this->Cell(30,$h,$row[0],1,0,'L');
+        $this->Cell($metaW - 30,$h,clean($row[1]),1,0,'L');
+        $y += $h;
+    }
+
+    $this->headerHeight = 30;
+    $this->SetY($this->headerHeight);
+    $this->SetX(5);
+    $this->headerHeight = 30;
+
+// add gap (e.g. 10mm)
+$gap = 8;
+
+$this->SetY($this->headerHeight + $gap);
+$this->SetX(5);
+}
+
     
     function GetRowHeight($data, $isHeader = false) {
         $lineHeight = $isHeader ? 8 : 12;
