@@ -15,20 +15,20 @@
                             <!-- Direct link to Home (index.php) -->
                             <a href="index.php">Home</a>
                             <!-- Direct link to About Us -->
-                            <a href="index.php?page=about">About Us</a>
+                            <a href="about.php">About Us</a>
                             <!-- Direct link to Product Overview -->
-                            <a href="index.php?page=product">Product Overview</a>
+                            <a href="product-overview.php">Product Overview</a>
                             <!-- Direct link to Pricing -->
-                            <a href="index.php?page=pricing">Pricing</a>
+                            <a href="pricing.php">Pricing</a>
                             <!-- Direct link to Contact Us -->
-                            <a href="index.php?page=contact">Contact Us</a>
+                            <a href="contact.php">Contact Us</a>
                         </nav>
                     </div>
                 </div>
                 <div class="ul-header-actions">
                     
                     <a href="erp/"><i class="flaticon-user"></i></a>
-                    <a href="#" class="add-property-btn d-xxs-none"><i class="flaticon-home"></i> Request Demo</a>
+                    <a href="contact.php" class="add-property-btn d-xxs-none"><i class="flaticon-home"></i> Request Demo</a>
                     <button class="ul-header-sidebar-opener"><i class="flaticon-menu-button"></i></button>
                 </div>
             </div>

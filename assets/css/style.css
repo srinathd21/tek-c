@@ -377,7 +377,7 @@ button {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(112, 101, 240, 0.85);
+
   z-index: -1;
 }
 
@@ -1974,7 +1974,7 @@ button {
   content: "";
   position: absolute;
   inset: 0;
-  background: url(../img/featured-properties-bg.jpg) no-repeat center center;
+  background: url(../img1/1920X1040.png) no-repeat center center;
   background-size: cover;
   background-attachment: fixed;
   opacity: 10%;
@@ -2814,7 +2814,7 @@ button {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: url(../img/ad-bg.jpg) no-repeat center center/cover;
+  background: url(../img1/1410X400.png) no-repeat center center/cover;
   opacity: 25%;
 }
 
@@ -2967,7 +2967,7 @@ button {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: url("../img/testimonial-bg.jpg") no-repeat center center/cover fixed;
+  background: url("../img1/1920x1001.png") no-repeat center center/cover fixed;
   opacity: 10%;
 }
 
