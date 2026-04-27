@@ -340,15 +340,14 @@
                         <div class="col-lg-5">
                             <div class="ul-app-ad-imgs">
                                 <div class="ul-app-ad-img">
-                                    <!-- qr code -->
-                                    <img src="assets/img/app-ad-qr-code.jpg" alt="QR Code" class="ul-app-ad-qr-code">
-                                    <!-- app screenshot 1 -->
-                                    <img src="assets/img/app-ad-ss-1.png" alt="App screenshot" class="ul-app-ad-ss-1">
-                                </div>
-                                <div class="ul-app-ad-img">
-                                    <!-- app screenshot 2 -->
-                                    <img src="assets/img/app-ad-ss-2.png" alt="App Screenshot" class="ul-app-ad-ss-2">
-                                </div>
+                                        
+                                        <img src="https://images.pexels.com/photos/2760242/pexels-photo-2760242.jpeg?auto=compress&cs=tinysrgb&w=200&h=300&fit=crop"
+                                            alt="App ss" class="ul-app-ad-ss-1">
+                                    </div>
+                                    <div class="ul-app-ad-img">
+                                        <img src="https://images.pexels.com/photos/3183197/pexels-photo-3183197.jpeg?auto=compress&cs=tinysrgb&w=200&h=300&fit=crop"
+                                            alt="App Screenshot" class="ul-app-ad-ss-2">
+                                    </div>
 
                                 <!-- vector -->
                                 <img src="assets/img/app-ad-img-vector.svg" alt="vector" class="vector">

@@ -301,8 +301,8 @@
                 <div class="row row-cols-lg-2 row-cols-1 align-items-center">
                     <div class="col">
                         <div class="ul-why-choose-us-imgs">
-                            <div class="img"><img src="assets/img1/erp1.png" alt="ERP Screenshot"></div>
-                            <div class="img"><img src="assets/img1/erp1.png" alt="Dashboard">
+                            <div class="img"><img src="assets/img1/erp2.png" alt="ERP Screenshot"></div>
+                            <div class="img"><img src="assets/img1/erp1.png" alt="Dashboard" >
                                 <div class="icon"><i class="flaticon-home-agreement"></i></div>
                             </div>
                         </div>
@@ -374,7 +374,7 @@
                                     <p class="ul-project-location">Manpower, machinery, material, work progress tracking
                                     </p>
                                 </div>
-                                <div class="ul-project-img"><img src="assets/img1/dpr.png"
+                                <div class="ul-project-img"><img src="assets/img1/erp.png"
                                         alt="DPR"><span class="ul-project-tag">Core</span></div>
                                 <div class="ul-project-txt"><span class="ul-project-price"><span
                                             class="number">Site</span> Execution</span>
@@ -397,7 +397,7 @@
                                     </div><a href="#" class="ul-project-title">Quotation Management</a>
                                     <p class="ul-project-location">Request → Dealer → QS → Manager approval</p>
                                 </div>
-                                <div class="ul-project-img"><img src="https://picsum.photos/id/28/300/200"
+                                <div class="ul-project-img"><img src="assets/img1/quotation management.png"
                                         alt="Quotation"><span class="ul-project-tag">Procurement</span></div>
                                 <div class="ul-project-txt"><span class="ul-project-price"><span
                                             class="number">Cost</span> Control</span>
@@ -421,7 +421,7 @@
                                     <p class="ul-project-location">Request for information, action items, delay tracking
                                     </p>
                                 </div>
-                                <div class="ul-project-img"><img src="https://picsum.photos/id/41/300/200"
+                                <div class="ul-project-img"><img src="assets/img1/rfi.png"
                                         alt="RFI"><span class="ul-project-tag">Compliance</span></div>
                                 <div class="ul-project-txt"><span class="ul-project-price"><span
                                             class="number">Clarity</span> & Accountability</span>
@@ -445,7 +445,7 @@
                                     <p class="ul-project-location">Meeting minutes, attendee signatures, action items
                                     </p>
                                 </div>
-                                <div class="ul-project-img"><img src="https://picsum.photos/id/166/300/200"
+                                <div class="ul-project-img"><img src="assets/img1/mom&mas.png"
                                         alt="MOM"><span class="ul-project-tag">Meeting</span></div>
                                 <div class="ul-project-txt"><span class="ul-project-price"><span
                                             class="number">Structured</span> Minutes</span>
@@ -468,7 +468,7 @@
                                     </div><a href="#" class="ul-project-title">HR & Attendance</a>
                                     <p class="ul-project-location">Geo-fenced attendance, leave, hiring, onboarding</p>
                                 </div>
-                                <div class="ul-project-img"><img src="https://picsum.photos/id/100/300/200"
+                                <div class="ul-project-img"><img src="assets/img1/hr attendance.png"
                                         alt="HR"><span class="ul-project-tag">Workforce</span></div>
                                 <div class="ul-project-txt"><span class="ul-project-price"><span
                                             class="number">People</span> Operations</span>

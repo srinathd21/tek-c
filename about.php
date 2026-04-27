@@ -682,8 +682,7 @@
                             <div class="col-lg-5">
                                 <div class="ul-app-ad-imgs">
                                     <div class="ul-app-ad-img">
-                                        <img src="https://placehold.co/200x200/f5a623/ffffff?text=Scan+QR" alt="QR"
-                                            class="ul-app-ad-qr-code">
+                                        
                                         <img src="https://images.pexels.com/photos/2760242/pexels-photo-2760242.jpeg?auto=compress&cs=tinysrgb&w=200&h=300&fit=crop"
                                             alt="App ss" class="ul-app-ad-ss-1">
                                     </div>
