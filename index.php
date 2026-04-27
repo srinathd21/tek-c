@@ -231,7 +231,7 @@
                 <div class="row row-cols-md-3 row-cols-2 g-4 mx-auto">
                     <div class="col">
                         <div class="ul-city">
-                            <div class="img"><a href="#"><img src="https://picsum.photos/id/22/300/200"
+                            <div class="img"><a href="#"><img src="assets/img1/sites & Contracts.jpeg"
                                         alt="Sites & Contracts"></a></div>
                             <div class="txt">
                                 <h3 class="ul-city-title"><a href="#">Sites & Contracts</a></h3><span
@@ -244,14 +244,14 @@
                             <div class="img"><a href="#"><img src="https://picsum.photos/id/26/300/200"
                                         alt="Daily Reports"></a></div>
                             <div class="txt">
-                                <h3 class="ul-city-title"><a href="#">DPR & DAR & MPT</a></h3><span
+                                <h3 class="ul-city-title" ><a href="#">DPR & DAR & MPT</a></h3><span
                                     class="ul-city-count">Daily Progress, Activity, Monthly Trackers</span>
                             </div>
                         </div>
                     </div>
                     <div class="col">
                         <div class="ul-city">
-                            <div class="img"><a href="#"><img src="https://picsum.photos/id/29/300/200"
+                            <div class="img"><a href="#"><img src="assets/img1/document control.jpeg"
                                         alt="Document Control"></a></div>
                             <div class="txt">
                                 <h3 class="ul-city-title"><a href="#">Document Management</a></h3><span
@@ -374,7 +374,7 @@
                                     <p class="ul-project-location">Manpower, machinery, material, work progress tracking
                                     </p>
                                 </div>
-                                <div class="ul-project-img"><img src="https://picsum.photos/id/15/300/200"
+                                <div class="ul-project-img"><img src="assets/img1/dpr.png"
                                         alt="DPR"><span class="ul-project-tag">Core</span></div>
                                 <div class="ul-project-txt"><span class="ul-project-price"><span
                                             class="number">Site</span> Execution</span>
