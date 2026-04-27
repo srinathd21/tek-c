@@ -170,7 +170,7 @@
     <main>
         <!-- BREADCRUMB SECTION START -->
         <div class="ul-breadcrumb"
-            style="background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.pexels.com/photos/159306/construction-site-build-construction-work-159306.jpeg?auto=compress&cs=tinysrgb&w=1600&h=400&fit=crop'); background-size: cover; background-position: center;">
+            style="background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('assets/img1/1600X400.png'); background-size: cover; background-position: center;">
             <div class="wow animate__fadeInUp">
                 <h2 class="ul-breadcrumb-title">About TEK-C</h2>
                 <div class="ul-breadcrumb-nav">
@@ -320,7 +320,7 @@
 
                         <div class="col">
                             <div class="ul-about-img ul-inner-about-img">
-                                <img src="https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=500&h=500&fit=crop"
+                                <img src="assets/img1/500X500.png" height="300"
                                     alt="TEK-C Platform">
                             </div>
                         </div>

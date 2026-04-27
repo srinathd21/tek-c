@@ -301,8 +301,8 @@
                 <div class="row row-cols-lg-2 row-cols-1 align-items-center">
                     <div class="col">
                         <div class="ul-why-choose-us-imgs">
-                            <div class="img"><img src="https://picsum.photos/id/105/400/500" alt="ERP Screenshot"></div>
-                            <div class="img"><img src="https://picsum.photos/id/177/400/300" alt="Dashboard">
+                            <div class="img"><img src="assets/img1/erp1.png" alt="ERP Screenshot"></div>
+                            <div class="img"><img src="assets/img1/erp1.png" alt="Dashboard">
                                 <div class="icon"><i class="flaticon-home-agreement"></i></div>
                             </div>
                         </div>

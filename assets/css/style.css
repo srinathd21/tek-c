@@ -364,7 +364,7 @@ button {
 }
 
 .ul-breadcrumb {
-  background: url(../img/breadcrumb-bg.jpg) no-repeat center center;
+  background: url(../img1/contact-1920X423.png) no-repeat center center;
   background-size: cover;
   padding: clamp(50px, 6.31vw, 120px) 15px;
   padding-top: clamp(128px, 10.4vw, 198px);
@@ -2511,7 +2511,7 @@ button {
   position: absolute;
   content: "";
   inset: 0;
-  background-image: url(../img/stat-bg-hover.png);
+  
   background-size: cover;
   mix-blend-mode: multiply;
   opacity: 0;
