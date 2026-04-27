@@ -231,7 +231,7 @@
                 <div class="row row-cols-md-3 row-cols-2 g-4 mx-auto">
                     <div class="col">
                         <div class="ul-city">
-                            <div class="img"><a href="#"><img src="assets/img1/sites & Contracts.jpeg"
+                            <div class="img"><a href="#"><img src="assets/img1/sites & Contracts.jpeg" height="50"
                                         alt="Sites & Contracts"></a></div>
                             <div class="txt">
                                 <h3 class="ul-city-title"><a href="#">Sites & Contracts</a></h3><span
@@ -241,7 +241,7 @@
                     </div>
                     <div class="col">
                         <div class="ul-city">
-                            <div class="img"><a href="#"><img src="https://picsum.photos/id/26/300/200"
+                            <div class="img"><a href="#"><img src="assets/img1/dpr-mpt.png"
                                         alt="Daily Reports"></a></div>
                             <div class="txt">
                                 <h3 class="ul-city-title" ><a href="#">DPR & DAR & MPT</a></h3><span
@@ -262,7 +262,7 @@
                     
                     <div class="col">
                         <div class="ul-city">
-                            <div class="img"><a href="#"><img src="https://picsum.photos/id/101/300/200"
+                            <div class="img"><a href="#"><img src="assets/img1/reporting.jpeg"
                                         alt="Quotations"></a></div>
                             <div class="txt">
                                 <h3 class="ul-city-title"><a href="#">Procurement & Quotations</a></h3><span
@@ -272,7 +272,7 @@
                     </div>
                     <div class="col">
                         <div class="ul-city">
-                            <div class="img"><a href="#"><img src="https://picsum.photos/id/155/300/200" alt="HRMS"></a>
+                            <div class="img"><a href="#"><img src="assets/img1/staff records.jpeg" alt="HRMS"></a>
                             </div>
                             <div class="txt">
                                 <h3 class="ul-city-title"><a href="#">HR & Recruitment</a></h3><span
@@ -283,7 +283,7 @@
                     
                     <div class="col">
                         <div class="ul-city">
-                            <div class="img"><a href="#"><img src="https://picsum.photos/id/20/300/200"
+                            <div class="img"><a href="#"><img src="assets/img1/role based.jpeg"
                                         alt="Role Access"></a></div>
                             <div class="txt">
                                 <h3 class="ul-city-title"><a href="#">Role-Based Access</a></h3><span
