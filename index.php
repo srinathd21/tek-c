@@ -731,6 +731,11 @@
             .hero-tags{
                 margin-bottom: 50px;
             }
+            .dashboard-img>img {
+            width: 100%;
+            height: auto;
+           
+        }
         }
     </style>
 </head>
