@@ -715,7 +715,10 @@
     <div class="container position-relative">
         <div class="row align-items-center">
             <div class="col-lg-6" data-aos="fade-right">
-                
+                <div class="hero-badge">
+                    <i class="bi bi-building"></i>
+                    Pre Construction to Post Construction
+                </div>
 
                 <h1>
                     Complete Project <br>
@@ -754,7 +757,9 @@
                         <div class="app-sidebar">
                             <div class="d-flex align-items-center gap-2 mb-4">
                                 <div class="logo-box" style="width:35px;height:35px;border-radius:9px;">
-                                    <i class="bi bi-send-fill"></i>
+                                    <img src="assets/logo.png" class="logo-box">
+                
+            </img>
                                 </div>
                                 <strong>TEK-C</strong>
                             </div>
@@ -807,13 +812,13 @@
 
                             <div class="mt-4">
                                 <h6 class="fw-bold">Project Progress</h6>
-                                <div class="mb-2">KFC - Client: Ariharasudhan P <span class="float-end">42%</span></div>
+                                <div class="mb-2">Hifi11 Technologies: Ariharasudhan P  <span class="float-end">42%</span></div>
                                 <div class="progress mb-3" style="height:8px;"><div class="progress-bar bg-warning" style="width:42%"></div></div>
 
-                                <div class="mb-2">Ecommer - Client: Ariharasudhan P <span class="float-end">78%</span></div>
+                                <div class="mb-2">Ecommer - Client: Sanjeevan <span class="float-end">78%</span></div>
                                 <div class="progress mb-3" style="height:8px;"><div class="progress-bar bg-warning" style="width:78%"></div></div>
 
-                                <div class="mb-2">Demo Project - Client: UKB Construction <span class="float-end">55%</span></div>
+                                <div class="mb-2">Ananadhamayam- Client: Vignesh G <span class="float-end">55%</span></div>
                                 <div class="progress" style="height:8px;"><div class="progress-bar bg-warning" style="width:55%"></div></div>
                             </div>
                         </div>
@@ -1219,7 +1224,7 @@
                         <img class="avatar" src="assets/img/Shanthi.jpg" alt="">
                         <div>
                             <h6 class="fw-bold mb-0">Shanthi Balachandhar</h6>
-                            <small class="text-warning fw-bold">Director - TEK-C</small>
+                            <small class="text-warning fw-bold">Director - Anandhamayam</small>
                         </div>
                     </div>
                 </div>

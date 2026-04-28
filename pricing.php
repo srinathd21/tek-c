@@ -567,7 +567,7 @@ $constructionImages = [
                         <img class="avatar" src="assets/img/Shanthi.jpg" alt="">
                         <div>
                             <h6 class="fw-bold mb-0">Shanthi Balachandhar</h6>
-                            <small class="text-warning fw-bold">Director - TEK-C</small>
+                            <small class="text-warning fw-bold">Director - Anandhamayam</small>
                         </div>
                     </div>
                 </div>
