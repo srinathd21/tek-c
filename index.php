@@ -103,26 +103,26 @@
             border-radius: 20px;
         }
 
-        .search-box {
+        /* .search-box {
             background: rgba(255,255,255,.08);
             border: 1px solid rgba(255,255,255,.1);
             border-radius: 12px;
             color: #fff;
-            padding: 11px 15px;
+            padding: 8px 10px;
             min-width: 260px;
         }
 
         .search-box::placeholder {
             color: #abb6c3;
-        }
+        } */
 
         .btn-yellow {
             background: linear-gradient(135deg, var(--yellow), var(--yellow2));
             color: #111;
-            font-weight: 800;
+            font-weight: 700;
             border: 0;
-            border-radius: 12px;
-            padding: 12px 24px;
+            border-radius: 7px;
+            padding: 8px 14px;
             box-shadow: 0 12px 28px rgba(255, 179, 0, .35);
             transition: .35s;
         }
@@ -725,10 +725,7 @@
     <div class="container position-relative">
         <div class="row align-items-center">
             <div class="col-lg-6" data-aos="fade-right">
-                <div class="hero-badge">
-                    <i class="bi bi-building"></i>
-                    For Builders & Contractors
-                </div>
+                
 
                 <h1>
                     Complete Project <br>

@@ -1,10 +1,27 @@
+<style>
+       .btn-yellow {
+            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
+            color: #111;
+            font-weight: 700;
+            border: 0;
+            border-radius: 7px;
+            padding: 8px 14px;
+            box-shadow: 0 12px 28px rgba(255, 179, 0, .35);
+            transition: .35s;
+        }
+
+        .btn-yellow:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 18px 40px rgba(255, 179, 0, .45);
+        }
+</style>
 <!-- NAVBAR -->
 <nav class="navbar navbar-expand-lg fixed-top">
     <div class="container">
         <a class="navbar-brand" href="#">
-            <div class="logo-box">
-                <i class="bi bi-send-fill fs-4"></i>
-            </div>
+            <img src="assets/logo.png" class="logo-box">
+                
+            </img>
             <div class="logo-text">
                 TEK-C
                 <span>GLOBAL</span>
@@ -16,16 +33,30 @@
         </button>
 
         <div class="collapse navbar-collapse" id="mainNav">
-            <ul class="navbar-nav mx-auto">
-                <li class="nav-item"><a class="nav-link active" href="index.php">Home</a></li>
-                <li class="nav-item"><a class="nav-link" href="about.php">About Us</a></li>
-                <li class="nav-item"><a class="nav-link" href="modules.php">Product Overview</a></li>
-                <li class="nav-item"><a class="nav-link" href="pricing.php">Pricing</a></li>
-                <li class="nav-item"><a class="nav-link" href="contact.php">Contact Us</a></li>
-            </ul>
+            <?php
+$currentPage = basename($_SERVER['PHP_SELF']);
+?>
+
+<ul class="navbar-nav mx-auto">
+    <li class="nav-item">
+        <a class="nav-link <?= ($currentPage == 'index.php') ? 'active' : ''; ?>" href="index.php">Home</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= ($currentPage == 'about.php') ? 'active' : ''; ?>" href="about.php">About Us</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= ($currentPage == 'modules.php') ? 'active' : ''; ?>" href="modules.php">Product Overview</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= ($currentPage == 'pricing.php') ? 'active' : ''; ?>" href="pricing.php">Pricing</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= ($currentPage == 'contact.php') ? 'active' : ''; ?>" href="contact.php">Contact Us</a>
+    </li>
+</ul>
 
             <div class="d-lg-flex align-items-center gap-3">
-                <input class="search-box" type="text" placeholder="Search Modules, Features...">
+                
                 <a href="demo.php" class="btn btn-yellow">Request Demo</a>
             </div>
         </div>
