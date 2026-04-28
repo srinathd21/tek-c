@@ -1,50 +1,64 @@
+
 <!-- FOOTER -->
-    <footer class="ul-footer">
-        <div class="ul-footer-top">
-            <div class="ul-container">
-                <div class="ul-footer-top-wrapper wow animate__fadeInUp">
-                    <div class="ul-footer-about"><a href="index.php"><img src="assets/img/logo-dark.svg" alt="logo"></a>
-                        <p class="ul-footer-about-txt">TEK-C is a complete construction ERP software by UKB Group. Ready
-                            to deploy for builders, contractors, and developers across India and beyond.</p>
-                        <div class="ul-footer-socials"><a href="#"><i class="flaticon-facebook"></i></a><a href="#"><i
-                                    class="flaticon-instagram"></i></a><a href="#"><i
-                                    class="flaticon-twitter"></i></a><a href="#"><i class="flaticon-linkedin"></i></a>
-                        </div>
+<footer>
+    <div class="container">
+        <div class="row g-5">
+            <div class="col-lg-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <div class="logo-box">
+                        <i class="bi bi-send-fill fs-4"></i>
                     </div>
-                    <div class="single-column">
-                        <div class="ul-footer-widget">
-                            <h3 class="ul-footer-widget-title">Product</h3>
-                            <div class="ul-footer-widget-links"><a href="index.php?page=product">Modules Overview</a><a
-                                    href="index.php?page=pricing">Pricing</a><a href="#">Request Demo</a><a
-                                    href="#">White-label Option</a></div>
-                        </div>
-                        <div class="ul-footer-widget">
-                            <h3 class="ul-footer-widget-title">Support</h3>
-                            <div class="ul-footer-widget-links"><a href="#">Help Center</a><a
-                                    href="index.php?page=contact">Contact Sales</a><a href="#">Documentation</a></div>
-                        </div>
-                    </div>
-                    <div class="single-column">
-                        <div class="ul-footer-widget">
-                            <h3 class="ul-footer-widget-title">Legal</h3>
-                            <div class="ul-footer-widget-links"><a href="#">Privacy Policy</a><a href="#">Terms of
-                                    Service</a><a href="#">Data Security</a></div>
-                        </div>
-                    </div>
-                    <div class="single-column">
-                        <div class="ul-footer-widget">
-                            <h3 class="ul-footer-widget-title">Connect</h3>
-                            <div class="ul-footer-widget-links"><a href="#">sales@tek-c.com</a><a href="#">+91 72003
-                                    14099</a><a href="#">Partner Inquiry</a></div>
-                        </div>
+                    <div>
+                        <h4 class="fw-black mb-0 text-white">TEK-C</h4>
+                        <small>GLOBAL</small>
                     </div>
                 </div>
+
+                <p>
+                    TEK-C is a complete construction ERP built for today's condition.
+                    Ready-to-deploy for builders, contractors and developers across India and beyond.
+                </p>
+            </div>
+
+            <div class="col-lg-2 col-md-3">
+                <h6>Product</h6>
+                <a href="modules.php">Product Overview</a>  
+                <a href="pricing.php">Pricing</a>
+                <a href="demo.php">Request Demo</a>
+            </div>
+
+            <div class="col-lg-2 col-md-3">
+                <h6>Support</h6>
+                <a href="help-center.php">Help Center</a>
+                <a href="implementation.php">Implementation</a>
+                <a href="system.php">System Status</a>
+                <a href="contact.php">Contact Support</a>
+            </div>
+
+            <div class="col-lg-2 col-md-3">
+                <h6>Legal</h6>
+                <a href="privacy-policy.php">Privacy Policy</a>
+                <a href="terms.php">Terms of Service</a>
+                <a href="compliance.php">Compliance</a>
+            </div>
+
+            <div class="col-lg-2 col-md-3">
+                <h6>Connect</h6>
+                <p class="mb-2"><i class="bi bi-envelope me-2"></i> info@tekcglobal.com</p>
+                <p class="mb-3"><i class="bi bi-telephone me-2"></i> +91 72003 16099</p>
+
+                <a class="social-icon" href="#"><i class="bi bi-linkedin"></i></a>
+                <a class="social-icon" href="#"><i class="bi bi-youtube"></i></a>
+                <a class="social-icon" href="#"><i class="bi bi-facebook"></i></a>
+                <a class="social-icon" href="#"><i class="bi bi-twitter-x"></i></a>
             </div>
         </div>
-        <div class="ul-footer-bottom">
-            <p class="copyright-txt">© 2025 TEK-C | A UKB Group Company. Construction ERP for Modern Builders.</p>
+
+        <hr class="border-secondary my-4">
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center">
+            <p class="mb-0">© 2026 TEK-C Global. All rights reserved.</p>
+            <p class="mb-0">TEK-C is a product of UKR Group. Construction ERP for Modern Builders.</p>
         </div>
-        <div class="ul-footer-vectors"><img src="assets/img/footer-vector-img-1.png" alt="Footer Image"
-                class="ul-footer-vector-1"><img src="assets/img/footer-vector-img-2.png" alt="Footer Image"
-                class="ul-footer-vector-2"></div>
-    </footer>
+    </div>
+</footer>

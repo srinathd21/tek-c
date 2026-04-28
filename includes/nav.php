@@ -1,37 +1,33 @@
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg fixed-top">
+    <div class="container">
+        <a class="navbar-brand" href="#">
+            <div class="logo-box">
+                <i class="bi bi-send-fill fs-4"></i>
+            </div>
+            <div class="logo-text">
+                TEK-C
+                <span>GLOBAL</span>
+            </div>
+        </a>
 
-    <!-- HEADER SECTION START - SIMPLIFIED NAVIGATION WITH DIRECT LINKS -->
-    <header class="ul-header ul-header--home">
-        <div class="ul-header-bottom">
-            <div class="ul-header-bottom-wrapper">
-                <div class="header-bottom-left">
-                    <div class="logo-container">
-                        <a href="index.php" class="d-inline-block"><img src="assets/img/logo.svg" alt="TEK-C Logo"
-                                class="logo"></a>
-                    </div>
-                </div>
-                <div class="ul-header-nav-wrapper">
-                    <div class="to-go-to-sidebar-in-mobile">
-                        <nav class="ul-header-nav">
-                            <!-- Direct link to Home (index.php) -->
-                            <a href="index.php">Home</a>
-                            <!-- Direct link to About Us -->
-                            <a href="about.php">About Us</a>
-                            <!-- Direct link to Product Overview -->
-                            <a href="product-overview.php">Product Overview</a>
-                            <!-- Direct link to Pricing -->
-                            <a href="pricing.php">Pricing</a>
-                            <!-- Direct link to Contact Us -->
-                            <a href="contact.php">Contact Us</a>
-                        </nav>
-                    </div>
-                </div>
-                <div class="ul-header-actions">
-                    
-                    <a href="erp/"><i class="flaticon-user"></i></a>
-                    <a href="contact.php" class="add-property-btn d-xxs-none"><i class="flaticon-home"></i> Request Demo</a>
-                    <button class="ul-header-sidebar-opener"><i class="flaticon-menu-button"></i></button>
-                </div>
+        <button class="navbar-toggler bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="mainNav">
+            <ul class="navbar-nav mx-auto">
+                <li class="nav-item"><a class="nav-link active" href="index.php">Home</a></li>
+                <li class="nav-item"><a class="nav-link" href="about.php">About Us</a></li>
+                <li class="nav-item"><a class="nav-link" href="modules.php">Product Overview</a></li>
+                <li class="nav-item"><a class="nav-link" href="pricing.php">Pricing</a></li>
+                <li class="nav-item"><a class="nav-link" href="contact.php">Contact Us</a></li>
+            </ul>
+
+            <div class="d-lg-flex align-items-center gap-3">
+                <input class="search-box" type="text" placeholder="Search Modules, Features...">
+                <a href="demo.php" class="btn btn-yellow">Request Demo</a>
             </div>
         </div>
-    </header>
-    <!-- HEADER SECTION END -->
+    </div>
+</nav>
