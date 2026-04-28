@@ -23,7 +23,8 @@
     <a class="side-link" href="my-sites.php">
       <i class="bi bi-geo-alt"></i><span class="label">My Projects</span>
     </a>
-    <!-- QUOTATION MANAGEMENT - NEW SECTION -->
+
+    <!-- QUOTATION MANAGEMENT -->
     <a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#quotationMenu">
       <i class="bi bi-file-text"></i>
       <span class="label">Quotations</span>
@@ -33,19 +34,16 @@
     </a>
 
     <div class="collapse ps-2 side-submenu-collapse" id="quotationMenu">
-
       <a class="side-link sub-link" href="quotation-requests.php">
         <i class="bi bi-plus-circle"></i>
         <span class="label">New Request</span>
       </a>
-
       <a class="side-link sub-link" href="my-quotation-requests.php">
         <i class="bi bi-list-check"></i>
         <span class="label">My Requests</span>
       </a>
-
-
     </div>
+
     <!-- Today's Reports -->
     <a class="side-link" href="today-tasks.php">
       <i class="bi bi-journal-text"></i><span class="label">Today's Reports</span>
@@ -93,7 +91,7 @@
         <i class="bi bi-journal-text"></i><span class="label">DPR</span>
       </a>
       <a class="side-sublink" href="dar.php">
-        <i class="bi bi-clipboard-check"></i><span class="label">DAR</span>
+        <i class="bi bi-check2-square"></i><span class="label">DAR</span>
       </a>
       <a class="side-sublink" href="ma.php">
         <i class="bi bi-calendar2-week"></i><span class="label">MA</span>
@@ -105,7 +103,7 @@
         <i class="bi bi-chat-left-text"></i><span class="label">MOM</span>
       </a>
       <a class="side-sublink" href="mom-short.php">
-        <i class="bi bi-chat-left-text"></i><span class="label">MOM (Short-term)</span>
+        <i class="bi bi-chat-left-quote"></i><span class="label">MOM (Short-term)</span>
       </a>
       <a class="side-sublink" href="rfi.php">
         <i class="bi bi-question-circle"></i><span class="label">RFI</span>
@@ -114,13 +112,40 @@
         <i class="bi bi-card-checklist"></i><span class="label">Checklist</span>
       </a>
       <a class="side-sublink" href="sat.php">
-        <i class="bi bi-clipboard-check"></i><span class="label">SAT</span>
+        <i class="bi bi-bar-chart-steps"></i><span class="label">SAT</span>
       </a>
       <a class="side-sublink" href="dlar.php">
-        <i class="bi bi-clipboard-check"></i><span class="label">DLAR</span>
+        <i class="bi bi-file-earmark-spreadsheet"></i><span class="label">DLAR</span>
       </a>
       <a class="side-sublink" href="ait.php">
-        <i class="bi bi-clipboard-check"></i><span class="label">AIT</span>
+        <i class="bi bi-cpu"></i><span class="label">AIT</span>
+      </a>
+      <a class="side-sublink" href="mas.php">
+        <i class="bi bi-diagram-3"></i><span class="label">MAS</span>
+      </a>
+      <a class="side-sublink" href="pd.php">
+        <i class="bi bi-graph-up"></i><span class="label">PD</span>
+      </a>
+      <a class="side-sublink" href="pms.php">
+        <i class="bi bi-tools"></i><span class="label">PMS</span>
+      </a>
+      <a class="side-sublink" href="vfs.php">
+        <i class="bi bi-eye"></i><span class="label">VFS</span>
+      </a>
+      <a class="side-sublink" href="vft.php">
+        <i class="bi bi-eye-fill"></i><span class="label">VFT</span>
+      </a>
+      <a class="side-sublink" href="wpt.php">
+        <i class="bi bi-database"></i><span class="label">WPT</span>
+      </a>
+      <a class="side-sublink" href="dds.php">
+        <i class="bi bi-database"></i><span class="label">DDS</span>
+      </a>
+      <a class="side-sublink" href="ddt.php">
+        <i class="bi bi-table"></i><span class="label">DDT</span>
+      </a>
+      <a class="side-sublink" href="dpt.php">
+        <i class="bi bi-pie-chart"></i><span class="label">DPT</span>
       </a>
     </div>
 
@@ -167,6 +192,26 @@
       </a>
       <a class="side-sublink" href="my-leave-history.php">
         <i class="bi bi-clock-history"></i><span class="label">My Leave History</span>
+      </a>
+    </div>
+
+    <!-- ========== HR MASTER SECTION (NEW) ========== -->
+    <button class="side-link side-toggle" type="button"
+            id="hrMasterToggle"
+            aria-expanded="false"
+            aria-controls="hrMasterMenu"
+            title="HR Master">
+      <i class="bi bi-database-gear"></i>
+      <span class="label">HR Master</span>
+      <i class="bi bi-chevron-down chevron ms-auto"></i>
+    </button>
+
+    <div class="side-submenu" id="hrMasterMenu" hidden>
+      <a class="side-sublink" href="manage-stakeholder-types.php">
+        <i class="bi bi-people-fill"></i><span class="label">Manage Stakeholder Types</span>
+      </a>
+      <a class="side-sublink" href="vfs_packages.php">
+        <i class="bi bi-box-seam"></i><span class="label">VFS Packages</span>
       </a>
     </div>
 
@@ -259,6 +304,7 @@
   #sidebar.collapsed #mailMenu{ top: var(--mail-top, 60px); }
   #sidebar.collapsed #tmMenu{ top: var(--tm-top, 120px); }
   #sidebar.collapsed #hrMenu{ top: var(--hr-top, 180px); }
+  #sidebar.collapsed #hrMasterMenu{ top: var(--hrmaster-top, 240px); }
 
   #sidebar.collapsed .side-submenu .label{
     display: inline !important;
@@ -289,30 +335,29 @@ document.addEventListener('DOMContentLoaded', function() {
   const hrToggle   = document.getElementById('hrToggle');
   const hrMenu     = document.getElementById('hrMenu');
 
+  // NEW: HR Master Toggle
+  const hrMasterToggle = document.getElementById('hrMasterToggle');
+  const hrMasterMenu   = document.getElementById('hrMasterMenu');
+
   // Pages list for auto-open / active highlight
   const mailPages = ['mail-inbox.php','mail-compose.php','mail-sent.php','mail-trash.php'];
 
   const tmPages = [
-    'dpr.php',
-    'dar.php',
-    'ma.php',
-    'mpt.php',
-    'mom.php',
-    'mom-short.php',
-    'rfi.php',
-    'checklist.php'
+    'dpr.php', 'dar.php', 'ma.php', 'mpt.php', 'mom.php', 'mom-short.php',
+    'rfi.php', 'checklist.php', 'sat.php', 'dlar.php', 'ait.php', 'mas.php',
+    'pd.php', 'pms.php', 'vfs.php', 'vft.php', 'wpt.php', 'dds.php', 'ddt.php', 'dpt.php'
   ];
 
   const hrPages = [
-    'my-profile.php',
-    'attendance-profile.php',
-    'leave-ledger.php',
-    'payslips.php',
-    'hr-policy.php',
-    'salary-loan.php',
-    'attendance-regularization.php',
-    'apply-leave.php',
-    'my-leave-history.php'
+    'my-profile.php', 'my-attendance.php', 'leave-ledger.php', 'payslips.php',
+    'hr-policy.php', 'salary-loan.php', 'attendance-regularization.php',
+    'apply-leave.php', 'my-leave-history.php'
+  ];
+
+  // NEW: HR Master pages
+  const hrMasterPages = [
+    'manage-stakeholder-types.php',
+    'vfs_packages.php'
   ];
 
   function isCollapsed(){
@@ -343,11 +388,12 @@ document.addEventListener('DOMContentLoaded', function() {
     return toggleEl && toggleEl.getAttribute('aria-expanded') === 'true';
   }
 
-  // Accordion behavior
+  // Accordion behavior - added HR Master
   const menuDefs = [
     { key:'mail_open', toggle: mailToggle, menu: mailMenu, cssVar:'--mail-top' },
     { key:'tm_open',   toggle: tmToggle,   menu: tmMenu,   cssVar:'--tm-top' },
-    { key:'hr_open',   toggle: hrToggle,   menu: hrMenu,   cssVar:'--hr-top' }
+    { key:'hr_open',   toggle: hrToggle,   menu: hrMenu,   cssVar:'--hr-top' },
+    { key:'hrmaster_open', toggle: hrMasterToggle, menu: hrMasterMenu, cssVar:'--hrmaster-top' }
   ];
 
   function closeAllExcept(exceptKey){
@@ -382,6 +428,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let hasActiveMail = false;
   let hasActiveTm   = false;
   let hasActiveHr   = false;
+  let hasActiveHrMaster = false;
 
   subLinks.forEach(a => {
     const href = a.getAttribute('href');
@@ -393,6 +440,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (mailPages.includes(href)) hasActiveMail = true;
       if (tmPages.includes(href)) hasActiveTm = true;
       if (hrPages.includes(href)) hasActiveHr = true;
+      if (hrMasterPages.includes(href)) hasActiveHrMaster = true;
     }
   });
 
@@ -402,12 +450,14 @@ document.addEventListener('DOMContentLoaded', function() {
   if (hasActiveMail) openKey = 'mail_open';
   else if (hasActiveTm) openKey = 'tm_open';
   else if (hasActiveHr) openKey = 'hr_open';
+  else if (hasActiveHrMaster) openKey = 'hrmaster_open';
 
   if (!openKey) {
     try {
       if (localStorage.getItem('mail_open') === '1') openKey = 'mail_open';
       else if (localStorage.getItem('tm_open') === '1') openKey = 'tm_open';
       else if (localStorage.getItem('hr_open') === '1') openKey = 'hr_open';
+      else if (localStorage.getItem('hrmaster_open') === '1') openKey = 'hrmaster_open';
     } catch(e){}
   }
 
