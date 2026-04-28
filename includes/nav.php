@@ -14,6 +14,10 @@
             transform: translateY(-3px);
             box-shadow: 0 18px 40px rgba(255, 179, 0, .45);
         }
+        html {
+            scroll-behavior: smooth;
+            overflow-x: hidden;
+        }
 </style>
 <!-- NAVBAR -->
 <nav class="navbar navbar-expand-lg fixed-top">

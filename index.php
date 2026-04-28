@@ -22,10 +22,12 @@
 
         * {
             font-family: "Inter", sans-serif;
+            
         }
 
         html {
             scroll-behavior: smooth;
+            overflow-x: hidden;
         }
 
         body {
@@ -39,6 +41,7 @@
             backdrop-filter: blur(14px);
             padding: 15px 0;
             box-shadow: 0 8px 35px rgba(0, 0, 0, .25);
+            width: 100%;
         }
 
         .navbar-brand {
@@ -159,16 +162,7 @@
             overflow: hidden;
         }
 
-        .hero::before {
-            content: "";
-            position: absolute;
-            width: 500px;
-            height: 500px;
-            right: -160px;
-            top: 100px;
-            background: radial-gradient(circle, rgba(255, 195, 41, .35), transparent 65%);
-            animation: pulseGlow 5s infinite alternate;
-        }
+       
 
         @keyframes pulseGlow {
             from {

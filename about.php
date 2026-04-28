@@ -462,12 +462,15 @@ $teams = [
                 font-size: 36px;
             }
         }
+    
     </style>
 </head>
 
 <body>
 
-<?php include 'includes/nav.php'; ?>
+
+    <?php include 'includes/nav.php'; ?>
+
 
 <!-- Hero Section -->
 <section class="hero-about">
