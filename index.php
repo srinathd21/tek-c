@@ -906,7 +906,7 @@
         </div>
 
         <div class="row g-4">
-            <div class="col-lg-2 col-md-4 col-6" data-aos="zoom-in">
+            <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in">
                 <div class="module-card text-center">
                     <div class="module-icon mx-auto"><i class="bi bi-building"></i></div>
                     <h5>Sites & Contracts</h5>
@@ -914,15 +914,15 @@
                 </div>
             </div>
 
-            <div class="col-lg-2 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="100">
+            <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="100">
                 <div class="module-card text-center">
                     <div class="module-icon mx-auto"><i class="bi bi-clipboard-data"></i></div>
                     <h5>Daily Reports</h5>
-                    <p>DPR, DAR, MOM, MA, RFI, AIT, DLAR, MPT fully integrated.</p>
+                    <p><span title="Daily Progress Report">DPR</span>,<span title="Daily Activity Report"> DAR</span>, <span title="Minutes of Meeting">MOM</span>, <span title="Meeting Agenda">MA</span>, <span title="Request For Information">RFI</span>, <span title="Action Item Tracker">AIT</span>, <span title="Delay Analysis Report">DLAR</span>, <span title="Monthly Planned Tracker">MPT</span> fully integrated.</p>
                 </div>
             </div>
 
-            <div class="col-lg-2 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="200">
+            <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="200">
                 <div class="module-card text-center">
                     <div class="module-icon mx-auto"><i class="bi bi-file-pdf"></i></div>
                     <h5>Document Control</h5>
@@ -930,7 +930,7 @@
                 </div>
             </div>
 
-            <div class="col-lg-2 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="300">
+            <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="300">
                 <div class="module-card text-center">
                     <div class="module-icon mx-auto"><i class="bi bi-calculator"></i></div>
                     <h5>Quotation & Tendering</h5>
@@ -938,7 +938,7 @@
                 </div>
             </div>
 
-            <div class="col-lg-2 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="400">
+            <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="400">
                 <div class="module-card text-center">
                     <div class="module-icon mx-auto"><i class="bi bi-people"></i></div>
                     <h5>HRMS</h5>
@@ -946,7 +946,7 @@
                 </div>
             </div>
 
-            <div class="col-lg-2 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="500">
+            <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="500">
                 <div class="module-card text-center">
                     <div class="module-icon mx-auto"><i class="bi bi-shield-lock"></i></div>
                     <h5>Role Access</h5>
@@ -1124,7 +1124,7 @@
 <section class="bg-light" id="pricing">
     <div class="container">
         <div class="row g-5 align-items-stretch">
-            <div class="col-lg-5" data-aos="fade-right">
+            <div class="col-lg-12" data-aos="fade-right">
                 <h2 class="fw-black mb-4">Deployment Options</h2>
 
                 <div class="row g-4">
@@ -1158,7 +1158,7 @@
                 </div>
             </div>
 
-            <div class="col-lg-7" data-aos="fade-left">
+            <div class="col-lg-12" data-aos="fade-left">
                 <h2 class="fw-black mb-4 text-center">Why Teams Choose TEK-C</h2>
 
                 <div class="row g-0 bg-white rounded-4 shadow-sm overflow-hidden">

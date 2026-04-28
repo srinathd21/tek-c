@@ -56,7 +56,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 </ul>
 
             <div class="d-lg-flex align-items-center gap-3">
-                
+               <a href="erp/" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; background-color: white; border-radius: 50%; color: #333; text-decoration: none;">
+    <i class="fas fa-user"></i>
+</a>
                 <a href="demo.php" class="btn btn-yellow">Request Demo</a>
             </div>
         </div>
