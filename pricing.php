@@ -564,10 +564,10 @@ $constructionImages = [
                     <div class="stars">★★★★★</div>
                     <p>"TEK-C has transformed our operations. The ROI has been incredible - we've reduced report generation time by 70% and improved site coordination significantly."</p>
                     <div class="d-flex align-items-center gap-3 mt-4">
-                        <img class="avatar" src="https://randomuser.me/api/portraits/men/32.jpg" alt="">
+                        <img class="avatar" src="assets/img/Shanthi.jpg" alt="">
                         <div>
-                            <h6 class="fw-bold mb-0">Ariharasudhan P</h6>
-                            <small class="text-warning fw-bold">Director - UKB Construction</small>
+                            <h6 class="fw-bold mb-0">Shanthi Balachandhar</h6>
+                            <small class="text-warning fw-bold">Director - TEK-C</small>
                         </div>
                     </div>
                 </div>
@@ -577,10 +577,10 @@ $constructionImages = [
                     <div class="stars">★★★★★</div>
                     <p>"The Professional plan is perfect for our needs. The quotation management and HR features have streamlined our entire workflow. Highly recommended!"</p>
                     <div class="d-flex align-items-center gap-3 mt-4">
-                        <img class="avatar" src="https://randomuser.me/api/portraits/men/45.jpg" alt="">
+                        <img class="avatar" src="assets/img/Balachandar.jpg" alt="" style="object-position: 10% 10%;">
                         <div>
                             <h6 class="fw-bold mb-0">U K Balachandar</h6>
-                            <small class="text-warning fw-bold">CEO - UKB Group</small>
+                            <small class="text-warning fw-bold">Founder/ Principal Consultant</small>
                         </div>
                     </div>
                 </div>

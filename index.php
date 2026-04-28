@@ -1216,10 +1216,10 @@
                         structured document control have improved approvals and reduced delays across sites.”
                     </p>
                     <div class="d-flex align-items-center gap-3 mt-4">
-                        <img class="avatar" src="https://randomuser.me/api/portraits/men/32.jpg" alt="">
+                        <img class="avatar" src="assets/img/Shanthi.jpg" alt="">
                         <div>
-                            <h6 class="fw-bold mb-0">Ariharasudhan P</h6>
-                            <small class="text-warning fw-bold">Director - UKB Construction</small>
+                            <h6 class="fw-bold mb-0">Shanthi Balachandhar</h6>
+                            <small class="text-warning fw-bold">Director - TEK-C</small>
                         </div>
                     </div>
                 </div>
@@ -1233,10 +1233,10 @@
                         TEK-C gives us the control and insights we need every day.”
                     </p>
                     <div class="d-flex align-items-center gap-3 mt-4">
-                        <img class="avatar" src="https://randomuser.me/api/portraits/men/45.jpg" alt="">
+                        <img class="avatar" src="assets/img/Balachandar.jpg" alt="" style="object-position: 10% 10%;">
                         <div>
                             <h6 class="fw-bold mb-0">U K Balachandar</h6>
-                            <small class="text-warning fw-bold">CEO - UKB Group</small>
+                            <small class="text-warning fw-bold">Founder/ Principal Consultant</small>
                         </div>
                     </div>
                 </div>
