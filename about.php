@@ -1,845 +1,594 @@
 <?php
-// Start session if needed
-session_start();
-
-// Database configuration
-$host = 'localhost';
-$dbname = 'u209621005_tekc';
-$username = 'root';
-$password = '';
-
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    // Fetch company details
-    $stmt = $pdo->query("SELECT * FROM company_details ORDER BY id DESC LIMIT 1");
-    $companyDetails = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    // Get total active sites
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM sites WHERE deleted_at IS NULL");
-    $siteCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    // Get total completed projects (projects with end date passed)
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM sites WHERE expected_completion_date < CURDATE() AND deleted_at IS NULL");
-    $completedProjects = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    // Get total active employees
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM employees WHERE employee_status = 'active'");
-    $employeeCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    // Get total clients
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM clients");
-    $clientCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    // Get total reports generated
-    $stmt = $pdo->query("SELECT 
-                        (SELECT COUNT(*) FROM dpr_reports) + 
-                        (SELECT COUNT(*) FROM dar_reports) + 
-                        (SELECT COUNT(*) FROM mom_reports) + 
-                        (SELECT COUNT(*) FROM ma_reports) as total");
-    $reportCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    // Get department distribution
-    $stmt = $pdo->query("SELECT department, COUNT(*) as count FROM employees WHERE employee_status = 'active' GROUP BY department");
-    $departmentStats = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Get recent clients
-    $stmt = $pdo->query("SELECT * FROM clients ORDER BY created_at DESC LIMIT 6");
-    $recentClients = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Get employee roles distribution
-    $stmt = $pdo->query("SELECT designation, COUNT(*) as count FROM employees WHERE employee_status = 'active' GROUP BY designation ORDER BY count DESC LIMIT 6");
-    $roleDistribution = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Get testimonials/staff feedback (using activity logs as proxy)
-    $stmt = $pdo->query("SELECT DISTINCT user_name, user_role, action_type FROM activity_logs WHERE user_name IS NOT NULL AND user_name != '' ORDER BY created_at DESC LIMIT 6");
-    $teamMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Calculate years of operation
-    $stmt = $pdo->query("SELECT MIN(YEAR(created_at)) as earliest_year FROM sites WHERE created_at IS NOT NULL");
-    $earliest = $stmt->fetch(PDO::FETCH_ASSOC);
-    $currentYear = date('Y');
-    $yearsOfOperation = $earliest['earliest_year'] ? ($currentYear - $earliest['earliest_year']) : 5;
-    
-} catch(PDOException $e) {
-    // Fallback to static data if database connection fails
-    $companyDetails = [
-        'company_name' => 'TEK-C Global',
-        'company_address' => 'Dharmapuri, Tamil Nadu, India',
-        'company_phone' => '+91 72003 16099',
-        'company_email' => 'info@tekcglobal.com',
-        'company_website' => 'https://tekcglobal.com',
-        'ceo_name' => 'Ariharasudhan P',
-        'ceo_designation' => 'Director',
-        'established_date' => '2020-01-01'
-    ];
-    $siteCount = 8;
-    $completedProjects = 3;
-    $employeeCount = 18;
-    $clientCount = 3;
-    $reportCount = 47;
-    $departmentStats = [];
-    $recentClients = [];
-    $roleDistribution = [];
-    $teamMembers = [];
-    $yearsOfOperation = 5;
-}
-
-// Define teams (static for now, can be fetched from employees table)
-$teams = [
-    ['name' => 'Project Management', 'icon' => 'bi-briefcase', 'count' => 6, 'color' => '#ffc329'],
-    ['name' => 'Quality Surveying', 'icon' => 'bi-calculator', 'count' => 3, 'color' => '#ffc329'],
-    ['name' => 'Human Resources', 'icon' => 'bi-people', 'count' => 3, 'color' => '#ffc329'],
-    ['name' => 'Accounts & Finance', 'icon' => 'bi-currency-rupee', 'count' => 2, 'color' => '#ffc329'],
-    ['name' => 'Construction Management', 'icon' => 'bi-building', 'count' => 4, 'color' => '#ffc329'],
-    ['name' => 'IFM', 'icon' => 'bi-tools', 'count' => 2, 'color' => '#ffc329']
-];
+// about.php - About TEK-C & UKB Construction Management
+// Company story, mission, team, and the vision behind the software
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About Us | TEK-C Global Construction ERP</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About Us - TEK-C Construction Management Software</title>
 
-    <?php include('includes/links.php'); ?>
-    <style>
-        :root {
-            --dark: #101820;
-            --dark2: #151f28;
-            --yellow: #ffc329;
-            --yellow2: #ffb000;
-            --text: #1f2937;
-            --muted: #6b7280;
-            --border: #e9edf3;
-            --soft: #f7f9fc;
-        }
+<?php include 'includes/link.php'; ?>
 
-        * {
-            font-family: "Inter", sans-serif;
-        }
+<style>
+:root{
+    --yellow:#f6ad22;
+    --yellow2:#ffc247;
+    --dark:#080b0d;
+    --black:#050607;
+    --text:#111;
+    --muted:#666;
+    --line:#e8e8e8;
+}
 
-        html {
-            scroll-behavior: smooth;
-        }
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
 
-        body {
-            background: #fff;
-            color: var(--text);
-            overflow-x: hidden;
-        }
+html{
+    scroll-behavior:smooth;
+    scroll-padding-top:105px;
+}
 
-        .navbar {
-            background: rgba(16, 24, 32, 0.96);
-            backdrop-filter: blur(14px);
-            padding: 15px 0;
-            box-shadow: 0 8px 35px rgba(0,0,0,.25);
-        }
+body{
+    font-family:'Inter',sans-serif;
+    color:var(--text);
+    background:#fff;
+    overflow-x:hidden;
+    padding-top:88px;
+}
 
-        .navbar-brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: #fff !important;
-            font-weight: 900;
-            letter-spacing: .5px;
-        }
+.section-title{
+    font-size:34px;
+    font-weight:900;
+    text-align:center;
+    margin-bottom:20px;
+    line-height:1.2;
+}
 
-        .logo-box {
-            width: 48px;
-            height: 48px;
-            border-radius: 13px;
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            box-shadow: 0 8px 22px rgba(255, 195, 41, .4);
-        }
+.section-subtitle{
+    max-width:760px;
+    margin:0 auto 48px;
+    text-align:center;
+    color:#666;
+    font-size:16px;
+    line-height:1.7;
+}
 
-        .logo-text span {
-            display: block;
-            font-size: 11px;
-            letter-spacing: 4px;
-            color: #cfd6df;
-            font-weight: 600;
-            margin-top: -3px;
-        }
+.text-yellow{
+    color:var(--yellow);
+}
 
-        .nav-link {
-            color: #dbe3ec !important;
-            font-weight: 600;
-            margin: 0 8px;
-            position: relative;
-        }
+.btn-yellow{
+    background:linear-gradient(135deg,var(--yellow),var(--yellow2));
+    color:#111;
+    font-weight:800;
+    border:none;
+    border-radius:12px;
+    padding:14px 28px;
+    box-shadow:0 10px 25px rgba(246,173,34,.35);
+    transition:.35s;
+}
 
-        .nav-link:hover,
-        .nav-link.active {
-            color: var(--yellow) !important;
-        }
+.btn-yellow:hover{
+    transform:translateY(-3px);
+    color:#111;
+}
 
-        .nav-link.active::after {
-            content: "";
-            position: absolute;
-            left: 10px;
-            bottom: -8px;
-            height: 3px;
-            width: 35px;
-            background: var(--yellow);
-            border-radius: 20px;
-        }
+/* NAVBAR */
+.navbar{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    z-index:999;
+    padding:14px 0;
+    background:rgba(5,7,9,.96);
+    backdrop-filter:blur(16px);
+    box-shadow:0 8px 30px rgba(0,0,0,.28);
+    transition:.35s ease;
+}
 
-        .search-box {
-            background: rgba(255,255,255,.08);
-            border: 1px solid rgba(255,255,255,.1);
-            border-radius: 12px;
-            color: #fff;
-            padding: 11px 15px;
-            min-width: 260px;
-        }
+.navbar.nav-fixed{
+    padding:10px 0;
+    background:rgba(5,7,9,.98);
+}
 
-        .search-box::placeholder {
-            color: #abb6c3;
-        }
+.logo{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    color:#fff;
+}
 
-        .btn-yellow {
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            color: #111;
-            font-weight: 800;
-            border: 0;
-            border-radius: 12px;
-            padding: 12px 24px;
-            box-shadow: 0 12px 28px rgba(255, 179, 0, .35);
-            transition: .35s;
-        }
+.logo-icon{
+    width:48px;
+    height:48px;
+    background:linear-gradient(135deg,#ffbe35,#e79510);
+    clip-path:polygon(50% 0,100% 35%,85% 35%,50% 15%,15% 35%,0 35%);
+}
 
-        .btn-yellow:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 18px 40px rgba(255, 179, 0, .45);
-        }
+.logo-text h3{
+    margin:0;
+    color:var(--yellow);
+    font-size:32px;
+    font-weight:900;
+    letter-spacing:.5px;
+}
 
-        .btn-light-custom {
-            background: #fff;
-            color: #111;
-            font-weight: 800;
-            border-radius: 12px;
-            padding: 12px 24px;
-            border: 0;
-            transition: .35s;
-        }
+.logo-text span{
+    display:block;
+    color:#fff;
+    font-size:10px;
+    margin-top:-6px;
+    letter-spacing:.8px;
+}
 
-        .btn-light-custom:hover {
-            transform: translateY(-3px);
-        }
+.navbar-nav{
+    background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:50px;
+    padding:7px;
+    backdrop-filter:blur(12px);
+}
 
-        .hero-about {
-            background: linear-gradient(135deg, #101820 0%, #1a2a3a 100%);
-            padding: 150px 0 80px;
-            color: #fff;
-            position: relative;
-            overflow: hidden;
-        }
+.navbar-nav .nav-link{
+    color:#fff;
+    font-size:14px;
+    font-weight:700;
+    margin:0 2px;
+    padding:10px 16px !important;
+    border-radius:50px;
+    transition:.3s;
+}
 
-        .hero-about::before {
-            content: "";
-            position: absolute;
-            width: 500px;
-            height: 500px;
-            right: -100px;
-            top: -100px;
-            background: radial-gradient(circle, rgba(255,195,41,.15), transparent 70%);
-            border-radius: 50%;
-        }
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link.active{
+    color:#111;
+    background:linear-gradient(135deg,var(--yellow),var(--yellow2));
+    box-shadow:0 7px 18px rgba(246,173,34,.25);
+}
 
-        .hero-about h1 {
-            font-size: clamp(42px, 5vw, 68px);
-            font-weight: 900;
-            line-height: 1.1;
-        }
+/* PAGE HEADER */
+.page-header{
+    background: linear-gradient(115deg, #0a0e12 0%, #161c24 100%);
+    padding: 100px 0 80px;
+    color: white;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+.page-header::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    background: radial-gradient(circle at 70% 20%, rgba(246,173,34,0.12), transparent 50%);
+}
+.page-header h1{
+    font-size: 56px;
+    font-weight: 900;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 2;
+}
+.page-header p{
+    font-size: 20px;
+    color: #ddd;
+    max-width: 720px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 2;
+}
 
-        .hero-about .yellow-text {
-            color: var(--yellow);
-        }
+/* MISSION SECTION */
+.mission-section{
+    padding: 85px 0;
+    background: #fff;
+}
+.mission-box{
+    background: #fefaf2;
+    border-radius: 32px;
+    padding: 48px 40px;
+    text-align: center;
+    border: 1px solid rgba(246,173,34,0.2);
+}
+.mission-box h2{
+    font-size: 32px;
+    font-weight: 900;
+    margin-bottom: 20px;
+}
+.mission-box p{
+    font-size: 18px;
+    line-height: 1.7;
+    color: #444;
+    max-width: 800px;
+    margin: 0 auto;
+}
 
-        section {
-            padding: 85px 0;
-        }
+/* STORY SECTION */
+.story-section{
+    padding: 0 0 85px 0;
+}
+.story-img{
+    border-radius: 32px;
+    width: 100%;
+    box-shadow: 0 20px 35px -12px rgba(0,0,0,0.15);
+}
+.story-content h2{
+    font-size: 34px;
+    font-weight: 800;
+    margin-bottom: 24px;
+}
+.story-content p{
+    font-size: 16px;
+    line-height: 1.7;
+    color: #555;
+    margin-bottom: 20px;
+}
 
-        .section-title {
-            text-align: center;
-            margin-bottom: 50px;
-        }
+/* VALUES */
+.values-section{
+    background: #f8f9fc;
+    padding: 85px 0;
+}
+.value-card{
+    background: white;
+    border-radius: 28px;
+    padding: 36px 28px;
+    height: 100%;
+    text-align: center;
+    transition: 0.3s;
+    border: 1px solid #eee;
+}
+.value-card:hover{
+    transform: translateY(-6px);
+    border-color: var(--yellow);
+}
+.value-icon{
+    width: 70px;
+    height: 70px;
+    background: #fff5e6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+    font-size: 32px;
+    color: var(--yellow);
+}
+.value-card h4{
+    font-size: 22px;
+    font-weight: 800;
+    margin-bottom: 15px;
+}
+.value-card p{
+    color: #666;
+    font-size: 14px;
+    line-height: 1.6;
+}
 
-        .section-title h2 {
-            font-size: clamp(32px, 4vw, 48px);
-            font-weight: 900;
-            color: #111827;
-            letter-spacing: -1px;
-        }
+/* TEAM SECTION */
+.team-section{
+    padding: 85px 0;
+}
+.team-card{
+    text-align: center;
+    background: white;
+    border-radius: 28px;
+    padding: 32px 20px;
+    border: 1px solid #eee;
+    transition: 0.3s;
+}
+.team-card:hover{
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(0,0,0,0.08);
+}
+.team-avatar{
+    width: 140px;
+    height: 140px;
+    background: linear-gradient(135deg, #f6ad22, #ffcf7a);
+    border-radius: 50%;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 58px;
+    color: white;
+    font-weight: 800;
+}
+.team-card h4{
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 5px;
+}
+.team-card .designation{
+    color: var(--yellow);
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+.team-card .bio{
+    font-size: 13px;
+    color: #666;
+    padding: 0 12px;
+}
 
-        .section-title p {
-            color: var(--muted);
-            font-size: 17px;
-        }
+/* UKB BADGE */
+.ukb-section{
+    background: #0a0e12;
+    color: white;
+    padding: 70px 0;
+}
+.ukb-logo-large{
+    font-size: 64px;
+    font-weight: 900;
+    line-height: 1.2;
+}
+.ukb-logo-large span{
+    color: var(--yellow);
+}
 
-        .stat-circle {
-            background: #fff;
-            border-radius: 50%;
-            width: 180px;
-            height: 180px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto;
-            box-shadow: 0 20px 40px rgba(0,0,0,.1);
-            border: 5px solid var(--yellow);
-        }
+/* CTA */
+.cta-about{
+    background: linear-gradient(135deg, #f1a51b, #ffc247);
+    padding: 70px 0;
+    text-align: center;
+    color: #111;
+}
+.cta-about h2{
+    font-size: 38px;
+    font-weight: 900;
+}
 
-        .stat-number {
-            font-size: 48px;
-            font-weight: 900;
-            color: var(--dark);
-        }
+.footer{
+    background:#07090b;
+    color:#fff;
+    padding:65px 0 20px;
+}
+.footer h5{
+    font-size:14px;
+    font-weight:900;
+    margin-bottom:18px;
+}
+.footer a{
+    display:block;
+    color:#d6d6d6;
+    font-size:13px;
+    margin:10px 0;
+}
+.footer a:hover{
+    color:var(--yellow);
+}
+.social a{
+    display:inline-flex;
+    width:34px;
+    height:34px;
+    align-items:center;
+    justify-content:center;
+    background:#1b2025;
+    border-radius:50%;
+    margin-right:8px;
+}
+.footer-bottom{
+    border-top:1px solid #222;
+    margin-top:32px;
+    padding-top:18px;
+    font-size:13px;
+    color:#bbb;
+}
 
-        .stat-label {
-            color: var(--muted);
-            font-weight: 600;
-        }
-
-        .value-card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 30px;
-            text-align: center;
-            height: 100%;
-            transition: .35s;
-            box-shadow: 0 10px 32px rgba(17,24,39,.05);
-        }
-
-        .value-card:hover {
-            transform: translateY(-8px);
-            border-color: var(--yellow);
-        }
-
-        .value-icon {
-            width: 70px;
-            height: 70px;
-            border-radius: 18px;
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            font-size: 32px;
-            color: #fff;
-        }
-
-        .team-card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 30px;
-            text-align: center;
-            transition: .35s;
-            height: 100%;
-        }
-
-        .team-card:hover {
-            transform: translateY(-5px);
-            border-color: var(--yellow);
-        }
-
-        .team-icon {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            font-size: 36px;
-            color: #fff;
-        }
-
-        .client-card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 20px;
-            text-align: center;
-            transition: .35s;
-            height: 100%;
-        }
-
-        .client-card:hover {
-            transform: translateY(-5px);
-            border-color: var(--yellow);
-        }
-
-        .company-logo {
-            width: 100%;
-            max-width: 200px;
-            margin: 0 auto;
-        }
-
-        .milestone-item {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .milestone-year {
-            font-size: 28px;
-            font-weight: 900;
-            color: var(--yellow);
-            min-width: 100px;
-        }
-
-        .milestone-content {
-            flex: 1;
-        }
-
-        footer {
-            background: #101820;
-            color: #d8dee8;
-            padding: 55px 0 25px;
-        }
-
-        footer h6 {
-            color: #fff;
-            font-weight: 900;
-            margin-bottom: 18px;
-        }
-
-        footer a {
-            display: block;
-            color: #aeb8c5;
-            text-decoration: none;
-            margin-bottom: 11px;
-            transition: .3s;
-        }
-
-        footer a:hover {
-            color: var(--yellow);
-            transform: translateX(5px);
-        }
-
-        .social-icon {
-            width: 42px;
-            height: 42px;
-            background: #fff;
-            color: #101820;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            margin-right: 8px;
-            transition: .3s;
-        }
-
-        .social-icon:hover {
-            background: var(--yellow);
-            color: #111;
-            transform: translateY(-5px);
-        }
-
-        @media (max-width: 991px) {
-            .search-box {
-                min-width: 100%;
-                margin: 12px 0;
-            }
-            
-            .stat-circle {
-                width: 140px;
-                height: 140px;
-            }
-            
-            .stat-number {
-                font-size: 36px;
-            }
-        }
-    
-    </style>
+@media(max-width:991px){
+    body{padding-top:82px;}
+    .navbar-nav{
+        border-radius:18px;
+        margin-top:18px;
+        padding:12px;
+    }
+    .page-header h1{font-size: 42px;}
+    .mission-box{padding: 32px 24px;}
+    .story-content{margin-top: 30px;}
+}
+@media(max-width:575px){
+    .section-title{font-size: 28px;}
+    .page-header h1{font-size: 32px;}
+    .ukb-logo-large{font-size: 42px;}
+}
+</style>
 </head>
-
 <body>
 
+<?php include 'includes/nav.php'; ?>
 
-    <?php include 'includes/nav.php'; ?>
+<section class="page-header">
+    <div class="container" data-aos="fade-up">
+        <h1>Built by <span class="text-yellow">builders</span>, for builders.</h1>
+        <p>TEK-C was born on construction sites — solving real delays, cost overruns, and execution chaos.</p>
+    </div>
+</section>
 
-
-<!-- Hero Section -->
-<section class="hero-about">
+<!-- MISSION STATEMENT -->
+<section class="mission-section">
     <div class="container">
-        <div class="row justify-content-center text-center">
-            <div class="col-lg-8" data-aos="fade-up">
-                <h1>About <span class="yellow-text">TEK-C Global</span></h1>
-                <p class="lead mt-4">India's leading Construction ERP solution provider, empowering builders and contractors with cutting-edge technology.</p>
-            </div>
+        <div class="mission-box" data-aos="fade-up">
+            <h2>Our Mission</h2>
+            <p>To empower construction professionals with a digital command center that brings <strong class="text-yellow">complete visibility, accountability, and control</strong> to every project — from foundation to handover.</p>
         </div>
     </div>
 </section>
 
-<!-- Company Overview -->
-<section>
+<!-- OUR STORY -->
+<section class="story-section">
     <div class="container">
         <div class="row align-items-center g-5">
             <div class="col-lg-6" data-aos="fade-right">
-                <h2 class="fw-black mb-4">Who We Are</h2>
-                <p class="fs-5 text-muted">
-                    TEK-C Global is a comprehensive construction management platform developed by <strong>UKR Group</strong>, 
-                    designed to streamline project execution, documentation, and team coordination for modern construction businesses.
-                </p>
-                <p class="text-muted">
-                    With over <strong><?php echo $yearsOfOperation; ?>+ years</strong> of industry expertise, we've built a solution that 
-                    addresses the real challenges faced by builders, contractors, and developers across India. Our platform 
-                    integrates every aspect of construction management - from daily progress reports to financial approvals, 
-                    from HR management to document control.
-                </p>
-                <div class="row mt-4">
-                    <div class="col-4">
-                        <div class="text-center">
-                            <h3 class="fw-bold text-warning"><?php echo $siteCount; ?>+</h3>
-                            <p class="text-muted small">Active Sites</p>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="text-center">
-                            <h3 class="fw-bold text-warning"><?php echo $employeeCount; ?>+</h3>
-                            <p class="text-muted small">Team Members</p>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="text-center">
-                            <h3 class="fw-bold text-warning"><?php echo $clientCount; ?>+</h3>
-                            <p class="text-muted small">Happy Clients</p>
-                        </div>
-                    </div>
-                </div>
+                <img src="https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?auto=format&fit=crop&w=900&q=80" alt="Construction site story" class="story-img">
             </div>
-            <div class="col-lg-6" data-aos="fade-left">
-                <div class="overview-img" style="border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,.1);">
-                    <img src="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=1200&q=80" alt="About TEK-C" class="img-fluid" style="width: 100%; height: auto;">
-                </div>
+            <div class="col-lg-6 story-content" data-aos="fade-left">
+                <h2>The story behind <span class="text-yellow">TEK-C</span></h2>
+                <p>In 2018, our founding team at UKB Construction Management was managing multiple residential and commercial projects simultaneously. We realized that despite having experienced engineers, clear designs, and motivated teams — projects were still facing delays, cost escalations, and miscommunication.</p>
+                <p>Updates were scattered across WhatsApp groups. Daily reports were buried in email threads. Approvals took weeks. And there was no single source of truth for project progress.</p>
+                <p>We searched for a construction management software that truly understood on-ground realities. When we didn't find one, we decided to build it ourselves. TEK-C was designed by construction professionals, tested on real sites, and refined over 5+ years of live project execution.</p>
+                <p><strong>Today, TEK-C powers projects worth over ₹500+ Crores and helps construction teams deliver on time, within budget.</strong></p>
             </div>
         </div>
     </div>
 </section>
 
-<!-- Company Details -->
-<section class="bg-light">
+<!-- CORE VALUES -->
+<section class="values-section">
     <div class="container">
-        <div class="section-title" data-aos="fade-up">
-            <h2>Company <span class="yellow-text">Information</span></h2>
-            <p>Learn more about our organization</p>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-md-6" data-aos="fade-right">
-                <div class="value-card text-start">
-                    <div class="value-icon mx-0"><i class="bi bi-building"></i></div>
-                    <h4 class="fw-bold mt-3"><?php echo htmlspecialchars($companyDetails['company_name'] ?? 'TEK-C Global'); ?></h4>
-                    <p class="text-muted">
-                        <i class="bi bi-geo-alt me-2 text-warning"></i> <?php echo htmlspecialchars($companyDetails['company_address'] ?? 'Dharmapuri, Tamil Nadu, India'); ?><br>
-                        <i class="bi bi-telephone me-2 text-warning"></i> <?php echo htmlspecialchars($companyDetails['company_phone'] ?? '+91 72003 16099'); ?><br>
-                        <i class="bi bi-envelope me-2 text-warning"></i> <?php echo htmlspecialchars($companyDetails['company_email'] ?? 'info@tekcglobal.com'); ?><br>
-                        <i class="bi bi-globe me-2 text-warning"></i> <?php echo htmlspecialchars($companyDetails['company_website'] ?? 'https://tekcglobal.com'); ?>
-                    </p>
-                </div>
-            </div>
-
-            <div class="col-md-6" data-aos="fade-left">
-                <div class="value-card text-start">
-                    <div class="value-icon mx-0"><i class="bi bi-person-badge"></i></div>
-                    <h4 class="fw-bold mt-3">Leadership</h4>
-                    <p class="text-muted">
-                        <strong><?php echo htmlspecialchars($companyDetails['ceo_name'] ?? 'Ariharasudhan P'); ?></strong><br>
-                        <?php echo htmlspecialchars($companyDetails['ceo_designation'] ?? 'Director'); ?><br><br>
-                        <strong>Established:</strong> <?php echo date('F Y', strtotime($companyDetails['established_date'] ?? '2020-01-01')); ?><br>
-                        <strong>Experience:</strong> <?php echo $yearsOfOperation; ?>+ Years in Construction Industry
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Our Impact -->
-<section>
-    <div class="container">
-        <div class="section-title" data-aos="fade-up">
-            <h2>Our <span class="yellow-text">Impact</span></h2>
-            <p>Numbers that speak for themselves</p>
-        </div>
-
-        <div class="row g-4 text-center">
-            <div class="col-md-3 col-6" data-aos="zoom-in">
-                <div class="stat-circle">
-                    <div>
-                        <div class="stat-number"><?php echo $siteCount; ?></div>
-                        <div class="stat-label">Active Sites</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3 col-6" data-aos="zoom-in" data-aos-delay="100">
-                <div class="stat-circle">
-                    <div>
-                        <div class="stat-number"><?php echo $completedProjects; ?></div>
-                        <div class="stat-label">Completed Projects</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3 col-6" data-aos="zoom-in" data-aos-delay="200">
-                <div class="stat-circle">
-                    <div>
-                        <div class="stat-number"><?php echo $reportCount; ?></div>
-                        <div class="stat-label">Reports Generated</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3 col-6" data-aos="zoom-in" data-aos-delay="300">
-                <div class="stat-circle">
-                    <div>
-                        <div class="stat-number">100%</div>
-                        <div class="stat-label">Client Satisfaction</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Our Values -->
-<section class="bg-light">
-    <div class="container">
-        <div class="section-title" data-aos="fade-up">
-            <h2>Our Core <span class="yellow-text">Values</span></h2>
-            <p>The principles that guide everything we do</p>
-        </div>
-
+        <h2 class="section-title" data-aos="fade-up">Our core values</h2>
         <div class="row g-4">
             <div class="col-md-4" data-aos="fade-up">
                 <div class="value-card">
-                    <div class="value-icon mx-auto"><i class="bi bi-star-fill"></i></div>
-                    <h5 class="fw-bold">Excellence</h5>
-                    <p class="text-muted">We strive for excellence in every aspect of our product and service delivery.</p>
+                    <div class="value-icon"><i class="fa-solid fa-eye"></i></div>
+                    <h4>Radical Transparency</h4>
+                    <p>Every stakeholder deserves real-time visibility into project health, delays, and costs — no hidden surprises.</p>
                 </div>
             </div>
-
             <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
                 <div class="value-card">
-                    <div class="value-icon mx-auto"><i class="bi bi-lightbulb-fill"></i></div>
-                    <h5 class="fw-bold">Innovation</h5>
-                    <p class="text-muted">Continuous innovation to bring cutting-edge solutions to construction management.</p>
+                    <div class="value-icon"><i class="fa-solid fa-helmet-safety"></i></div>
+                    <h4>Site-First Design</h4>
+                    <p>Our software is built for engineers and supervisors on the ground — simple, fast, and practical.</p>
                 </div>
             </div>
-
             <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
                 <div class="value-card">
-                    <div class="value-icon mx-auto"><i class="bi bi-people-fill"></i></div>
-                    <h5 class="fw-bold">Collaboration</h5>
-                    <p class="text-muted">Building strong partnerships with clients for mutual growth and success.</p>
+                    <div class="value-icon"><i class="fa-solid fa-handshake"></i></div>
+                    <h4>Accountability</h4>
+                    <p>We believe clarity in roles, tasks, and approvals drives performance. TEK-C makes responsibility visible.</p>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- Our Team -->
-<section>
+<!-- THE TEAM -->
+<section class="team-section">
     <div class="container">
-        <div class="section-title" data-aos="fade-up">
-            <h2>Our <span class="yellow-text">Team</span></h2>
-            <p>Meet the experts behind TEK-C</p>
-        </div>
-
+        <h2 class="section-title" data-aos="fade-up">Leadership & founding team</h2>
+        <p class="section-subtitle" data-aos="fade-up">Construction veterans, technology experts, and project management professionals.</p>
         <div class="row g-4">
-            <?php 
-            $departments = [
-                ['name' => 'Project Management', 'icon' => 'bi-briefcase-fill', 'color' => '#ffc329'],
-                ['name' => 'Quality Surveying', 'icon' => 'bi-calculator-fill', 'color' => '#ffc329'],
-                ['name' => 'Human Resources', 'icon' => 'bi-people-fill', 'color' => '#ffc329'],
-                ['name' => 'Accounts & Finance', 'icon' => 'bi-currency-rupee', 'color' => '#ffc329'],
-                ['name' => 'Construction Management', 'icon' => 'bi-building', 'color' => '#ffc329'],
-                ['name' => 'IT & Support', 'icon' => 'bi-gear-fill', 'color' => '#ffc329']
-            ];
-            foreach ($departments as $dept): 
-            ?>
-            <div class="col-lg-4 col-md-6" data-aos="fade-up">
+            <div class="col-lg-3 col-md-6" data-aos="fade-up">
                 <div class="team-card">
-                    <div class="team-icon mx-auto" style="background: linear-gradient(135deg, <?php echo $dept['color']; ?>, var(--yellow2));">
-                        <i class="<?php echo $dept['icon']; ?>"></i>
-                    </div>
-                    <h5 class="fw-bold"><?php echo $dept['name']; ?></h5>
-                    <p class="text-muted mb-0">Expert professionals dedicated to delivering excellence in construction management solutions.</p>
+                    <div class="team-avatar"><i class="fa-solid fa-user-tie"></i></div>
+                    <h4>Arun Krishnamurthy</h4>
+                    <div class="designation">CEO & Founder</div>
+                    <p class="bio">20+ years in construction management. Former Project Director at L&T, led UKB Group operations.</p>
                 </div>
             </div>
-            <?php endforeach; ?>
-        </div>
-    </div>
-</section>
-
-<!-- Our Clients -->
-<section class="bg-light">
-    <div class="container">
-        <div class="section-title" data-aos="fade-up">
-            <h2>Our <span class="yellow-text">Clients</span></h2>
-            <p>Trusted by industry leaders</p>
-        </div>
-
-        <div class="row g-4" data-aos="fade-up">
-            <?php if (!empty($recentClients)): ?>
-                <?php foreach ($recentClients as $client): ?>
-                <div class="col-md-4 col-sm-6">
-                    <div class="client-card">
-                        <h6 class="fw-bold mb-2"><?php echo htmlspecialchars($client['client_name']); ?></h6>
-                        <p class="text-muted small mb-0">
-                            <?php echo htmlspecialchars($client['client_type']); ?><br>
-                            <?php echo htmlspecialchars($client['company_name'] ?? 'Individual'); ?>
-                        </p>
-                    </div>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="80">
+                <div class="team-card">
+                    <div class="team-avatar"><i class="fa-solid fa-chart-line"></i></div>
+                    <h4>Priya Mehta</h4>
+                    <div class="designation">Chief Product Officer</div>
+                    <p class="bio">Civil engineer turned product leader. Passionate about digitizing construction workflows.</p>
                 </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="col-12 text-center">
-                    <p class="text-muted">Client data loading...</p>
+            </div>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="160">
+                <div class="team-card">
+                    <div class="team-avatar"><i class="fa-solid fa-microchip"></i></div>
+                    <h4>Rahul Nair</h4>
+                    <div class="designation">CTO</div>
+                    <p class="bio">Tech architect with expertise in cloud platforms and real-time data systems.</p>
                 </div>
-            <?php endif; ?>
-        </div>
-    </div>
-</section>
-
-<!-- Milestones -->
-<section>
-    <div class="container">
-        <div class="section-title" data-aos="fade-up">
-            <h2>Our <span class="yellow-text">Journey</span></h2>
-            <p>Key milestones in our growth story</p>
-        </div>
-
-        <div class="row justify-content-center">
-            <div class="col-lg-8" data-aos="fade-up">
-                <div class="milestone-item">
-                    <div class="milestone-year">2020</div>
-                    <div class="milestone-content">
-                        <h5 class="fw-bold">Company Founded</h5>
-                        <p class="text-muted">TEK-C Global was established with a vision to revolutionize construction management.</p>
-                    </div>
-                </div>
-                <div class="milestone-item">
-                    <div class="milestone-year">2021</div>
-                    <div class="milestone-content">
-                        <h5 class="fw-bold">First Major Client</h5>
-                        <p class="text-muted">Secured partnership with UKR Group as founding client for ERP implementation.</p>
-                    </div>
-                </div>
-                <div class="milestone-item">
-                    <div class="milestone-year">2022</div>
-                    <div class="milestone-content">
-                        <h5 class="fw-bold">Platform Launch</h5>
-                        <p class="text-muted">Official launch of TEK-C Construction ERP platform with core modules.</p>
-                    </div>
-                </div>
-                <div class="milestone-item">
-                    <div class="milestone-year">2023</div>
-                    <div class="milestone-content">
-                        <h5 class="fw-bold">Expansion</h5>
-                        <p class="text-muted">Expanded to serve 5+ construction companies across Tamil Nadu.</p>
-                    </div>
-                </div>
-                <div class="milestone-item">
-                    <div class="milestone-year">2024</div>
-                    <div class="milestone-content">
-                        <h5 class="fw-bold">Major Milestone</h5>
-                        <p class="text-muted">Reached <?php echo $siteCount; ?>+ active sites and <?php echo $employeeCount; ?>+ users on platform.</p>
-                    </div>
+            </div>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="240">
+                <div class="team-card">
+                    <div class="team-avatar"><i class="fa-solid fa-helmet-safety"></i></div>
+                    <h4>Suresh Babu</h4>
+                    <div class="designation">Head of Operations</div>
+                    <p class="bio">15 years of site execution experience. Ensures TEK-C solves real site problems.</p>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- Call to Action -->
-<section class="final-cta">
+<!-- UKB CONSTRUCTION MANAGEMENT BADGE -->
+<section class="ukb-section">
     <div class="container">
-        <div class="row align-items-center">
-            <div class="col-lg-8 mx-auto text-center" data-aos="fade-up">
-                <h2 class="display-5 fw-black">
-                    Ready to Transform Your <span class="yellow-text">Construction Business</span>?
-                </h2>
-                <p class="mt-3 fs-5">Join <?php echo $clientCount; ?>+ clients who trust TEK-C for their construction management needs</p>
-                <div class="d-flex flex-wrap gap-3 justify-content-center mt-4">
-                    <a href="contact.php" class="btn btn-yellow">
-                        <i class="bi bi-calendar2-check me-2"></i> Contact Us
-                    </a>
-                    <a href="#" class="btn btn-light-custom">
-                        <i class="bi bi-download me-2"></i> Download Brochure
-                    </a>
+        <div class="row align-items-center g-5">
+            <div class="col-md-5" data-aos="fade-right">
+                <div class="ukb-logo-large">
+                    <span>UKB</span><br>
+                    CONSTRUCTION<br>
+                    MANAGEMENT
                 </div>
             </div>
+            <div class="col-md-7" data-aos="fade-left">
+                <h3 style="font-weight:800; margin-bottom:15px;">TEK-C is powered by <span class="text-yellow">UKB Group</span></h3>
+                <p style="color:#ccc; font-size:16px; line-height:1.6;">UKB Construction Management has delivered over 2.5 million sq.ft. of residential and commercial projects across India. TEK-C is the result of decades of on-ground experience — turning proven workflows into a powerful software platform.</p>
+                <ul class="check-list" style="list-style:none; padding:0; margin-top:20px;">
+                    <li style="color:#ddd; margin:10px 0;"><i class="fa-regular fa-circle-check text-yellow me-2"></i> 25+ years of construction excellence</li>
+                    <li style="color:#ddd; margin:10px 0;"><i class="fa-regular fa-circle-check text-yellow me-2"></i> 50+ successfully delivered projects</li>
+                    <li style="color:#ddd; margin:10px 0;"><i class="fa-regular fa-circle-check text-yellow me-2"></i> Trusted by leading developers & contractors</li>
+                </ul>
+            </div>
         </div>
+    </div>
+</section>
+
+<!-- STATS / MILESTONES -->
+<section class="values-section" style="background:white;">
+    <div class="container">
+        <div class="row g-4 text-center">
+            <div class="col-md-3 col-6" data-aos="fade-up">
+                <h2 class="text-yellow" style="font-size: 44px; font-weight:900;">500+</h2>
+                <p>Crores worth projects managed</p>
+            </div>
+            <div class="col-md-3 col-6" data-aos="fade-up" data-aos-delay="50">
+                <h2 class="text-yellow" style="font-size: 44px; font-weight:900;">150+</h2>
+                <p>Active users across India</p>
+            </div>
+            <div class="col-md-3 col-6" data-aos="fade-up" data-aos-delay="100">
+                <h2 class="text-yellow" style="font-size: 44px; font-weight:900;">35+</h2>
+                <p>Projects digitalized</p>
+            </div>
+            <div class="col-md-3 col-6" data-aos="fade-up" data-aos-delay="150">
+                <h2 class="text-yellow" style="font-size: 44px; font-weight:900;">98%</h2>
+                <p>Client retention rate</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-about">
+    <div class="container" data-aos="zoom-in">
+        <h2>Ready to transform your construction projects?</h2>
+        <p class="mb-4">Join 150+ construction professionals who trust TEK-C for project control.</p>
+        <a href="#contact" class="btn btn-dark btn-lg px-5" style="background:#111; border-radius:50px;">Start your free trial →</a>
     </div>
 </section>
 
 <?php include 'includes/footer.php'; ?>
 
-<!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
 
 <script>
-    AOS.init({
-        duration: 1000,
-        once: true,
-        offset: 80
-    });
+AOS.init({ duration: 700, once: true });
 
-    // Navbar active link on scroll
-    const sections = document.querySelectorAll("section[id]");
-    const navLinks = document.querySelectorAll(".nav-link");
+const navbar = document.getElementById('mainNavbar');
+window.addEventListener('scroll', () => {
+    if(window.scrollY > 70) navbar.classList.add('nav-fixed');
+    else navbar.classList.remove('nav-fixed');
+});
 
-    window.addEventListener("scroll", () => {
-        let current = "";
-        sections.forEach(section => {
-            const sectionTop = section.offsetTop - 130;
-            if (window.scrollY >= sectionTop) {
-                current = section.getAttribute("id");
-            }
-        });
-        navLinks.forEach(link => {
-            link.classList.remove("active");
-            if (link.getAttribute("href") === "#" + current) {
-                link.classList.add("active");
-            }
-        });
-    });
-
-    // Search functionality
-    const searchBox = document.querySelector(".search-box");
-    if (searchBox) {
-        searchBox.addEventListener("keyup", function() {
-            const value = this.value.toLowerCase();
-            const cards = document.querySelectorAll(".value-card, .team-card, .client-card");
-            cards.forEach(card => {
-                const text = card.innerText.toLowerCase();
-                if (value === "" || text.includes(value)) {
-                    card.style.opacity = "1";
-                    card.style.display = "block";
-                } else {
-                    card.style.opacity = ".25";
-                    card.style.display = "none";
-                }
-            });
-        });
+// Active link highlight for about
+const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
+navLinks.forEach(link => {
+    if(link.getAttribute('href') === '#about'){
+        link.classList.add('active');
+    } else {
+        link.classList.remove('active');
     }
+});
 </script>
-
 </body>
 </html>

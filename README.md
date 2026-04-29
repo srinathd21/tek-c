@@ -1,1 +1,1 @@
-# tekcglobal
+# tec

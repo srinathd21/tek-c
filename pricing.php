@@ -1,587 +1,550 @@
 <?php
-// Start session if needed
-session_start();
-
-// Database configuration
-$host = 'localhost';
-$dbname = 'u209621005_tekc';
-$username = 'root';
-$password = '';
-
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    // Get stats for pricing page
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM sites WHERE deleted_at IS NULL");
-    $siteCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM employees WHERE employee_status = 'active'");
-    $employeeCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM clients");
-    $clientCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM dpr_reports");
-    $reportCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    // Get total quotations processed
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM quotations");
-    $quotationCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-} catch(PDOException $e) {
-    $siteCount = 8;
-    $employeeCount = 18;
-    $clientCount = 3;
-    $reportCount = 47;
-    $quotationCount = 7;
-}
-
-// Construction images
-$constructionImages = [
-    'hero' => 'https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?auto=format&fit=crop&w=1800&q=80',
-    'team' => 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80',
-    'meeting' => 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=800&q=80',
-    'site' => 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=800&q=80',
-    'blueprint' => 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80',
-    'office' => 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=800&q=80',
-];
+// pricing.php - Pricing Plans & Subscription Options
+// Complete pricing table, feature comparison, FAQs and CTA
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pricing | TEK-C Global Construction ERP</title>
-<?php include('includes/links.php'); ?>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing Plans - TEK-C Construction Management Software</title>
 
-    <style>
-        :root {
-            --dark: #101820;
-            --dark2: #151f28;
-            --yellow: #ffc329;
-            --yellow2: #ffb000;
-            --text: #1f2937;
-            --muted: #6b7280;
-            --border: #e9edf3;
-            --soft: #f7f9fc;
-        }
+<?php include 'includes/link.php'; ?>
 
-        * { font-family: "Inter", sans-serif; }
-        html { scroll-behavior: smooth; }
-        body { background: #fff; color: var(--text); overflow-x: hidden; }
+<style>
+:root{
+    --yellow:#f6ad22;
+    --yellow2:#ffc247;
+    --dark:#080b0d;
+    --black:#050607;
+    --text:#111;
+    --muted:#666;
+    --line:#e8e8e8;
+}
 
-        .navbar {
-            background: rgba(16, 24, 32, 0.96);
-            backdrop-filter: blur(14px);
-            padding: 15px 0;
-            box-shadow: 0 8px 35px rgba(0,0,0,.25);
-            position: fixed;
-            width: 100%;
-            top: 0;
-            z-index: 1000;
-        }
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
 
-        .navbar-brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: #fff !important;
-            font-weight: 900;
-        }
+html{
+    scroll-behavior:smooth;
+    scroll-padding-top:105px;
+}
 
-        .logo-box {
-            width: 48px;
-            height: 48px;
-            border-radius: 13px;
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            box-shadow: 0 8px 22px rgba(255, 195, 41, .4);
-        }
+body{
+    font-family:'Inter',sans-serif;
+    color:var(--text);
+    background:#fff;
+    overflow-x:hidden;
+    padding-top:88px;
+}
 
-        .logo-text span {
-            display: block;
-            font-size: 11px;
-            letter-spacing: 4px;
-            color: #cfd6df;
-            font-weight: 600;
-            margin-top: -3px;
-        }
+.section-title{
+    font-size:34px;
+    font-weight:900;
+    text-align:center;
+    margin-bottom:20px;
+    line-height:1.2;
+}
 
-        .nav-link {
-            color: #dbe3ec !important;
-            font-weight: 600;
-            margin: 0 8px;
-            position: relative;
-        }
+.section-subtitle{
+    max-width:760px;
+    margin:0 auto 48px;
+    text-align:center;
+    color:#666;
+    font-size:16px;
+    line-height:1.7;
+}
 
-        .nav-link:hover, .nav-link.active { color: var(--yellow) !important; }
-        .nav-link.active::after {
-            content: "";
-            position: absolute;
-            left: 10px;
-            bottom: -8px;
-            height: 3px;
-            width: 35px;
-            background: var(--yellow);
-            border-radius: 20px;
-        }
+.text-yellow{
+    color:var(--yellow);
+}
 
-        .search-box {
-            background: rgba(255,255,255,.08);
-            border: 1px solid rgba(255,255,255,.1);
-            border-radius: 12px;
-            color: #fff;
-            padding: 11px 15px;
-            min-width: 260px;
-        }
+.btn-yellow{
+    background:linear-gradient(135deg,var(--yellow),var(--yellow2));
+    color:#111;
+    font-weight:800;
+    border:none;
+    border-radius:12px;
+    padding:14px 28px;
+    box-shadow:0 10px 25px rgba(246,173,34,.35);
+    transition:.35s;
+}
 
-        .btn-yellow {
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            color: #111;
-            font-weight: 800;
-            border: 0;
-            border-radius: 12px;
-            padding: 12px 24px;
-            transition: .35s;
-        }
+.btn-yellow:hover{
+    transform:translateY(-3px);
+    color:#111;
+}
 
-        .btn-yellow:hover { transform: translateY(-3px); box-shadow: 0 18px 40px rgba(255, 179, 0, .45); }
-        .btn-outline-yellow {
-            background: transparent;
-            border: 2px solid var(--yellow);
-            color: var(--yellow);
-            font-weight: 800;
-            border-radius: 12px;
-            padding: 12px 24px;
-            transition: .35s;
-        }
-        .btn-outline-yellow:hover { background: var(--yellow); color: #111; transform: translateY(-3px); }
+.btn-outline-dark-custom{
+    border:2px solid #ddd;
+    background:transparent;
+    border-radius:12px;
+    padding:12px 24px;
+    font-weight:700;
+    transition:.3s;
+}
+.btn-outline-dark-custom:hover{
+    border-color:var(--yellow);
+    background:rgba(246,173,34,0.05);
+}
 
-        .hero-pricing {
-            background: linear-gradient(135deg, #101820 0%, #1a2a3a 100%);
-            padding: 180px 0 100px;
-            color: #fff;
-            position: relative;
-            overflow: hidden;
-        }
+/* NAVBAR */
+.navbar{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    z-index:999;
+    padding:14px 0;
+    background:rgba(5,7,9,.96);
+    backdrop-filter:blur(16px);
+    box-shadow:0 8px 30px rgba(0,0,0,.28);
+    transition:.35s ease;
+}
 
-        .hero-pricing::before {
-            content: "";
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            background: url('<?php echo $constructionImages['hero']; ?>') center/cover no-repeat;
-            opacity: 0.15;
-            z-index: 0;
-        }
+.navbar.nav-fixed{
+    padding:10px 0;
+    background:rgba(5,7,9,.98);
+}
 
-        .hero-pricing .container { position: relative; z-index: 1; }
-        .hero-pricing h1 { font-size: clamp(42px, 5vw, 68px); font-weight: 900; line-height: 1.1; }
-        .hero-pricing .yellow-text { color: var(--yellow); }
+.logo{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    color:#fff;
+}
 
-        section { padding: 85px 0; }
-        .section-title { text-align: center; margin-bottom: 50px; }
-        .section-title h2 { font-size: clamp(32px, 4vw, 48px); font-weight: 900; color: #111827; letter-spacing: -1px; }
-        .section-title p { color: var(--muted); font-size: 17px; }
+.logo-icon{
+    width:48px;
+    height:48px;
+    background:linear-gradient(135deg,#ffbe35,#e79510);
+    clip-path:polygon(50% 0,100% 35%,85% 35%,50% 15%,15% 35%,0 35%);
+}
 
-        .pricing-card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            padding: 40px 30px;
-            height: 100%;
-            transition: .35s;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 10px 32px rgba(17,24,39,.05);
-        }
+.logo-text h3{
+    margin:0;
+    color:var(--yellow);
+    font-size:32px;
+    font-weight:900;
+    letter-spacing:.5px;
+}
 
-        .pricing-card:hover { transform: translateY(-10px); border-color: var(--yellow); box-shadow: 0 20px 40px rgba(17,24,39,.15); }
-        .pricing-card.popular { border: 2px solid var(--yellow); box-shadow: 0 15px 35px rgba(255,195,41,.15); }
-        .popular-badge {
-            position: absolute;
-            top: 20px;
-            right: -30px;
-            background: var(--yellow);
-            color: #111;
-            padding: 8px 40px;
-            font-size: 12px;
-            font-weight: 800;
-            transform: rotate(45deg);
-        }
+.logo-text span{
+    display:block;
+    color:#fff;
+    font-size:10px;
+    margin-top:-6px;
+    letter-spacing:.8px;
+}
 
-        .pricing-icon {
-            width: 70px;
-            height: 70px;
-            border-radius: 18px;
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            font-size: 32px;
-            color: #fff;
-        }
+.navbar-nav{
+    background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:50px;
+    padding:7px;
+    backdrop-filter:blur(12px);
+}
 
-        .price { font-size: 48px; font-weight: 900; color: #111827; }
-        .price-period { font-size: 16px; color: var(--muted); font-weight: 500; }
-        .feature-list-custom { list-style: none; padding: 0; margin: 25px 0; }
-        .feature-list-custom li { padding: 10px 0; border-bottom: 1px solid var(--border); }
-        .feature-list-custom li i { color: #22c55e; margin-right: 10px; font-weight: bold; }
-        .feature-list-custom li.disabled i { color: #ef4444; }
-        .feature-list-custom li.disabled { color: var(--muted); text-decoration: line-through; }
+.navbar-nav .nav-link{
+    color:#fff;
+    font-size:14px;
+    font-weight:700;
+    margin:0 2px;
+    padding:10px 16px !important;
+    border-radius:50px;
+    transition:.3s;
+}
 
-        .comparison-table th, .comparison-table td { padding: 15px; vertical-align: middle; }
-        .comparison-table .feature-cell { font-weight: 700; background: #f8f9fa; }
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link.active{
+    color:#111;
+    background:linear-gradient(135deg,var(--yellow),var(--yellow2));
+    box-shadow:0 7px 18px rgba(246,173,34,.25);
+}
 
-        .testimonial-card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 30px;
-            height: 100%;
-            transition: .35s;
-        }
-        .testimonial-card:hover { transform: translateY(-5px); border-color: var(--yellow); }
-        .stars { color: var(--yellow2); letter-spacing: 3px; margin-bottom: 15px; }
-        .avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
+/* PAGE HEADER */
+.page-header{
+    background: linear-gradient(135deg, #0a0d12 0%, #141a22 100%);
+    padding: 80px 0 60px;
+    color: white;
+    text-align: center;
+}
+.page-header h1{
+    font-size: 52px;
+    font-weight: 900;
+    margin-bottom: 20px;
+}
+.page-header p{
+    font-size: 18px;
+    color: #ccc;
+    max-width: 680px;
+    margin: 0 auto;
+}
+.toggle-switch{
+    background: #1e252e;
+    border-radius: 60px;
+    display: inline-flex;
+    padding: 6px;
+    margin-top: 35px;
+}
+.toggle-option{
+    padding: 10px 28px;
+    border-radius: 50px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
+    color: #bbb;
+}
+.toggle-option.active{
+    background: var(--yellow);
+    color: #111;
+}
 
-        .faq-item {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            margin-bottom: 12px;
-            overflow: hidden;
-        }
-        .accordion-button { font-weight: 800; padding: 20px 24px; }
-        .accordion-button:not(.collapsed) { background: rgba(255,195,41,.12); color: #111; box-shadow: none; }
+/* PRICE CARDS */
+.price-card{
+    background: white;
+    border-radius: 32px;
+    padding: 40px 28px;
+    height: 100%;
+    transition: 0.3s;
+    border: 1px solid #eee;
+    position: relative;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+}
+.price-card:hover{
+    transform: translateY(-8px);
+    border-color: rgba(246,173,34,0.5);
+    box-shadow: 0 25px 40px -14px rgba(0,0,0,0.12);
+}
+.price-card.featured{
+    border: 2px solid var(--yellow);
+    transform: scale(1.02);
+    background: linear-gradient(to bottom, #fff, #fffcf5);
+}
+.popular-tag{
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--yellow);
+    color: #111;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 5px 18px;
+    border-radius: 40px;
+}
+.price-card h3{
+    font-size: 26px;
+    font-weight: 800;
+}
+.price{
+    font-size: 44px;
+    font-weight: 900;
+    color: var(--yellow);
+    margin: 20px 0 8px;
+}
+.price small{
+    font-size: 14px;
+    font-weight: 400;
+    color: #777;
+}
+.price-card ul{
+    list-style: none;
+    padding: 0;
+    margin: 25px 0;
+}
+.price-card li{
+    margin: 14px 0;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.price-card li i.fa-check{
+    color: var(--yellow);
+    font-size: 16px;
+    width: 20px;
+}
+.price-card li i.fa-times{
+    color: #ccc;
+    font-size: 14px;
+    width: 20px;
+}
+.btn-price{
+    width: 100%;
+    margin-top: 15px;
+    border-radius: 40px;
+    padding: 14px;
+    font-weight: 800;
+}
 
-        .final-cta {
-            background: linear-gradient(135deg, #101820 0%, #1a2a3a 100%);
-            color: #fff;
-            padding: 70px 0;
-            position: relative;
-            overflow: hidden;
-        }
-        .final-cta::before {
-            content: "";
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            background: url('<?php echo $constructionImages['site']; ?>') center/cover no-repeat;
-            opacity: 0.1;
-        }
+/* COMPARISON TABLE */
+.comparison-wrap{
+    background: #f8fafc;
+    padding: 85px 0;
+}
+.comparison-table{
+    background: white;
+    border-radius: 36px;
+    overflow-x: auto;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.05);
+}
+.comparison-table table{
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 700px;
+}
+.comparison-table th{
+    background: #111;
+    color: white;
+    padding: 20px 24px;
+    font-weight: 800;
+}
+.comparison-table td{
+    padding: 16px 24px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.comparison-table tr:last-child td{
+    border-bottom: none;
+}
+.comparison-table td:first-child{
+    font-weight: 700;
+    background: #fefdf9;
+}
+.yellow-check{
+    color: var(--yellow);
+    font-size: 18px;
+}
 
-        footer {
-            background: #101820;
-            color: #d8dee8;
-            padding: 55px 0 25px;
-        }
-        footer h6 { color: #fff; font-weight: 900; margin-bottom: 18px; }
-        footer a {
-            display: block;
-            color: #aeb8c5;
-            text-decoration: none;
-            margin-bottom: 11px;
-            transition: .3s;
-        }
-        footer a:hover { color: var(--yellow); transform: translateX(5px); }
-        .social-icon {
-            width: 42px;
-            height: 42px;
-            background: #fff;
-            color: #101820;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            margin-right: 8px;
-            transition: .3s;
-        }
-        .social-icon:hover { background: var(--yellow); transform: translateY(-5px); }
+/* FAQ */
+.faq-section{
+    padding: 85px 0;
+}
+.accordion-item{
+    border: none;
+    border-bottom: 1px solid #eaeef2;
+    background: transparent;
+}
+.accordion-button{
+    background: transparent;
+    font-weight: 700;
+    font-size: 18px;
+    padding: 22px 0;
+    box-shadow: none;
+}
+.accordion-button:not(.collapsed){
+    background: transparent;
+    color: var(--yellow);
+}
+.accordion-body{
+    padding: 0 0 24px 0;
+    color: #555;
+}
 
-        .toggle-switch {
-            display: inline-flex;
-            background: #f0f0f0;
-            border-radius: 50px;
-            padding: 5px;
-        }
-        .toggle-option {
-            padding: 10px 25px;
-            border-radius: 50px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: .3s;
-        }
-        .toggle-option.active { background: var(--yellow); color: #111; }
+/* CTA */
+.cta-strip{
+    background: linear-gradient(135deg,#f1a51b,#ffc247);
+    padding: 65px 0;
+    text-align: center;
+    color: #111;
+}
+.cta-strip h2{
+    font-size: 38px;
+    font-weight: 900;
+}
 
-        @media (max-width: 991px) {
-            .search-box { min-width: 100%; margin: 12px 0; }
-            .pricing-card { margin-bottom: 20px; }
-        }
-    </style>
+.footer{
+    background:#07090b;
+    color:#fff;
+    padding:65px 0 20px;
+}
+.footer h5{
+    font-size:14px;
+    font-weight:900;
+    margin-bottom:18px;
+}
+.footer a{
+    display:block;
+    color:#d6d6d6;
+    font-size:13px;
+    margin:10px 0;
+}
+.footer a:hover{
+    color:var(--yellow);
+}
+.social a{
+    display:inline-flex;
+    width:34px;
+    height:34px;
+    align-items:center;
+    justify-content:center;
+    background:#1b2025;
+    border-radius:50%;
+    margin-right:8px;
+}
+.footer-bottom{
+    border-top:1px solid #222;
+    margin-top:32px;
+    padding-top:18px;
+    font-size:13px;
+    color:#bbb;
+}
+
+@media(max-width:991px){
+    body{padding-top:82px;}
+    .navbar-nav{
+        border-radius:18px;
+        margin-top:18px;
+        padding:12px;
+    }
+    .page-header h1{font-size: 38px;}
+    .price-card.featured{transform: none;}
+}
+@media(max-width:575px){
+    .section-title{font-size: 28px;}
+    .price{font-size: 36px;}
+}
+</style>
 </head>
-
 <body>
 
 <?php include 'includes/nav.php'; ?>
 
-<!-- Hero Section -->
-<section class="hero-pricing">
-    <div class="container">
-        <div class="row justify-content-center text-center">
-            <div class="col-lg-8" data-aos="fade-up">
-                <h1>Simple, <span class="yellow-text">Transparent</span> Pricing</h1>
-                <p class="lead mt-4">Choose the perfect plan for your construction business. No hidden fees, no surprises.</p>
-                <div class="mt-4">
-                    <span class="badge bg-warning text-dark me-2 p-2">No Setup Fee</span>
-                    <span class="badge bg-warning text-dark me-2 p-2">Cancel Anytime</span>
-                    <span class="badge bg-warning text-dark p-2">Free Demo</span>
-                </div>
-            </div>
+<section class="page-header">
+    <div class="container" data-aos="fade-up">
+        <h1>Simple, transparent <span class="text-yellow">pricing</span></h1>
+        <p>Choose the plan that fits your project scale and team size. All plans include core features with free onboarding support.</p>
+        
+        <div class="toggle-switch" id="billingToggle">
+            <span class="toggle-option active" data-billing="monthly">Monthly Billing</span>
+            <span class="toggle-option" data-billing="yearly">Yearly Billing <span class="text-yellow">(Save 18%)</span></span>
         </div>
     </div>
 </section>
 
-<!-- Pricing Toggle & Cards -->
-<section style="padding: 60px 0 0 0;">
+<!-- PRICING CARDS -->
+<section style="padding: 70px 0 40px;">
     <div class="container">
-        <div class="text-center mb-5" data-aos="fade-up">
-            <div class="toggle-switch">
-                <span class="toggle-option active" data-plan="monthly">Monthly Billing</span>
-                <span class="toggle-option" data-plan="yearly">Yearly Billing <span class="badge bg-success ms-2">Save 20%</span></span>
-            </div>
-        </div>
-
-        <div class="row g-4">
-            <!-- Basic Plan -->
+        <div class="row g-5">
+            <!-- Starter Plan -->
             <div class="col-lg-4" data-aos="fade-up">
-                <div class="pricing-card">
-                    <div class="pricing-icon mx-auto"><i class="bi bi-rocket-takeoff"></i></div>
-                    <h3 class="text-center fw-bold mt-3">Starter</h3>
-                    <div class="text-center mt-3">
-                        <span class="price monthly-price">₹4,999</span>
-                        <span class="price yearly-price" style="display: none;">₹3,999</span>
-                        <span class="price-period">/month</span>
-                    </div>
-                    <p class="text-center text-muted mt-2">Perfect for small builders & contractors</p>
-                    <ul class="feature-list-custom">
-                        <li><i class="bi bi-check-circle-fill"></i> Up to 5 Active Sites</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Up to 20 Employees</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Basic Reports (DPR, DAR, MOM)</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Quotation Management</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Attendance Tracking</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Email Support</li>
-                        <li class="disabled"><i class="bi bi-x-circle-fill"></i> API Access</li>
-                        <li class="disabled"><i class="bi bi-x-circle-fill"></i> White-label Option</li>
+                <div class="price-card">
+                    <h3>Starter</h3>
+                    <p class="text-muted">For small builders & single site</p>
+                    <div class="price monthly-price">₹7,999<span>/month</span></div>
+                    <div class="price yearly-price d-none">₹6,559<span>/month <small>(billed yearly)</small></span></div>
+                    <ul>
+                        <li><i class="fa-regular fa-check"></i> Up to 1 project</li>
+                        <li><i class="fa-regular fa-check"></i> Core DPR & Task Management</li>
+                        <li><i class="fa-regular fa-check"></i> Basic Document Control</li>
+                        <li><i class="fa-regular fa-check"></i> Mobile app access</li>
+                        <li><i class="fa-regular fa-check"></i> Email support</li>
+                        <li><i class="fa-regular fa-times"></i> Advanced analytics</li>
+                        <li><i class="fa-regular fa-times"></i> Multi-project dashboard</li>
                     </ul>
-                    <a href="#" class="btn btn-outline-yellow w-100">Get Started</a>
+                    <a href="#contact" class="btn btn-outline-dark-custom btn-price">Start Free Trial</a>
                 </div>
             </div>
 
-            <!-- Professional Plan (Popular) -->
+            <!-- Professional Plan (Featured) -->
             <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
-                <div class="pricing-card popular">
-                    <div class="popular-badge">MOST POPULAR</div>
-                    <div class="pricing-icon mx-auto"><i class="bi bi-building"></i></div>
-                    <h3 class="text-center fw-bold mt-3">Professional</h3>
-                    <div class="text-center mt-3">
-                        <span class="price monthly-price">₹9,999</span>
-                        <span class="price yearly-price" style="display: none;">₹7,999</span>
-                        <span class="price-period">/month</span>
-                    </div>
-                    <p class="text-center text-muted mt-2">Best for growing construction companies</p>
-                    <ul class="feature-list-custom">
-                        <li><i class="bi bi-check-circle-fill"></i> Up to 20 Active Sites</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Unlimited Employees</li>
-                        <li><i class="bi bi-check-circle-fill"></i> All Reports (DPR, DAR, MOM, RFI, AIT)</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Advanced Quotation & Tendering</li>
-                        <li><i class="bi bi-check-circle-fill"></i> HR & Payroll Management</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Document Control System</li>
-                        <li><i class="bi bi-check-circle-fill"></i> API Access</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Priority Support</li>
-                        <li class="disabled"><i class="bi bi-x-circle-fill"></i> White-label Option</li>
+                <div class="price-card featured">
+                    <div class="popular-tag">🔥 MOST POPULAR</div>
+                    <h3>Professional</h3>
+                    <p class="text-muted">For growing teams & multiple projects</p>
+                    <div class="price monthly-price">₹18,999<span>/month</span></div>
+                    <div class="price yearly-price d-none">₹15,579<span>/month <small>(billed yearly)</small></span></div>
+                    <ul>
+                        <li><i class="fa-regular fa-check"></i> Up to 5 projects</li>
+                        <li><i class="fa-regular fa-check"></i> All Starter features</li>
+                        <li><i class="fa-regular fa-check"></i> Cost & Procurement Module</li>
+                        <li><i class="fa-regular fa-check"></i> RFI, MOM & Approval workflow</li>
+                        <li><i class="fa-regular fa-check"></i> Advanced Document Management</li>
+                        <li><i class="fa-regular fa-check"></i> Management Dashboard (KPI)</li>
+                        <li><i class="fa-regular fa-check"></i> Priority support</li>
                     </ul>
-                    <a href="#" class="btn btn-yellow w-100">Get Started</a>
+                    <a href="#contact" class="btn btn-yellow btn-price">Request Demo</a>
                 </div>
             </div>
 
             <!-- Enterprise Plan -->
             <div class="col-lg-4" data-aos="fade-up" data-aos-delay="200">
-                <div class="pricing-card">
-                    <div class="pricing-icon mx-auto"><i class="bi bi-buildings-fill"></i></div>
-                    <h3 class="text-center fw-bold mt-3">Enterprise</h3>
-                    <div class="text-center mt-3">
-                        <span class="price">Custom</span>
-                        <span class="price-period"></span>
-                    </div>
-                    <p class="text-center text-muted mt-2">For large developers & enterprises</p>
-                    <ul class="feature-list-custom">
-                        <li><i class="bi bi-check-circle-fill"></i> Unlimited Sites</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Unlimited Employees</li>
-                        <li><i class="bi bi-check-circle-fill"></i> All Features Included</li>
-                        <li><i class="bi bi-check-circle-fill"></i> White-label Ready</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Custom Workflows</li>
-                        <li><i class="bi bi-check-circle-fill"></i> On-premise Deployment</li>
-                        <li><i class="bi bi-check-circle-fill"></i> Dedicated Account Manager</li>
-                        <li><i class="bi bi-check-circle-fill"></i> 24/7 Priority Support</li>
-                        <li><i class="bi bi-check-circle-fill"></i> SLA Guarantee</li>
+                <div class="price-card">
+                    <h3>Enterprise</h3>
+                    <p class="text-muted">For large firms & portfolio management</p>
+                    <div class="price monthly-price">Custom</div>
+                    <div class="price yearly-price d-none">Custom pricing</div>
+                    <ul>
+                        <li><i class="fa-regular fa-check"></i> Unlimited projects</li>
+                        <li><i class="fa-regular fa-check"></i> Everything in Professional</li>
+                        <li><i class="fa-regular fa-check"></i> Role-based access control</li>
+                        <li><i class="fa-regular fa-check"></i> Custom reports & analytics</li>
+                        <li><i class="fa-regular fa-check"></i> API access & integrations</li>
+                        <li><i class="fa-regular fa-check"></i> Dedicated account manager</li>
+                        <li><i class="fa-regular fa-check"></i> SLA & 24/7 support</li>
                     </ul>
-                    <a href="#" class="btn btn-outline-yellow w-100">Contact Sales</a>
+                    <a href="#contact" class="btn btn-outline-dark-custom btn-price">Contact Sales</a>
                 </div>
             </div>
         </div>
+        <p class="text-center text-muted mt-5 small">*All plans include 14-day free trial, no credit card required. Onboarding & training included.</p>
     </div>
 </section>
 
-<!-- Stats Section -->
-<section class="bg-light">
+<!-- COMPARISON TABLE (Detailed Features) -->
+<section class="comparison-wrap">
     <div class="container">
-        <div class="row g-4 text-center">
-            <div class="col-md-3 col-6" data-aos="zoom-in">
-                <div class="stat-card-mini" style="background: #fff; padding: 25px; border-radius: 20px;">
-                    <h3 class="fw-bold text-warning mb-0"><?php echo $siteCount; ?>+</h3>
-                    <p class="text-muted mb-0">Active Sites Managed</p>
-                </div>
-            </div>
-            <div class="col-md-3 col-6" data-aos="zoom-in" data-aos-delay="100">
-                <div class="stat-card-mini" style="background: #fff; padding: 25px; border-radius: 20px;">
-                    <h3 class="fw-bold text-warning mb-0"><?php echo $employeeCount; ?>+</h3>
-                    <p class="text-muted mb-0">Happy Users</p>
-                </div>
-            </div>
-            <div class="col-md-3 col-6" data-aos="zoom-in" data-aos-delay="200">
-                <div class="stat-card-mini" style="background: #fff; padding: 25px; border-radius: 20px;">
-                    <h3 class="fw-bold text-warning mb-0"><?php echo $reportCount; ?>K+</h3>
-                    <p class="text-muted mb-0">Reports Generated</p>
-                </div>
-            </div>
-            <div class="col-md-3 col-6" data-aos="zoom-in" data-aos-delay="300">
-                <div class="stat-card-mini" style="background: #fff; padding: 25px; border-radius: 20px;">
-                    <h3 class="fw-bold text-warning mb-0">99.9%</h3>
-                    <p class="text-muted mb-0">Uptime Guarantee</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Feature Comparison Table -->
-<section>
-    <div class="container">
-        <div class="section-title" data-aos="fade-up">
-            <h2>Compare <span class="yellow-text">Features</span></h2>
-            <p>See what's included in each plan</p>
-        </div>
-
-        <div class="table-responsive" data-aos="fade-up">
-            <table class="table table-bordered comparison-table">
-                <thead class="table-dark">
-                    <tr><th style="width: 30%;">Feature</th><th style="width: 23%;">Starter</th><th style="width: 23%;">Professional</th><th style="width: 24%;">Enterprise</th></tr>
+        <h2 class="section-title" data-aos="fade-up">Compare all features side by side</h2>
+        <div class="comparison-table" data-aos="fade-up">
+            <table>
+                <thead>
+                    <tr><th>Feature</th><th>Starter</th><th>Professional</th><th>Enterprise</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td class="feature-cell">Active Sites</td><td>Up to 5</td><td>Up to 20</td><td>Unlimited</td></tr>
-                    <tr><td class="feature-cell">Employees</td><td>Up to 20</td><td>Unlimited</td><td>Unlimited</td></tr>
-                    <tr><td class="feature-cell">DPR Reports</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                    <tr><td class="feature-cell">DAR Reports</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                    <tr><td class="feature-cell">MOM Reports</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                    <tr><td class="feature-cell">RFI Management</td><td>❌</td><td>✅</td><td>✅</td></tr>
-                    <tr><td class="feature-cell">AIT Tracker</td><td>❌</td><td>✅</td><td>✅</td></tr>
-                    <tr><td class="feature-cell">Quotation System</td><td>Basic</td><td>Advanced</td><td>Enterprise</td></tr>
-                    <tr><td class="feature-cell">HR & Payroll</td><td>Basic</td><td>Full</td><td>Full + Custom</td></tr>
-                    <tr><td class="feature-cell">Document Control</td><td>Basic</td><td>Full</td><td>Full + API</td></tr>
-                    <tr><td class="feature-cell">Mobile App</td><td>✅</td><td>✅</td><td>✅</td></tr>
-                    <tr><td class="feature-cell">API Access</td><td>❌</td><td>✅</td><td>✅</td></tr>
-                    <tr><td class="feature-cell">White-label</td><td>❌</td><td>❌</td><td>✅</td></tr>
-                    <tr><td class="feature-cell">On-premise Deployment</td><td>❌</td><td>❌</td><td>✅</td></tr>
-                    <tr><td class="feature-cell">Priority Support</td><td>Email</td><td>24/7 Chat</td><td>Dedicated</td></tr>
+                    <tr><td>Number of Projects</td><td>1</td><td>5</td><td>Unlimited</td></tr>
+                    <tr><td>Daily Progress Report (DPR)</td><td><i class="fa-regular fa-check yellow-check"></i></td><td><i class="fa-regular fa-check yellow-check"></i></td><td><i class="fa-regular fa-check yellow-check"></i></td></tr>
+                    <tr><td>RFI & MOM Management</td><td><i class="fa-regular fa-check yellow-check"></i></td><td><i class="fa-regular fa-check yellow-check"></i></td><td><i class="fa-regular fa-check yellow-check"></i></td></tr>
+                    <tr><td>Cost & Procurement Control</td><td>-</td><td><i class="fa-regular fa-check yellow-check"></i></td><td><i class="fa-regular fa-check yellow-check"></i></td></tr>
+                    <tr><td>Document Version Control</td><td>Basic</td><td>Advanced with workflow</td><td>Full + Audit trail</td></tr>
+                    <tr><td>Workforce Management</td><td>-</td><td><i class="fa-regular fa-check yellow-check"></i></td><td><i class="fa-regular fa-check yellow-check"></i></td></tr>
+                    <tr><td>Analytics Dashboard</td><td>Limited</td><td>Full KPIs & Reports</td><td>Custom dashboards</td></tr>
+                    <tr><td>API Access</td><td>-</td><td>-</td><td><i class="fa-regular fa-check yellow-check"></i></td></tr>
+                    <tr><td>Support Level</td><td>Email</td><td>Priority Chat/Email</td><td>24/7 Dedicated</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 </section>
 
-<!-- Add-on Services -->
-<section class="bg-light">
+<!-- FAQ SECTION -->
+<section class="faq-section">
     <div class="container">
-        <div class="section-title" data-aos="fade-up">
-            <h2>Add-on <span class="yellow-text">Services</span></h2>
-            <p>Customize your plan with additional services</p>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-md-4" data-aos="fade-up">
-                <div class="value-card" style="text-align: center;">
-                    <div class="value-icon mx-auto"><i class="bi bi-person-badge"></i></div>
-                    <h5 class="fw-bold">Onboarding & Training</h5>
-                    <p class="text-muted">Comprehensive training for your team</p>
-                    <h4 class="fw-bold text-warning">₹25,000</h4>
-                    <small class="text-muted">One-time fee</small>
-                </div>
-            </div>
-            <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                <div class="value-card" style="text-align: center;">
-                    <div class="value-icon mx-auto"><i class="bi bi-gear"></i></div>
-                    <h5 class="fw-bold">Custom Development</h5>
-                    <p class="text-muted">Custom features & workflows</p>
-                    <h4 class="fw-bold text-warning">Custom Quote</h4>
-                    <small class="text-muted">Based on requirements</small>
-                </div>
-            </div>
-            <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                <div class="value-card" style="text-align: center;">
-                    <div class="value-icon mx-auto"><i class="bi bi-cloud-upload"></i></div>
-                    <h5 class="fw-bold">Data Migration</h5>
-                    <p class="text-muted">Seamless data migration from existing systems</p>
-                    <h4 class="fw-bold text-warning">₹15,000</h4>
-                    <small class="text-muted">One-time fee</small>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Testimonials -->
-<section>
-    <div class="container">
-        <div class="section-title" data-aos="fade-up">
-            <h2>What Our <span class="yellow-text">Clients Say</span></h2>
-            <p>Trusted by construction companies across India</p>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-md-6" data-aos="fade-right">
-                <div class="testimonial-card">
-                    <div class="stars">★★★★★</div>
-                    <p>"TEK-C has transformed our operations. The ROI has been incredible - we've reduced report generation time by 70% and improved site coordination significantly."</p>
-                    <div class="d-flex align-items-center gap-3 mt-4">
-                        <img class="avatar" src="assets/img/Shanthi.jpg" alt="">
-                        <div>
-                            <h6 class="fw-bold mb-0">Shanthi Balachandhar</h6>
-                            <small class="text-warning fw-bold">Director - Anandhamayam</small>
-                        </div>
+        <h2 class="section-title" data-aos="fade-up">Frequently asked questions</h2>
+        <div class="row justify-content-center">
+            <div class="col-lg-8" data-aos="fade-up">
+                <div class="accordion" id="faqAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">Can I switch plans later?</button></h2>
+                        <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion"><div class="accordion-body">Absolutely. You can upgrade or downgrade anytime. Changes are prorated automatically.</div></div>
                     </div>
-                </div>
-            </div>
-            <div class="col-md-6" data-aos="fade-left">
-                <div class="testimonial-card">
-                    <div class="stars">★★★★★</div>
-                    <p>"The Professional plan is perfect for our needs. The quotation management and HR features have streamlined our entire workflow. Highly recommended!"</p>
-                    <div class="d-flex align-items-center gap-3 mt-4">
-                        <img class="avatar" src="assets/img/Balachandar.jpg" alt="" style="object-position: 10% 10%;">
-                        <div>
-                            <h6 class="fw-bold mb-0">U K Balachandar</h6>
-                            <small class="text-warning fw-bold">Founder/ Principal Consultant</small>
-                        </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">Is there a setup fee?</button></h2>
+                        <div id="faq2" class="accordion-collapse collapse"><div class="accordion-body">No setup fees. Onboarding, data migration and training are included free for all paid plans.</div></div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">Do you offer custom enterprise pricing?</button></h2>
+                        <div id="faq3" class="accordion-collapse collapse"><div class="accordion-body">Yes, contact our sales team for volume discounts, custom module requirements, or long-term contracts.</div></div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Is there a free trial available?</button></h2>
+                        <div id="faq4" class="accordion-collapse collapse"><div class="accordion-body">Yes, 14-day free trial with full access to Professional features. No credit card required.</div></div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Can I add more users?</button></h2>
+                        <div id="faq5" class="accordion-collapse collapse"><div class="accordion-body">All plans include unlimited users. You only pay per project or per organization based on plan.</div></div>
                     </div>
                 </div>
             </div>
@@ -589,135 +552,65 @@ $constructionImages = [
     </div>
 </section>
 
-<!-- FAQ -->
-<section class="bg-light">
-    <div class="container">
-        <div class="section-title" data-aos="fade-up">
-            <h2>Frequently Asked <span class="yellow-text">Questions</span></h2>
-            <p>Everything you need to know about our pricing</p>
-        </div>
-
-        <div class="accordion" id="faqAccordion" data-aos="fade-up">
-            <div class="faq-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#faq1">
-                        Is there a setup fee?
-                    </button>
-                </h2>
-                <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
-                    <div class="accordion-body">No, there is no setup fee for any of our plans. You only pay the monthly or yearly subscription fee.</div>
-                </div>
-            </div>
-            <div class="faq-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#faq2">
-                        Can I upgrade or downgrade my plan?
-                    </button>
-                </h2>
-                <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                    <div class="accordion-body">Yes, you can upgrade or downgrade your plan at any time. Changes will be reflected in your next billing cycle.</div>
-                </div>
-            </div>
-            <div class="faq-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#faq3">
-                        Do you offer a free trial?
-                    </button>
-                </h2>
-                <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                    <div class="accordion-body">Yes, we offer a 14-day free trial on all plans. No credit card required.</div>
-                </div>
-            </div>
-            <div class="faq-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#faq4">
-                        What payment methods do you accept?
-                    </button>
-                </h2>
-                <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                    <div class="accordion-body">We accept all major credit cards, UPI, net banking, and bank transfers for annual plans.</div>
-                </div>
-            </div>
-            <div class="faq-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#faq5">
-                        Is there a contract lock-in?
-                    </button>
-                </h2>
-                <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                    <div class="accordion-body">No, all our plans are month-to-month with no long-term contracts. You can cancel anytime.</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Final CTA -->
-<section class="final-cta">
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-lg-8 mx-auto text-center" data-aos="fade-up">
-                <h2 class="display-5 fw-black">Ready to <span class="yellow-text">Get Started</span>?</h2>
-                <p class="mt-3 fs-5">Join <?php echo $clientCount; ?>+ satisfied clients using TEK-C for their construction management</p>
-                <div class="d-flex flex-wrap gap-3 justify-content-center mt-4">
-                    <a href="#" class="btn btn-yellow"><i class="bi bi-calendar2-check me-2"></i> Start Free Trial</a>
-                    <a href="#" class="btn btn-light-custom"><i class="bi bi-telephone me-2"></i> Contact Sales</a>
-                </div>
-                <p class="mt-4 small">No credit card required. Cancel anytime.</p>
-            </div>
-        </div>
+<!-- CTA SECTION -->
+<section class="cta-strip">
+    <div class="container" data-aos="zoom-in">
+        <h2>Start your 14-day free trial today</h2>
+        <p class="mb-4">Experience TEK-C with your real project data. No commitment, cancel anytime.</p>
+        <a href="#contact" class="btn btn-dark btn-lg px-5" style="background:#111; border-radius:50px;">Get Started →</a>
+        <p class="mt-3 small">Free onboarding call • No credit card</p>
     </div>
 </section>
 
 <?php include 'includes/footer.php'; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
 
 <script>
-    AOS.init({ duration: 1000, once: true, offset: 80 });
+AOS.init({ duration: 700, once: true });
 
-    // Pricing toggle between monthly and yearly
-    const monthlyPrices = document.querySelectorAll('.monthly-price');
-    const yearlyPrices = document.querySelectorAll('.yearly-price');
-    const toggleOptions = document.querySelectorAll('.toggle-option');
+const navbar = document.getElementById('mainNavbar');
+window.addEventListener('scroll', () => {
+    if(window.scrollY > 70) navbar.classList.add('nav-fixed');
+    else navbar.classList.remove('nav-fixed');
+});
 
-    toggleOptions.forEach(option => {
-        option.addEventListener('click', () => {
-            toggleOptions.forEach(opt => opt.classList.remove('active'));
-            option.classList.add('active');
-            
-            const isYearly = option.getAttribute('data-plan') === 'yearly';
-            
-            monthlyPrices.forEach(price => {
-                price.style.display = isYearly ? 'none' : 'inline';
-            });
-            yearlyPrices.forEach(price => {
-                price.style.display = isYearly ? 'inline' : 'none';
-            });
-        });
+// Billing toggle (monthly/yearly)
+const monthlyPrices = document.querySelectorAll('.monthly-price');
+const yearlyPrices = document.querySelectorAll('.yearly-price');
+const toggleOptions = document.querySelectorAll('.toggle-option');
+
+function setBilling(type) {
+    if(type === 'monthly') {
+        monthlyPrices.forEach(el => el.classList.remove('d-none'));
+        yearlyPrices.forEach(el => el.classList.add('d-none'));
+    } else {
+        monthlyPrices.forEach(el => el.classList.add('d-none'));
+        yearlyPrices.forEach(el => el.classList.remove('d-none'));
+    }
+    toggleOptions.forEach(opt => {
+        if((type === 'monthly' && opt.dataset.billing === 'monthly') || (type === 'yearly' && opt.dataset.billing === 'yearly')) {
+            opt.classList.add('active');
+        } else {
+            opt.classList.remove('active');
+        }
     });
+}
 
-    // Navbar active link on scroll
-    const sections = document.querySelectorAll("section[id]");
-    const navLinks = document.querySelectorAll(".nav-link");
-
-    window.addEventListener("scroll", () => {
-        let current = "";
-        sections.forEach(section => {
-            const sectionTop = section.offsetTop - 130;
-            if (window.scrollY >= sectionTop) {
-                current = section.getAttribute("id");
-            }
-        });
-        navLinks.forEach(link => {
-            link.classList.remove("active");
-            if (link.getAttribute("href") === "#" + current) {
-                link.classList.add("active");
-            }
-        });
+toggleOptions.forEach(opt => {
+    opt.addEventListener('click', () => {
+        setBilling(opt.dataset.billing);
     });
+});
+
+// active highlight for pricing link
+const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
+navLinks.forEach(link => {
+    if(link.getAttribute('href') === '#pricing'){
+        link.classList.add('active');
+    }
+});
 </script>
-
 </body>
 </html>

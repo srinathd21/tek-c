@@ -1,1479 +1,1375 @@
+<!-- Updated full index.html -->
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TEK-C Global | Construction ERP Software</title>
-
-    <?php include('includes/links.php'); ?>
-
-    <style>
-        :root {
-            --dark: #101820;
-            --dark2: #151f28;
-            --yellow: #ffc329;
-            --yellow2: #ffb000;
-            --text: #1f2937;
-            --muted: #6b7280;
-            --border: #e9edf3;
-            --soft: #f7f9fc;
-        }
-
-        * {
-            font-family: "Inter", sans-serif;
-            
-        }
-
-        html {
-            scroll-behavior: smooth;
-            overflow-x: hidden;
-        }
-
-        body {
-            background: #fff;
-            color: var(--text);
-            overflow-x: hidden;
-        }
-
-        .navbar {
-            background: rgba(16, 24, 32, 0.96);
-            backdrop-filter: blur(14px);
-            padding: 15px 0;
-            box-shadow: 0 8px 35px rgba(0, 0, 0, .25);
-            width: 100%;
-        }
-
-        .navbar-brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: #fff !important;
-            font-weight: 900;
-            letter-spacing: .5px;
-        }
-
-        .logo-box {
-            width: 48px;
-            height: 48px;
-            border-radius: 13px;
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            box-shadow: 0 8px 22px rgba(255, 195, 41, .4);
-        }
-
-        .logo-text span {
-            display: block;
-            font-size: 11px;
-            letter-spacing: 4px;
-            color: #cfd6df;
-            font-weight: 600;
-            margin-top: -3px;
-        }
-
-        .nav-link {
-            color: #dbe3ec !important;
-            font-weight: 600;
-            margin: 0 8px;
-            position: relative;
-        }
-
-        .nav-link:hover,
-        .nav-link.active {
-            color: var(--yellow) !important;
-        }
-
-        .nav-link.active::after {
-            content: "";
-            position: absolute;
-            left: 10px;
-            bottom: -8px;
-            height: 3px;
-            width: 35px;
-            background: var(--yellow);
-            border-radius: 20px;
-        }
-
-        /* .search-box {
-            background: rgba(255,255,255,.08);
-            border: 1px solid rgba(255,255,255,.1);
-            border-radius: 12px;
-            color: #fff;
-            padding: 8px 10px;
-            min-width: 260px;
-        }
-
-        .search-box::placeholder {
-            color: #abb6c3;
-        } */
-
-        .btn-yellow {
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            color: #111;
-            font-weight: 700;
-            border: 0;
-            border-radius: 7px;
-            padding: 8px 14px;
-            box-shadow: 0 12px 28px rgba(255, 179, 0, .35);
-            transition: .35s;
-        }
-
-        .btn-yellow:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 18px 40px rgba(255, 179, 0, .45);
-        }
-
-        .btn-light-custom {
-            background: #fff;
-            color: #111;
-            font-weight: 800;
-            border-radius: 12px;
-            padding: 12px 24px;
-            border: 0;
-            transition: .35s;
-        }
-
-        .btn-light-custom:hover {
-            transform: translateY(-3px);
-        }
-
-        .dashboard-img>img {
-            width: 100%;
-            height: 350px;
-            border: 5px solid #e8e8e8;
-            border-radius: 10px;
-            animation: float 4s ease-in-out infinite;
-        }
-        
-
-        .hero {
-            position: relative;
-            min-height: 760px;
-            background:
-                linear-gradient(90deg, rgba(16, 24, 32, .96), rgba(16, 24, 32, .82), rgba(16, 24, 32, .45)),
-                url("https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1800&q=80");
-            background-size: cover;
-            background-position: center;
-            padding-top: 125px;
-            color: #fff;
-            overflow: hidden;
-        }
-
-       
-
-        @keyframes pulseGlow {
-            from {
-                transform: scale(.9);
-                opacity: .5;
-            }
-
-            to {
-                transform: scale(1.2);
-                opacity: 1;
-            }
-        }
-
-        .hero-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border: 1px solid rgba(255, 195, 41, .35);
-            background: rgba(255, 195, 41, .1);
-            color: var(--yellow);
-            padding: 8px 18px;
-            border-radius: 30px;
-            font-weight: 800;
-            margin-bottom: 24px;
-        }
-
-        .hero h2 {
-            font-size: clamp(32px, 6vw, 48px);
-            font-weight: 900;
-            line-height: 1.05;
-            letter-spacing: -2px;
-        }
-
-        .hero h2 span,
-        .yellow-text {
-            color: var(--yellow);
-        }
-
-        .hero p {
-            font-size: 19px;
-            color: #d6dde6;
-            max-width: 650px;
-            line-height: 1.8;
-        }
-
-        .hero-screen {
-            background: #fff;
-            border-radius: 24px;
-            padding: 14px;
-            box-shadow: 0 35px 90px rgba(0, 0, 0, .45);
-            transform: perspective(1000px) rotateY(-7deg) rotateX(3deg);
-            animation: float 4s ease-in-out infinite;
-        }
-
-        @keyframes float {
-
-            0%,
-            100% {
-                transform: perspective(1000px) rotateY(-7deg) rotateX(3deg) translateY(0);
-            }
-
-            50% {
-                transform: perspective(1000px) rotateY(-4deg) rotateX(2deg) translateY(-18px);
-            }
-        }
-
-        .app-window {
-            background: #f7f8fb;
-            border-radius: 18px;
-            overflow: hidden;
-            display: grid;
-            grid-template-columns: 190px 1fr;
-            min-height: 420px;
-        }
-
-        .app-sidebar {
-            background: #17212b;
-            color: #fff;
-            padding: 18px;
-        }
-
-        .side-link {
-            padding: 11px 12px;
-            border-radius: 10px;
-            font-size: 13px;
-            margin-bottom: 8px;
-            color: #cbd5e1;
-        }
-
-        .side-link.active {
-            background: var(--yellow);
-            color: #111;
-            font-weight: 800;
-        }
-
-        .app-content {
-            padding: 22px;
-            color: #111;
-        }
-
-        .stat-card-mini {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 18px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, .04);
-        }
-
-        .chart-line {
-            height: 60px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, rgba(255, 195, 41, .25), rgba(255, 195, 41, .05));
-            position: relative;
-            overflow: hidden;
-        }
-
-        .chart-line::after {
-            content: "";
-            position: absolute;
-            inset: 20px 10px;
-            border-top: 4px solid var(--yellow);
-            border-radius: 50%;
-            transform: rotate(-8deg);
-        }
-
-        .hero-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 35px;
-        }
-
-        .hero-tags span {
-            border: 1px solid rgba(255, 255, 255, .18);
-            background: rgba(255, 255, 255, .06);
-            padding: 10px 15px;
-            border-radius: 8px;
-            color: #dbe3ec;
-            font-weight: 600;
-            font-size: 12px;
-        }
-
-        section {
-            padding: 85px 0;
-        }
-
-        .section-title {
-            text-align: center;
-            margin-bottom: 50px;
-        }
-
-        .section-title h2 {
-            font-size: clamp(32px, 4vw, 48px);
-            font-weight: 900;
-            color: #111827;
-            letter-spacing: -1px;
-        }
-
-        .section-title p {
-            color: var(--muted);
-            font-size: 17px;
-        }
-
-        .overview-img {
-            border-radius: 26px;
-            min-height: 320px;
-            background:
-                linear-gradient(rgba(255, 255, 255, .15), rgba(255, 255, 255, .15)),
-                url("https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=1200&q=80");
-            background-size: cover;
-            background-position: center;
-            box-shadow: 0 25px 60px rgba(0, 0, 0, .15);
-            position: relative;
-        }
-
-        .overview-device {
-            position: absolute;
-            right: -20px;
-            bottom: -30px;
-            width: 280px;
-            background: #fff;
-            border-radius: 20px;
-            padding: 15px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, .18);
-        }
-
-        .metric-card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 28px;
-            height: 100%;
-            box-shadow: 0 12px 35px rgba(17, 24, 39, .05);
-            transition: .35s;
-        }
-
-        .metric-card:hover,
-        .module-card:hover,
-        .contact-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 25px 60px rgba(17, 24, 39, .12);
-        }
-
-        .metric-icon,
-        .module-icon,
-        .big-icon {
-            width: 68px;
-            height: 68px;
-            border-radius: 20px;
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-size: 30px;
-            box-shadow: 0 15px 35px rgba(255, 195, 41, .35);
-        }
-
-        .metric-card h3 {
-            font-size: 42px;
-            font-weight: 900;
-            margin: 16px 0 0;
-        }
-
-        .module-card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 22px;
-            padding: 28px;
-            height: 100%;
-            transition: .35s;
-            box-shadow: 0 10px 32px rgba(17, 24, 39, .05);
-        }
-
-        .module-card h5 {
-            font-weight: 900;
-            margin-top: 20px;
-            margin-bottom: 12px;
-        }
-
-        .module-card p {
-            color: var(--muted);
-            font-size: 15px;
-            line-height: 1.7;
-        }
-
-        .product-row {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 18px 22px;
-            margin-bottom: 14px;
-            display: grid;
-            grid-template-columns: 55px 1fr repeat(4, 110px);
-            gap: 18px;
-            align-items: center;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, .035);
-            transition: .3s;
-        }
-
-        .product-row:hover {
-            transform: translateX(8px);
-            border-color: var(--yellow);
-        }
-
-        .product-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 15px;
-            background: rgba(255, 195, 41, .18);
-            color: var(--yellow2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 23px;
-        }
-
-        .tag-small {
-            background: #f4f6f9;
-            padding: 8px 12px;
-            border-radius: 10px;
-            font-size: 13px;
-            font-weight: 700;
-            color: #4b5563;
-        }
-
-        .dark-process {
-            background: linear-gradient(135deg, #101820, #151f28);
-            color: #fff;
-            overflow: hidden;
-        }
-
-        .process-card {
-            background: #fff;
-            color: #111;
-            border-radius: 18px;
-            padding: 26px;
-            height: 100%;
-            position: relative;
-            box-shadow: 0 22px 45px rgba(0, 0, 0, .25);
-        }
-
-        .process-no {
-            font-size: 36px;
-            font-weight: 900;
-            color: #fff;
-            margin-bottom: 18px;
-        }
-
-        .arrow-line {
-            position: absolute;
-            right: -35px;
-            top: 50%;
-            color: var(--yellow);
-            font-size: 40px;
-            z-index: 2;
-        }
-
-        .business-card,
-        .deploy-card,
-        .faq-card,
-        .step-card,
-        .contact-card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 22px;
-            padding: 30px;
-            height: 100%;
-            box-shadow: 0 10px 32px rgba(17, 24, 39, .05);
-        }
-
-        .deploy-card ul {
-            list-style: none;
-            padding: 0;
-            margin: 20px 0 0;
-        }
-
-        .deploy-card li {
-            margin-bottom: 13px;
-            color: var(--muted);
-        }
-
-        .deploy-card li i {
-            color: #22c55e;
-            margin-right: 8px;
-        }
-
-        .benefit-card {
-            background: #fff;
-            border-left: 1px solid var(--border);
-            padding: 25px;
-            height: 100%;
-        }
-
-        .benefit-card h3 {
-            font-size: 44px;
-            font-weight: 900;
-            color: #111;
-        }
-
-        .testimonial-card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            padding: 30px;
-            box-shadow: 0 12px 35px rgba(17, 24, 39, .05);
-            height: 100%;
-        }
-
-        .stars {
-            color: var(--yellow2);
-            letter-spacing: 3px;
-        }
-
-        .avatar {
-            width: 58px;
-            height: 58px;
-            border-radius: 50%;
-            object-fit: cover;
-        }
-
-        .faq-item {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            margin-bottom: 12px;
-            overflow: hidden;
-        }
-
-        .accordion-button {
-            font-weight: 800;
-            padding: 20px 24px;
-        }
-
-        .accordion-button:not(.collapsed) {
-            background: rgba(255, 195, 41, .12);
-            color: #111;
-            box-shadow: none;
-        }
-
-        .cta-option {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 22px;
-            padding: 32px;
-            height: 100%;
-            text-align: center;
-            transition: .35s;
-            box-shadow: 0 10px 35px rgba(17, 24, 39, .05);
-        }
-
-        .cta-option:hover {
-            transform: translateY(-10px);
-            border-color: var(--yellow);
-        }
-
-        .contact-card {
-            text-align: center;
-            transition: .35s;
-        }
-
-        .contact-card i {
-            font-size: 42px;
-            color: #374151;
-            margin-bottom: 18px;
-        }
-
-        .final-cta {
-            background:
-                linear-gradient(90deg, rgba(16, 24, 32, .96), rgba(16, 24, 32, .72)),
-                url("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1600&q=80");
-            background-size: cover;
-            background-position: center;
-            color: #fff;
-            padding: 70px 0;
-        }
-
-        footer {
-            background: #101820;
-            color: #d8dee8;
-            padding: 55px 0 25px;
-        }
-
-        footer h6 {
-            color: #fff;
-            font-weight: 900;
-            margin-bottom: 18px;
-        }
-
-        footer a {
-            display: block;
-            color: #aeb8c5;
-            text-decoration: none;
-            margin-bottom: 11px;
-            transition: .3s;
-        }
-
-        footer a:hover {
-            color: var(--yellow);
-            transform: translateX(5px);
-        }
-
-        .social-icon {
-            width: 42px;
-            height: 42px;
-            background: #fff;
-            color: #101820;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            margin-right: 8px;
-            transition: .3s;
-        }
-
-        .social-icon:hover {
-            background: var(--yellow);
-            color: #111;
-            transform: translateY(-5px);
-        }
-
-        .floating-shape {
-            position: absolute;
-            border-radius: 50%;
-            background: rgba(255, 195, 41, .18);
-            filter: blur(3px);
-           
-        }
-
-        .shape1 {
-            width: 90px;
-            height: 90px;
-            left: 8%;
-            top: 18%;
-        }
-
-        .shape2 {
-            width: 60px;
-            height: 60px;
-            right: 15%;
-            bottom: 16%;
-            animation-delay: 2s;
-        }
-
-        @keyframes shapeMove {
-            from {
-                transform: translateY(0) rotate(0);
-            }
-
-            to {
-                transform: translateY(-40px) rotate(25deg);
-            }
-        }
-
-        @media (max-width: 991px) {
-            .search-box {
-                min-width: 100%;
-                margin: 12px 0;
-            }
-
-            .hero {
-                padding-top: 115px;
-                min-height: auto;
-                padding-bottom: 70px;
-            }
-
-            .hero-screen {
-                margin-top: 45px;
-                transform: none;
-                animation: none;
-            }
-
-            .app-window {
-                grid-template-columns: 1fr;
-            }
-
-            .app-sidebar {
-                display: none;
-            }
-
-            .product-row {
-                grid-template-columns: 55px 1fr;
-            }
-
-            .product-row .tag-small {
-                display: inline-block;
-            }
-
-            .arrow-line {
-                display: none;
-            }
-
-            .overview-device {
-                position: relative;
-                right: auto;
-                bottom: auto;
-                margin: 20px auto 0;
-                width: 90%;
-            }
-            .hero-tags{
-                margin-bottom: 50px;
-            }
-            .dashboard-img>img {
-            width: 100%;
-            height: auto;
-           
-        }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEK-C Construction Management Software</title>
+
+<?php include 'includes/link.php'; ?>
+
+<style>
+:root{
+    --yellow:#f6ad22;
+    --yellow2:#ffc247;
+    --dark:#080b0d;
+    --black:#050607;
+    --text:#111;
+    --muted:#666;
+    --line:#e8e8e8;
+}
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html{
+    scroll-behavior:smooth;
+    scroll-padding-top:105px;
+}
+
+body{
+    font-family:'Inter',sans-serif;
+    color:var(--text);
+    background:#fff;
+    overflow-x:hidden;
+    padding-top:88px;
+}
+
+a{
+    text-decoration:none;
+}
+
+section{
+    position:relative;
+}
+
+.section-title{
+    font-size:34px;
+    font-weight:900;
+    text-align:center;
+    margin-bottom:34px;
+    line-height:1.2;
+}
+
+.section-subtitle{
+    max-width:760px;
+    margin:0 auto 38px;
+    text-align:center;
+    color:#666;
+    font-size:16px;
+    line-height:1.7;
+}
+
+.text-yellow{
+    color:var(--yellow);
+}
+
+.btn-yellow{
+    background:linear-gradient(135deg,var(--yellow),var(--yellow2));
+    color:#111;
+    font-weight:800;
+    border:none;
+    border-radius:12px;
+    padding:14px 28px;
+    box-shadow:0 10px 25px rgba(246,173,34,.35);
+    transition:.35s;
+}
+
+.btn-yellow:hover{
+    transform:translateY(-3px);
+    color:#111;
+}
+
+.btn-outline-light-custom{
+    border:1px solid rgba(246,173,34,.85);
+    color:#fff;
+    font-weight:700;
+    border-radius:12px;
+    padding:14px 28px;
+    transition:.35s;
+    background:rgba(255,255,255,.04);
+    backdrop-filter:blur(8px);
+}
+
+.btn-outline-light-custom:hover{
+    background:var(--yellow);
+    color:#111;
+}
+
+/* NAVBAR - FIXED, NOT MERGED WITH CONTENT */
+.navbar{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    z-index:999;
+    padding:14px 0;
+    background:rgba(5,7,9,.96);
+    backdrop-filter:blur(16px);
+    box-shadow:0 8px 30px rgba(0,0,0,.28);
+    transition:.35s ease;
+}
+
+.navbar.nav-fixed{
+    padding:10px 0;
+    background:rgba(5,7,9,.98);
+    box-shadow:0 8px 30px rgba(0,0,0,.38);
+}
+
+.logo{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    color:#fff;
+}
+
+.logo-icon{
+    width:48px;
+    height:48px;
+    background:linear-gradient(135deg,#ffbe35,#e79510);
+    clip-path:polygon(50% 0,100% 35%,85% 35%,50% 15%,15% 35%,0 35%);
+}
+
+.logo-text h3{
+    margin:0;
+    color:var(--yellow);
+    font-size:32px;
+    font-weight:900;
+    letter-spacing:.5px;
+}
+
+.logo-text span{
+    display:block;
+    color:#fff;
+    font-size:10px;
+    margin-top:-6px;
+    letter-spacing:.8px;
+}
+
+.navbar-nav{
+    background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:50px;
+    padding:7px;
+    backdrop-filter:blur(12px);
+}
+
+.navbar-nav .nav-link{
+    color:#fff;
+    font-size:14px;
+    font-weight:700;
+    margin:0 2px;
+    padding:10px 16px !important;
+    border-radius:50px;
+    transition:.3s;
+}
+
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link.active{
+    color:#111;
+    background:linear-gradient(135deg,var(--yellow),var(--yellow2));
+    box-shadow:0 7px 18px rgba(246,173,34,.25);
+}
+
+/* HERO */
+.hero{
+    min-height:720px;
+    background:
+    linear-gradient(90deg,rgba(5,7,9,.96) 0%,rgba(5,7,9,.92) 38%,rgba(5,7,9,.65) 70%,rgba(5,7,9,.95) 100%),
+    url('https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1800&q=80') center/cover;
+    padding:105px 0 95px;
+    color:#fff;
+    overflow:hidden;
+}
+
+.hero:after{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:radial-gradient(circle at 72% 32%,rgba(246,173,34,.16),transparent 28%);
+    pointer-events:none;
+}
+
+.hero-content{
+    position:relative;
+    z-index:2;
+}
+
+.hero h1{
+    font-size:62px;
+    font-weight:900;
+    line-height:1.08;
+    margin-bottom:28px;
+}
+
+.hero p{
+    font-size:20px;
+    line-height:1.75;
+    color:#f3f3f3;
+    max-width:640px;
+}
+
+.hero-points{
+    display:flex;
+    flex-wrap:wrap;
+    gap:18px;
+    margin:36px 0;
+}
+
+.hero-points div{
+    color:#f4f4f4;
+    font-size:14px;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.12);
+    padding:10px 14px;
+    border-radius:50px;
+}
+
+.hero-points i{
+    color:var(--yellow);
+    margin-right:8px;
+}
+
+.hero-buttons{
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+}
+
+.dashboard-device{
+    background:#111;
+    border:5px solid #dedede;
+    border-radius:26px;
+    padding:18px;
+    position:relative;
+    box-shadow:0 35px 90px rgba(0,0,0,.65);
+    transform:perspective(900px) rotateY(-4deg);
+    max-width:100%;
+}
+
+.dashboard-screen{
+    background:#f7f7f7;
+    border-radius:14px;
+    overflow:hidden;
+    width:100%;
+    display:block;
+}
+
+img.dashboard-screen{
+    width:100%;
+    height:auto;
+    object-fit:contain;
+}
+
+.phone{
+    position:absolute;
+    right:-42px;
+    bottom:-32px;
+    width:138px;
+    background:#fff;
+    border:6px solid #111;
+    border-radius:26px;
+    padding:14px;
+    color:#111;
+    box-shadow:0 20px 45px rgba(0,0,0,.45);
+}
+
+.phone h6{
+    font-size:12px;
+    font-weight:900;
+}
+
+.phone-line{
+    height:8px;
+    background:#eee;
+    margin:10px 0;
+    border-radius:6px;
+}
+
+.phone-line:nth-child(odd){
+    width:80%;
+}
+
+.laptop-base{
+    height:15px;
+    width:80%;
+    background:#cfcfcf;
+    margin:0 auto;
+    border-radius:0 0 28px 28px;
+}
+
+/* PROBLEM */
+.problem{
+    padding:85px 0 70px;
+}
+
+.problem-card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:16px;
+    text-align:center;
+    padding:34px 20px;
+    height:100%;
+    box-shadow:0 8px 24px rgba(0,0,0,.08);
+    transition:.35s;
+}
+
+.problem-card:hover{
+    transform:translateY(-8px);
+    border-color:rgba(246,173,34,.5);
+}
+
+.icon-circle{
+    width:70px;
+    height:70px;
+    border-radius:50%;
+    background:#fff2d8;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin:0 auto 18px;
+    font-size:30px;
+    color:#111;
+}
+
+.problem-card h5{
+    font-size:16px;
+    font-weight:900;
+    margin-bottom:10px;
+}
+
+.problem-card p{
+    font-size:13px;
+    color:#666;
+    margin:0;
+    line-height:1.6;
+}
+
+/* SOLUTION */
+.solution{
+    background:#fafafa;
+    padding:95px 0;
+    overflow:hidden;
+}
+
+.solution:after{
+    content:"";
+    position:absolute;
+    right:0;
+    bottom:0;
+    width:55%;
+    height:100%;
+    background:url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80') center/cover;
+    opacity:.08;
+}
+
+.solution h2{
+    font-size:42px;
+    font-weight:900;
+    line-height:1.12;
+    margin-bottom:25px;
+}
+
+.solution p{
+    color:#555;
+    line-height:1.7;
+}
+
+.check-list{
+    list-style:none;
+    padding:0;
+    margin:24px 0;
+}
+
+.check-list li{
+    margin:14px 0;
+    font-size:15px;
+    font-weight:600;
+    color:#333;
+}
+
+.check-list i{
+    color:var(--yellow);
+    margin-right:10px;
+}
+
+.solution-img{
+    position:relative;
+    z-index:2;
+}
+
+/* DARK STRIP */
+.dark-strip{
+    background:linear-gradient(90deg,#07090b,#11161a,#07090b);
+    color:#fff;
+    padding:75px 0;
+}
+
+.dark-strip h2{
+    font-size:36px;
+    font-weight:900;
+    line-height:1.2;
+}
+
+.dark-strip p{
+    color:#d7d7d7;
+    line-height:1.7;
+}
+
+.diff-item{
+    text-align:center;
+    color:#fff;
+    border-left:1px solid rgba(246,173,34,.35);
+    min-height:145px;
+    padding:22px 18px;
+}
+
+.diff-item i{
+    font-size:38px;
+    color:var(--yellow);
+    margin-bottom:16px;
+}
+
+.diff-item h5{
+    font-size:15px;
+    line-height:1.5;
+    font-weight:700;
+}
+
+/* FEATURES */
+.features{
+    padding:90px 0 85px;
+}
+
+.feature-card{
+    border:1px solid var(--line);
+    border-radius:16px;
+    background:#fff;
+    padding:28px;
+    min-height:165px;
+    display:flex;
+    gap:18px;
+    align-items:flex-start;
+    box-shadow:0 7px 22px rgba(0,0,0,.06);
+    transition:.35s;
+}
+
+.feature-card:hover{
+    transform:translateY(-7px);
+    border-color:rgba(246,173,34,.5);
+}
+
+.feature-card i{
+    font-size:38px;
+    color:#111;
+    min-width:42px;
+}
+
+.feature-card h5{
+    font-size:16px;
+    font-weight:900;
+    margin-bottom:10px;
+}
+
+.feature-card p{
+    font-size:13px;
+    color:#555;
+    margin:0;
+    line-height:1.6;
+}
+
+/* PREVIEW */
+.preview{
+    background:#f8f8f8;
+    padding:95px 0;
+}
+
+.preview h2{
+    font-size:34px;
+    font-weight:900;
+    line-height:1.25;
+    margin-bottom:18px;
+}
+
+.preview p{
+    color:#555;
+    line-height:1.7;
+}
+
+.impact-card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:32px 15px;
+    text-align:center;
+    height:100%;
+    box-shadow:0 7px 22px rgba(0,0,0,.06);
+}
+
+.impact-card i{
+    font-size:36px;
+    margin-bottom:15px;
+}
+
+.impact-card h3{
+    color:var(--yellow);
+    font-size:38px;
+    font-weight:900;
+    margin:0 0 6px;
+}
+
+.impact-card p{
+    margin:0;
+    font-size:14px;
+    font-weight:700;
+    color:#333;
+}
+
+/* ROLES */
+.roles{
+    padding:90px 0;
+}
+
+.role-card{
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:36px 24px;
+    text-align:center;
+    height:100%;
+    box-shadow:0 7px 22px rgba(0,0,0,.06);
+    transition:.35s;
+}
+
+.role-card:hover{
+    transform:translateY(-7px);
+    border-color:rgba(246,173,34,.5);
+}
+
+.role-card i{
+    font-size:48px;
+    margin-bottom:18px;
+}
+
+.role-card h5{
+    font-size:16px;
+    font-weight:900;
+    margin-bottom:10px;
+}
+
+.role-card p{
+    font-size:13px;
+    margin:0;
+    color:#555;
+    line-height:1.6;
+}
+
+/* AUTHORITY */
+.authority{
+    padding:90px 0;
+    background:#fff;
+}
+
+.ukb-box{
+    background:#f8f8f8;
+    border-radius:18px;
+    padding:34px 20px;
+    height:100%;
+    min-height:260px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:1px solid var(--line);
+}
+
+.ukb-logo{
+    font-size:34px;
+    font-weight:900;
+    line-height:1.1;
+}
+
+.project-grid{
+    display:grid;
+    grid-template-columns:1.2fr 1fr 1fr;
+    gap:12px;
+}
+
+.project-grid img{
+    width:100%;
+    height:135px;
+    object-fit:cover;
+    border-radius:14px;
+    box-shadow:0 8px 22px rgba(0,0,0,.12);
+}
+
+.project-grid img:first-child{
+    grid-row:span 2;
+    height:282px;
+}
+
+/* PRICING */
+.pricing{
+    padding:90px 0;
+    background:#f8f8f8;
+}
+
+.price-card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:34px;
+    height:100%;
+    box-shadow:0 8px 26px rgba(0,0,0,.07);
+    transition:.35s;
+}
+
+.price-card:hover{
+    transform:translateY(-7px);
+}
+
+.price-card.featured{
+    border:2px solid var(--yellow);
+    transform:scale(1.03);
+}
+
+.price-card h4{
+    font-size:22px;
+    font-weight:900;
+}
+
+.price-card h2{
+    font-size:38px;
+    font-weight:900;
+    color:var(--yellow);
+    margin:18px 0;
+}
+
+.price-card ul{
+    list-style:none;
+    padding:0;
+    margin:22px 0;
+}
+
+.price-card li{
+    margin:12px 0;
+    font-size:14px;
+    color:#444;
+}
+
+.price-card li i{
+    color:var(--yellow);
+    margin-right:8px;
+}
+
+/* CTA */
+.final-cta{
+    background:linear-gradient(135deg,#f1a51b,#ffc247);
+    color:#111;
+    padding:75px 0;
+    overflow:hidden;
+}
+
+.final-cta h2{
+    font-size:40px;
+    font-weight:900;
+    margin-bottom:14px;
+}
+
+.final-cta p{
+    font-size:18px;
+    margin-bottom:28px;
+}
+
+.btn-dark-custom{
+    background:#101214;
+    color:#fff;
+    border-radius:12px;
+    padding:14px 30px;
+    font-weight:800;
+}
+
+.btn-dark-custom:hover{
+    background:#000;
+    color:#fff;
+}
+
+/* FOOTER */
+.footer{
+    background:#07090b;
+    color:#fff;
+    padding:65px 0 20px;
+}
+
+.footer h5{
+    font-size:14px;
+    font-weight:900;
+    margin-bottom:18px;
+}
+
+.footer a{
+    display:block;
+    color:#d6d6d6;
+    font-size:13px;
+    margin:10px 0;
+}
+
+.footer a:hover{
+    color:var(--yellow);
+}
+
+.social a{
+    display:inline-flex;
+    width:34px;
+    height:34px;
+    align-items:center;
+    justify-content:center;
+    background:#1b2025;
+    border-radius:50%;
+    margin-right:8px;
+}
+
+.product-box{
+    border-left:1px solid #333;
+    padding-left:40px;
+}
+
+.footer-bottom{
+    border-top:1px solid #222;
+    margin-top:32px;
+    padding-top:18px;
+    font-size:13px;
+    color:#bbb;
+}
+
+/* ANIMATIONS */
+.float{
+    animation:float 4s ease-in-out infinite;
+}
+
+@keyframes float{
+    0%,100%{transform:translateY(0)}
+    50%{transform:translateY(-12px)}
+}
+
+.pulse{
+    animation:pulse 2s infinite;
+}
+
+@keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(246,173,34,.6)}
+    70%{box-shadow:0 0 0 18px rgba(246,173,34,0)}
+    100%{box-shadow:0 0 0 0 rgba(246,173,34,0)}
+}
+
+/* RESPONSIVE */
+@media(max-width:991px){
+    body{
+        padding-top:82px;
+    }
+
+    .navbar{
+        padding:12px 0;
+    }
+
+    .navbar-nav{
+        border-radius:18px;
+        margin-top:18px;
+        padding:12px;
+    }
+
+    .navbar-nav .nav-link{
+        margin:4px 0;
+    }
+
+    .hero{
+        padding-top:80px;
+        min-height:auto;
+    }
+
+    .hero h1{
+        font-size:42px;
+    }
+
+    .dashboard-device{
+        margin-top:45px;
+        transform:none;
+    }
+
+    .phone{
+        right:10px;
+    }
+
+    .solution:after{
+        display:none;
+    }
+
+    .solution h2{
+        font-size:34px;
+    }
+
+    .product-box{
+        border-left:none;
+        padding-left:0;
+        margin-top:25px;
+    }
+
+    .price-card.featured{
+        transform:none;
+    }
+}
+
+@media(max-width:575px){
+    body{
+        padding-top:78px;
+    }
+
+    .logo-text h3{
+        font-size:26px;
+    }
+
+    .logo-icon{
+        width:42px;
+        height:42px;
+    }
+
+    .hero h1{
+        font-size:34px;
+    }
+
+    .hero p{
+        font-size:16px;
+    }
+
+    .section-title{
+        font-size:26px;
+    }
+
+    .phone{
+        display:none;
+    }
+
+    .project-grid{
+        grid-template-columns:1fr;
+    }
+
+    .project-grid img:first-child,
+    .project-grid img{
+        height:210px;
+    }
+
+    .hero-buttons .btn{
+        width:100%;
+    }
+
+    .problem,
+    .solution,
+    .features,
+    .preview,
+    .roles,
+    .authority,
+    .pricing{
+        padding:65px 0;
+    }
+
+    .final-cta h2{
+        font-size:30px;
+    }
+}
+</style>
 </head>
 
 <body>
 
-    <?php include 'includes/nav.php'; ?>
+<?php include 'includes/nav.php'; ?>
 
-    <!-- HERO -->
-    <section class="hero" id="home">
-        <div class="floating-shape shape1"></div>
-        <div class="floating-shape shape2"></div>
+<section class="hero" id="home">
+    <div class="container hero-content">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6" data-aos="fade-right">
+                <h1>Control the <span class="text-yellow">Process.</span><br>Command the <span class="text-yellow">Project.</span></h1>
+                <p>Construction Management Software built for real sites, live tracking, daily reporting, approvals, procurement, workforce and project control.</p>
 
-        <div class="container position-relative">
-            <div class="row align-items-center">
-                <div class="col-lg-6" data-aos="fade-right">
-                    <div class="hero-badge">
-                        <i class="bi bi-building"></i>
-                        Pre Construction to Post Construction
-                    </div>
-
-                    <h2>
-                        Complete Project <br>
-                        <span>Lifecycle Management</span>
-                    </h2>
-
-                    <p class="mt-4">
-                        From Daily Progress Reports to Quotation Comparison, AIT, MOM, RFI and document approvals —
-                        TEK-C brings every construction workflow into one smart ERP system.
-                    </p>
-
-
-                    <div class="hero-tags">
-                        <span><i class="bi bi-check-circle text-warning me-1"></i> Ready to Deploy</span>
-                        
-                        <span><i class="bi bi-person-lock text-warning me-1"></i> Role Based Access</span>
-                        <span><i class="bi bi-headset text-warning me-1"></i> Active Support</span>
-                    </div>
+                <div class="hero-points">
+                    <div><i class="fa-solid fa-shield-halved"></i> Real-time Tracking</div>
+                    <div><i class="fa-solid fa-users"></i> Better Collaboration</div>
+                    <div><i class="fa-solid fa-indian-rupee-sign"></i> Cost Control</div>
+                    <div><i class="fa-solid fa-square-check"></i> On-time Delivery</div>
                 </div>
 
-                <div class="col-lg-6 dashboard-img" data-aos="zoom-in" data-aos-delay="200">
-                    <img src="assets/image.png" alt="">
+                <div class="hero-buttons">
+                    <a href="#contact" class="btn btn-yellow pulse"><i class="fa-regular fa-calendar me-2"></i> Book Live Demo <i class="fa-solid fa-arrow-right ms-2"></i></a>
+                    <a href="#dashboard" class="btn btn-outline-light-custom">See Dashboard <i class="fa-regular fa-circle-play ms-2"></i></a>
                 </div>
             </div>
 
-            <div class="text-warning fw-bold mt-4">
-                India’s Construction ERP by UKR Group
+            <div class="col-lg-6" data-aos="zoom-in">
+                <div class="dashboard-device float">
+                    <img src="assets/dashboard.png" class="dashboard-screen" alt="Dashboard">
+                    <div class="phone">
+                        <h6>Daily Reports</h6>
+                        <div class="phone-line"></div>
+                        <div class="phone-line"></div>
+                        <div class="phone-line"></div>
+                        <div class="phone-line"></div>
+                    </div>
+                </div>
+                <div class="laptop-base"></div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <!-- ABOUT SECTION - Data from sites table -->
-    <section id="about">
-        <div class="container">
-            <div class="row align-items-center g-5">
-                <div class="col-lg-5" data-aos="fade-right">
-                    <div class="overview-img">
-                        <div class="overview-device">
-                            <div class="stat-card-mini">
-                                <h6 class="fw-bold">Live Project View</h6>
-                                <div class="chart-line mb-3"></div>
-                                <div class="d-flex justify-content-between">
-                                    <span>Active Projects</span>
-                                    <strong>8 Sites</strong>
-                                </div>
-                                <div class="progress mt-2" style="height:8px;">
-                                    <div class="progress-bar bg-warning" style="width:82%"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+<section class="problem">
+    <div class="container">
+        <h2 class="section-title" data-aos="fade-up">Construction Projects Don’t Fail in Design... They Fail in Execution</h2>
+
+        <div class="row g-4">
+            <div class="col-lg col-md-4 col-6" data-aos="fade-up">
+                <div class="problem-card">
+                    <div class="icon-circle"><i class="fa-brands fa-whatsapp"></i></div>
+                    <h5>Updates lost in WhatsApp groups</h5>
+                    <p>Important information gets buried and missed.</p>
                 </div>
+            </div>
 
-                <div class="col-lg-7" data-aos="fade-left">
-                    <h2 class="fw-black display-5">
-                        Complete Construction ERP Software
-                    </h2>
-                    <h5 class="yellow-text fw-bold mb-3">Sell Confidence. Deliver Control.</h5>
+            <div class="col-lg col-md-4 col-6" data-aos="fade-up" data-aos-delay="80">
+                <div class="problem-card">
+                    <div class="icon-circle"><i class="fa-regular fa-clock"></i></div>
+                    <h5>Delays due to unclear instructions</h5>
+                    <p>No clear communication leads to rework.</p>
+                </div>
+            </div>
 
-                    <p class="text-muted fs-5">
-                        TEK-C is a production-ready construction ERP that manages sites, contracts,
-                        daily reports, HR, quotations, approvals and documents — all in one connected platform.
-                        White-label ready and built for scalability across projects and locations.
-                    </p>
+            <div class="col-lg col-md-4 col-6" data-aos="fade-up" data-aos-delay="160">
+                <div class="problem-card">
+                    <div class="icon-circle"><i class="fa-regular fa-eye-slash"></i></div>
+                    <h5>No visibility on real progress</h5>
+                    <p>Difficult to track actual site progress.</p>
+                </div>
+            </div>
 
-                    <div class="row g-4 mt-4">
-                        <div class="col-md-3 col-6">
-                            <div class="metric-card text-center">
-                                <div class="metric-icon mx-auto"><i class="bi bi-buildings"></i></div>
-                                <h3>8</h3>
-                                <p class="mb-0 text-muted">Active Sites</p>
-                            </div>
-                        </div>
-                        <div class="col-md-3 col-6">
-                            <div class="metric-card text-center">
-                                <div class="metric-icon mx-auto"><i class="bi bi-person-badge"></i></div>
-                                <h3>18</h3>
-                                <p class="mb-0 text-muted">Employees</p>
-                            </div>
-                        </div>
-                        <div class="col-md-3 col-6">
-                            <div class="metric-card text-center">
-                                <div class="metric-icon mx-auto"><i class="bi bi-file-text"></i></div>
-                                <h3>34</h3>
-                                <p class="mb-0 text-muted">DPR Reports</p>
-                            </div>
-                        </div>
-                        <div class="col-md-3 col-6">
-                            <div class="metric-card text-center">
-                                <div class="metric-icon mx-auto"><i class="bi bi-quote"></i></div>
-                                <h3>7</h3>
-                                <p class="mb-0 text-muted">Quotations</p>
-                            </div>
-                        </div>
-                    </div>
+            <div class="col-lg col-md-4 col-6" data-aos="fade-up" data-aos-delay="240">
+                <div class="problem-card">
+                    <div class="icon-circle"><i class="fa-solid fa-indian-rupee-sign"></i></div>
+                    <h5>Cost overruns from poor tracking</h5>
+                    <p>Uncontrolled expenses eat into profits.</p>
+                </div>
+            </div>
+
+            <div class="col-lg col-md-4 col-12" data-aos="fade-up" data-aos-delay="320">
+                <div class="problem-card">
+                    <div class="icon-circle"><i class="fa-solid fa-people-group"></i></div>
+                    <h5>Confusion in vendor coordination</h5>
+                    <p>No clarity on approvals and responsibilities.</p>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <!-- MODULES SECTION - based on DB modules and reports -->
-    <section id="modules" class="bg-light">
-        <div class="container">
-            <div class="section-title" data-aos="fade-up">
-                <h2>What <span class="yellow-text">TEK-C</span> Offers to Construction Groups</h2>
-                <p>15+ integrated modules that mirror real construction workflows.</p>
+<section class="solution" id="about">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-5" data-aos="fade-right">
+                <h2>Introducing <span class="text-yellow">TEK-C</span> —<br>Your Construction<br>Command Center</h2>
+                <ul class="check-list">
+                    <li><i class="fa-solid fa-circle-check"></i> Real-time site tracking & updates</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Structured DPR, MOM & RFI management</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Clear approval workflows</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Cost & procurement control</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Team accountability at every level</li>
+                </ul>
+                <p>From planning to handover — everything in one powerful and simple system.</p>
             </div>
 
-            <div class="row g-4">
-                <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in">
-                    <div class="module-card text-center">
-                        <div class="module-icon mx-auto"><i class="bi bi-building"></i></div>
-                        <h5>Sites & Contracts</h5>
-                        <p>Manage 8 active sites, contract values, and site-wise dashboards.</p>
-                    </div>
+            <div class="col-lg-7 solution-img" data-aos="fade-left">
+                <div class="dashboard-device">
+                    <img src="assets/report.png" class="dashboard-screen" alt="Report">
                 </div>
+                <div class="laptop-base"></div>
+            </div>
+        </div>
+    </div>
+</section>
 
-                <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="100">
-                    <div class="module-card text-center">
-                        <div class="module-icon mx-auto"><i class="bi bi-clipboard-data"></i></div>
-                        <h5>Daily Reports</h5>
-                        <p><span title="Daily Progress Report">DPR</span>,<span title="Daily Activity Report">
-                                DAR</span>, <span title="Minutes of Meeting">MOM</span>, <span
-                                title="Meeting Agenda">MA</span>, <span title="Request For Information">RFI</span>,
-                            <span title="Action Item Tracker">AIT</span>, <span
-                                title="Delay Analysis Report">DLAR</span>, <span
-                                title="Monthly Planned Tracker">MPT</span> fully integrated.</p>
+<section class="dark-strip">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-3" data-aos="fade-right">
+                <h2>Not Built by Coders.<br><span class="text-yellow">Built by Builders.</span></h2>
+                <p>Developed from real construction project workflows and execution challenges.</p>
+            </div>
+
+            <div class="col-lg-9">
+                <div class="row g-0">
+                    <div class="col-md-3 col-6 diff-item" data-aos="zoom-in">
+                        <i class="fa-solid fa-building-shield"></i>
+                        <h5>Manage residential & commercial projects</h5>
                     </div>
-                </div>
-
-                <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="200">
-                    <div class="module-card text-center">
-                        <div class="module-icon mx-auto"><i class="bi bi-file-pdf"></i></div>
-                        <h5>Document Control</h5>
-                        <p>Contract documents, drawings, site photos, version control.</p>
+                    <div class="col-md-3 col-6 diff-item" data-aos="zoom-in" data-aos-delay="100">
+                        <i class="fa-solid fa-eye-slash"></i>
+                        <h5>Solve real site visibility problems</h5>
                     </div>
-                </div>
-
-                <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="300">
-                    <div class="module-card text-center">
-                        <div class="module-icon mx-auto"><i class="bi bi-calculator"></i></div>
-                        <h5>Quotation & Tendering</h5>
-                        <p>RFQ, quotations from dealers, comparison and QS approval.</p>
+                    <div class="col-md-3 col-6 diff-item" data-aos="zoom-in" data-aos-delay="200">
+                        <i class="fa-solid fa-crosshairs"></i>
+                        <h5>Convert proven workflows into digital control</h5>
                     </div>
-                </div>
-
-                <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="400">
-                    <div class="module-card text-center">
-                        <div class="module-icon mx-auto"><i class="bi bi-people"></i></div>
-                        <h5>HRMS</h5>
-                        <p>Attendance, leave requests, hiring, onboarding and payroll.</p>
-                    </div>
-                </div>
-
-                <div class="col-lg-4 col-md-4 col-6" data-aos="zoom-in" data-aos-delay="500">
-                    <div class="module-card text-center">
-                        <div class="module-icon mx-auto"><i class="bi bi-shield-lock"></i></div>
-                        <h5>Role Access</h5>
-                        <p>Admin, Director, HR, Manager, QS, Project Engineer roles.</p>
+                    <div class="col-md-3 col-6 diff-item" data-aos="zoom-in" data-aos-delay="300">
+                        <i class="fa-solid fa-house-lock"></i>
+                        <h5>Practical, reliable and results-driven</h5>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <!-- PRODUCT LIST - Features based on actual DB tables -->
-    <section>
-        <div class="container">
-            <div class="section-title" data-aos="fade-up">
-                <h2>Why <span class="yellow-text">TEK-C</span> as a Product</h2>
-            </div>
+<section class="features" id="features">
+    <div class="container">
+        <h2 class="section-title" data-aos="fade-up">Everything You Need to Run a Project — In One Place</h2>
 
-            <div data-aos="fade-up">
-                <div class="product-row">
-                    <div class="product-icon"><i class="bi bi-journal-text"></i></div>
+        <div class="row g-4">
+            <div class="col-lg-3 col-md-6" data-aos="fade-up">
+                <div class="feature-card">
+                    <i class="fa-regular fa-clipboard"></i>
                     <div>
-                        <h6 class="fw-bold mb-1">Daily Progress Report (DPR)</h6>
-                        <p class="mb-0 text-muted">12 DPR reports captured with manpower, machinery, material and
-                            constraints.</p>
+                        <h5>Daily Reporting System</h5>
+                        <p>DPR, MOM, RFI and site reports documented clearly.</p>
                     </div>
-                    <span class="tag-small">Labour</span>
-                    <span class="tag-small">Progress %</span>
-                    <span class="tag-small">Photos</span>
-                    <span class="tag-small">Reports</span>
                 </div>
+            </div>
 
-                <div class="product-row">
-                    <div class="product-icon"><i class="bi bi-calculator-fill"></i></div>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="80">
+                <div class="feature-card">
+                    <i class="fa-solid fa-indian-rupee-sign"></i>
                     <div>
-                        <h6 class="fw-bold mb-1">Quotation Workflow</h6>
-                        <p class="mb-0 text-muted">7 RFQs created, quotations from dealers, QS negotiation and final
-                            approval.</p>
+                        <h5>Cost & Procurement Control</h5>
+                        <p>Vendor tracking, budget visibility and cost analytics.</p>
                     </div>
-                    <span class="tag-small">Comparison</span>
-                    <span class="tag-small">Negotiation</span>
-                    <span class="tag-small">Vendors</span>
-                    <span class="tag-small">Analytics</span>
                 </div>
+            </div>
 
-                <div class="product-row">
-                    <div class="product-icon"><i class="bi bi-pencil-square"></i></div>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="160">
+                <div class="feature-card">
+                    <i class="fa-regular fa-folder-open"></i>
                     <div>
-                        <h6 class="fw-bold mb-1">RFI & AIT Tracker</h6>
-                        <p class="mb-0 text-muted">3 RFIs raised, 1 AIT with multiple action items tracked to
-                            completion.</p>
+                        <h5>Document Management</h5>
+                        <p>Version control, approval tracking and secure access.</p>
                     </div>
-                    <span class="tag-small">RFI</span>
-                    <span class="tag-small">AIT</span>
-                    <span class="tag-small">Due Date</span>
-                    <span class="tag-small">Status</span>
                 </div>
+            </div>
 
-                <div class="product-row">
-                    <div class="product-icon"><i class="bi bi-chat-text"></i></div>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="240">
+                <div class="feature-card">
+                    <i class="fa-solid fa-users"></i>
                     <div>
-                        <h6 class="fw-bold mb-1">MOM & MAS Reports</h6>
-                        <p class="mb-0 text-muted">8 MOM reports, 13 MA reports with minutes and action points recorded.
-                        </p>
+                        <h5>Workforce & HR</h5>
+                        <p>Attendance, leave, payroll and workforce productivity.</p>
                     </div>
-                    <span class="tag-small">Minutes</span>
-                    <span class="tag-small">Action Points</span>
-                    <span class="tag-small">MAS</span>
-                    <span class="tag-small">Follow-up</span>
                 </div>
+            </div>
 
-                <div class="product-row">
-                    <div class="product-icon"><i class="bi bi-geo-alt-fill"></i></div>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up">
+                <div class="feature-card">
+                    <i class="fa-regular fa-square-check"></i>
                     <div>
-                        <h6 class="fw-bold mb-1">HR & Attendance with Geolocation</h6>
-                        <p class="mb-0 text-muted">23 attendance records, 2 office locations, leave management and 4
-                            leave requests.</p>
+                        <h5>Site & Task Management</h5>
+                        <p>Task allocation, progress tracking and checklists.</p>
                     </div>
-                    <span class="tag-small">Attendance</span>
-                    <span class="tag-small">Geolocation</span>
-                    <span class="tag-small">Leave</span>
-                    <span class="tag-small">Onboarding</span>
                 </div>
             </div>
-        </div>
-    </section>
 
-    <!-- PROCESS SECTION -->
-    <section class="dark-process">
-        <div class="container">
-            <div class="section-title" data-aos="fade-up">
-                <h2 class="text-white">How <span class="yellow-text">TEK-C</span> Works</h2>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="80">
+                <div class="feature-card">
+                    <i class="fa-solid fa-chart-column"></i>
+                    <div>
+                        <h5>Management Dashboard</h5>
+                        <p>Real-time insights, delays, risk alerts and reports.</p>
+                    </div>
+                </div>
             </div>
 
-            <div class="row g-4">
-                <div class="col-lg-3" data-aos="fade-up">
-                    <div class="process-no">01</div>
-                    <div class="process-card">
-                        <div class="module-icon mb-3"><i class="bi bi-cloud-upload"></i></div>
-                        <h5 class="fw-bold">Capture Site Data</h5>
-                        <p class="text-muted mb-0">DPR, labour, machinery, material and photo updates from site
-                            engineers.</p>
-                        <div class="arrow-line"><i class="bi bi-arrow-right"></i></div>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="160">
+                <div class="feature-card">
+                    <i class="fa-solid fa-microphone-lines"></i>
+                    <div>
+                        <h5>RFI, MOM & Approvals</h5>
+                        <p>Structured approvals with complete transparency.</p>
                     </div>
                 </div>
+            </div>
 
-                <div class="col-lg-3" data-aos="fade-up" data-aos-delay="100">
-                    <div class="process-no">02</div>
-                    <div class="process-card">
-                        <div class="module-icon mb-3"><i class="bi bi-check2-square"></i></div>
-                        <h5 class="fw-bold">Review & Approvals</h5>
-                        <p class="text-muted mb-0">Quotations, AIT, MOM, attendance regularization and workflow
-                            approvals.</p>
-                        <div class="arrow-line"><i class="bi bi-arrow-right"></i></div>
-                    </div>
-                </div>
-
-                <div class="col-lg-3" data-aos="fade-up" data-aos-delay="200">
-                    <div class="process-no">03</div>
-                    <div class="process-card">
-                        <div class="module-icon mb-3"><i class="bi bi-database-check"></i></div>
-                        <h5 class="fw-bold">Centralise Operations</h5>
-                        <p class="text-muted mb-0">Documents, contracts, HR, attendance and all site data in one place.
-                        </p>
-                        <div class="arrow-line"><i class="bi bi-arrow-right"></i></div>
-                    </div>
-                </div>
-
-                <div class="col-lg-3" data-aos="fade-up" data-aos-delay="300">
-                    <div class="process-no">04</div>
-                    <div class="process-card">
-                        <div class="module-icon mb-3"><i class="bi bi-bar-chart-line"></i></div>
-                        <h5 class="fw-bold">Track & Decide</h5>
-                        <p class="text-muted mb-0">Dashboards, activity logs, reports and management insights.</p>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="240">
+                <div class="feature-card">
+                    <i class="fa-solid fa-mobile-screen-button"></i>
+                    <div>
+                        <h5>Mobile App Access</h5>
+                        <p>Access your projects anytime from your mobile.</p>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <!-- BUSINESS TYPES -->
-    <section>
-        <div class="container">
-            <div class="section-title" data-aos="fade-up">
-                <h2>Built for Every Construction Business</h2>
-                <p>Built fits for business sizes</p>
+<section class="preview" id="dashboard">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-3" data-aos="fade-right">
+                <h2>See Your Project — Live & Structured</h2>
+                <p>One platform. All project information at your fingertips.</p>
+                <ul class="check-list">
+                    <li><i class="fa-solid fa-check"></i> Live progress tracking</li>
+                    <li><i class="fa-solid fa-check"></i> Real-time dashboards</li>
+                    <li><i class="fa-solid fa-check"></i> Instant decision support</li>
+                </ul>
+                <a href="#contact" class="btn btn-yellow">Explore Dashboard <i class="fa-solid fa-arrow-right ms-2"></i></a>
             </div>
 
-            <div class="row g-4">
-                <div class="col-md-4" data-aos="fade-up">
-                    <div class="business-card">
-                        <div class="big-icon mb-4"><i class="bi bi-building"></i></div>
-                        <h5 class="fw-bold">Small Builder</h5>
-                        <p class="text-muted">Perfect for growing builders looking for simple, powerful control.</p>
-                        <span class="tag-small">Fast Deployment</span>
-                        <span class="tag-small">Simple Workflow</span>
-                    </div>
-                </div>
-
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                    <div class="business-card">
-                        <div class="big-icon mb-4"><i class="bi bi-cone-striped"></i></div>
-                        <h5 class="fw-bold">Mid Size Contractor</h5>
-                        <p class="text-muted">Operational hub for contractors managing multiple sites and teams.</p>
-                        <span class="tag-small">Scalable Workflow</span>
-                        <span class="tag-small">Multi-site Visibility</span>
-                    </div>
-                </div>
-
-                <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                    <div class="business-card">
-                        <div class="big-icon mb-4"><i class="bi bi-buildings-fill"></i></div>
-                        <h5 class="fw-bold">Large Developer</h5>
-                        <p class="text-muted">Enterprise-ready ERP for large portfolios and complex projects.</p>
-                        <span class="tag-small">Enterprise Control</span>
-                        <span class="tag-small">Role Permission</span>
-                    </div>
+            <div class="col-lg-5" data-aos="zoom-in">
+                <div class="dashboard-device">
+                    <img src="assets/progress.png" class="dashboard-screen" alt="Progress">
                 </div>
             </div>
-        </div>
-    </section>
 
-    <!-- DEPLOYMENT + BENEFITS -->
-    <section class="bg-light" id="pricing">
-        <div class="container">
-            <div class="row g-5 align-items-stretch">
-                <div class="col-lg-12" data-aos="fade-right">
-                    <h2 class="fw-black mb-4">Deployment Options</h2>
-
-                    <div class="row g-4">
-                        <div class="col-md-6">
-                            <div class="deploy-card">
-                                <div class="module-icon mb-3"><i class="bi bi-cloud-check"></i></div>
-                                <h5 class="fw-bold">Cloud SaaS</h5>
-                                <ul>
-                                    <li><i class="bi bi-check-circle"></i> Quick start, no infrastructure</li>
-                                    <li><i class="bi bi-check-circle"></i> Secure cloud access</li>
-                                    <li><i class="bi bi-check-circle"></i> Automatic updates</li>
-                                    <li><i class="bi bi-check-circle"></i> Pay-as-you-go flexibility</li>
-                                </ul>
-                                <p class="text-primary fw-bold mt-3">Recommended for most teams</p>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <div class="deploy-card">
-                                <div class="module-icon mb-3"><i class="bi bi-server"></i></div>
-                                <h5 class="fw-bold">On-Premise / White-label</h5>
-                                <ul>
-                                    <li><i class="bi bi-check-circle"></i> Custom branding & domain</li>
-                                    <li><i class="bi bi-check-circle"></i> Host in your environment</li>
-                                    <li><i class="bi bi-check-circle"></i> Full data control</li>
-                                    <li><i class="bi bi-check-circle"></i> Enterprise-grade scalability</li>
-                                </ul>
-                                <p class="text-primary fw-bold mt-3">Best for enterprises</p>
-                            </div>
+            <div class="col-lg-4" data-aos="fade-left">
+                <h2 class="text-center mb-4">Real Impact. Real Results.</h2>
+                <div class="row g-4">
+                    <div class="col-6">
+                        <div class="impact-card">
+                            <i class="fa-regular fa-clock"></i>
+                            <h3>30%</h3>
+                            <p>Faster Decisions</p>
                         </div>
                     </div>
-                </div>
-
-                <div class="col-lg-12" data-aos="fade-left">
-                    <h2 class="fw-black mb-4 text-center">Why Teams Choose TEK-C</h2>
-
-                    <div class="row g-0 bg-white rounded-4 shadow-sm overflow-hidden">
-                        <div class="col-md-3 col-6">
-                            <div class="benefit-card text-center">
-                                <h3>34</h3>
-                                <h6 class="fw-bold">Reports Created</h6>
-                                <p class="text-muted small mb-0">DPR, DAR, MOM, MPT, DLAR.</p>
-                            </div>
+                    <div class="col-6">
+                        <div class="impact-card">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <h3>20%</h3>
+                            <p>Cost Savings</p>
                         </div>
-
-                        <div class="col-md-3 col-6">
-                            <div class="benefit-card text-center">
-                                <h3>100%</h3>
-                                <h6 class="fw-bold">Approval Control</h6>
-                                <p class="text-muted small mb-0">Track approvals with audit trails.</p>
-                            </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="impact-card">
+                            <i class="fa-regular fa-calendar-check"></i>
+                            <h3>15%</h3>
+                            <p>Delay Reduction</p>
                         </div>
-
-                        <div class="col-md-3 col-6">
-                            <div class="benefit-card text-center">
-                                <h3>4</h3>
-                                <h6 class="fw-bold">Active Hiring</h6>
-                                <p class="text-muted small mb-0">Open positions filled.</p>
-                            </div>
-                        </div>
-
-                        <div class="col-md-3 col-6">
-                            <div class="benefit-card text-center">
-                                <h3>360°</h3>
-                                <h6 class="fw-bold">Improved Visibility</h6>
-                                <p class="text-muted small mb-0">Real-time insight across sites.</p>
-                            </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="impact-card">
+                            <i class="fa-regular fa-eye"></i>
+                            <h3>100%</h3>
+                            <p>Visibility</p>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <!-- TESTIMONIAL -->
-    <section>
-        <div class="container">
-            <div class="section-title" data-aos="fade-up">
-                <p class="fw-bold mb-1">Trusted by Construction Leaders</p>
-                <h2>What Clients Say About <span class="yellow-text">TEK-C</span></h2>
+<section class="roles">
+    <div class="container">
+        <h2 class="section-title" data-aos="fade-up">Built for Every Role in Construction</h2>
+
+        <div class="row g-4">
+            <div class="col-lg-3 col-md-6" data-aos="fade-up">
+                <div class="role-card">
+                    <i class="fa-regular fa-building"></i>
+                    <h5>Builders & Developers</h5>
+                    <p>Complete project control from planning to handover.</p>
+                </div>
             </div>
 
-            <div class="row g-4">
-                <div class="col-md-6" data-aos="fade-right">
-                    <div class="testimonial-card">
-                        <div class="stars mb-3">★★★★★</div>
-                        <p>
-                            “TEK-C has transformed the way we manage our projects. Daily-based access and
-                            structured document control have improved approvals and reduced delays across sites.”
-                        </p>
-                        <div class="d-flex align-items-center gap-3 mt-4">
-                            <img class="avatar" src="assets/img/Shanthi.jpg" alt="">
-                            <div>
-                                <h6 class="fw-bold mb-0">Shanthi Balachandhar</h6>
-                                <small class="text-warning fw-bold">Director - Anandhamayam</small>
-                            </div>
-                        </div>
-                    </div>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="80">
+                <div class="role-card">
+                    <i class="fa-solid fa-user-helmet-safety"></i>
+                    <h5>Project Consultants</h5>
+                    <p>Manage multiple projects with ease and clarity.</p>
                 </div>
+            </div>
 
-                <div class="col-md-6" data-aos="fade-left">
-                    <div class="testimonial-card">
-                        <div class="stars mb-3">★★★★★</div>
-                        <p>
-                            “From DPR to AIT and MOM, everything is now structured and easy to monitor.
-                            TEK-C gives us the control and insights we need every day.”
-                        </p>
-                        <div class="d-flex align-items-center gap-3 mt-4">
-                            <img class="avatar" src="assets/img/Balachandar.jpg" alt=""
-                                style="object-position: 10% 10%;">
-                            <div>
-                                <h6 class="fw-bold mb-0">U K Balachandar</h6>
-                                <small class="text-warning fw-bold">Founder/ Principal Consultant</small>
-                            </div>
-                        </div>
-                    </div>
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="160">
+                <div class="role-card">
+                    <i class="fa-solid fa-people-group"></i>
+                    <h5>Engineers & Teams</h5>
+                    <p>Stay updated, accountable and on track.</p>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="240">
+                <div class="role-card">
+                    <i class="fa-solid fa-helmet-safety"></i>
+                    <h5>Contractors & Vendors</h5>
+                    <p>Better coordination, approvals and timely payments.</p>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <!-- FAQ -->
-    <section class="bg-light">
-        <div class="container">
-            <div class="section-title" data-aos="fade-up">
-                <h2>FAQ</h2>
+<section class="authority" id="modules">
+    <div class="container">
+        <div class="row g-5 align-items-center">
+            <div class="col-lg-2" data-aos="fade-right">
+                <div class="ukb-box">
+                    <div class="ukb-logo">
+                        <span class="text-yellow">UKB</span><br>
+                        <small style="font-size:14px;">CONSTRUCTION<br>MANAGEMENT</small>
+                    </div>
+                </div>
             </div>
 
-            <div class="accordion" id="faqAccordion" data-aos="fade-up">
-                <div class="faq-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#faq1">
-                            Is TEK-C ready to deploy?
-                        </button>
-                    </h2>
-                    <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body">
-                            Yes, TEK-C is a production-ready ERP with prebuilt modules and dashboards. Currently
-                            managing 8 active sites with real data.
-                        </div>
-                    </div>
-                </div>
+            <div class="col-lg-4" data-aos="fade-up">
+                <h2 style="font-weight:900;">Backed by Real Projects. Not Theory.</h2>
+                <p>Developed and tested across multiple live projects handled by <b>UKB Construction Management</b>.</p>
+                <ul class="check-list">
+                    <li><i class="fa-solid fa-check"></i> Proven execution workflow</li>
+                    <li><i class="fa-solid fa-check"></i> Practical module structure</li>
+                    <li><i class="fa-solid fa-check"></i> Real construction project clarity</li>
+                </ul>
+                <a href="#contact" class="btn btn-yellow">Know More About UKB <i class="fa-solid fa-arrow-right ms-2"></i></a>
+            </div>
 
-                <div class="faq-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#faq2">
-                            Can it be customised for our workflows?
-                        </button>
-                    </h2>
-                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body">
-                            Yes, TEK-C supports custom workflows, approvals, fields, reports and role-based permissions.
-                        </div>
-                    </div>
-                </div>
-
-                <div class="faq-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#faq3">
-                            Does it support multiple projects and roles?
-                        </button>
-                    </h2>
-                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body">
-                            Yes, currently supporting 8 sites, 5 departments (PM, QS, HR, CM, IFM) and 7 employee roles.
-                        </div>
-                    </div>
-                </div>
-
-                <div class="faq-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#faq4">
-                            Can we use TEK-C as a white-label ERP?
-                        </button>
-                    </h2>
-                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body">
-                            Yes, TEK-C can be white-labelled with your brand, domain and logo.
-                        </div>
-                    </div>
-                </div>
-
-                <div class="faq-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#faq5">
-                            Do you provide onboarding and support?
-                        </button>
-                    </h2>
-                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body">
-                            Yes, onboarding, training, documentation and support can be provided.
-                        </div>
-                    </div>
+            <div class="col-lg-6" data-aos="fade-left">
+                <div class="project-grid">
+                    <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=900&q=80" alt="Construction">
+                    <img src="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=600&q=80" alt="Building">
+                    <img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80" alt="Site">
+                    <img src="https://images.unsplash.com/photo-1565008447742-97f6f38c985c?auto=format&fit=crop&w=600&q=80" alt="Construction Worker">
+                    <img src="https://images.unsplash.com/photo-1590725140246-20acdee442be?auto=format&fit=crop&w=600&q=80" alt="Project">
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <!-- NEXT STEP -->
-    <section>
-        <div class="container">
-            <div class="section-title" data-aos="fade-up">
-                <h2>Choose Your Next Step</h2>
-                <p>Select the action that works best for you and your team.</p>
-            </div>
+<section class="pricing" id="pricing">
+    <div class="container">
+        <h2 class="section-title" data-aos="fade-up">Simple Plans for Every Construction Business</h2>
+        <p class="section-subtitle" data-aos="fade-up">Choose the right package based on your project size, team size and reporting needs.</p>
 
-            <div class="row g-4">
-                <div class="col-md-4" data-aos="zoom-in">
-                    <div class="cta-option">
-                        <i class="bi bi-play-btn display-3"></i>
-                        <h5 class="fw-bold mt-3">Live Demo</h5>
-                        <p class="text-muted">See TEK-C in action with a personalised walkthrough.</p>
-                        <a href="#" class="btn btn-yellow">Book a Live Demo</a>
-                    </div>
-                </div>
-
-                <div class="col-md-4" data-aos="zoom-in" data-aos-delay="100">
-                    <div class="cta-option">
-                        <i class="bi bi-file-earmark-text display-3"></i>
-                        <h5 class="fw-bold mt-3">Pricing & Brochure</h5>
-                        <p class="text-muted">Download detailed pricing and product brochure.</p>
-                        <a href="#" class="btn btn-yellow">Download Now</a>
-                    </div>
-                </div>
-
-                <div class="col-md-4" data-aos="zoom-in" data-aos-delay="200">
-                    <div class="cta-option">
-                        <i class="bi bi-headset display-3"></i>
-                        <h5 class="fw-bold mt-3">Talk to Sales</h5>
-                        <p class="text-muted">Speak with experts and find the right solution.</p>
-                        <a href="#" class="btn btn-yellow">Talk to Sales Team</a>
-                    </div>
+        <div class="row g-4">
+            <div class="col-lg-4" data-aos="fade-up">
+                <div class="price-card">
+                    <h4>Starter</h4>
+                    <p>For small builders and single-site teams.</p>
+                    <h2>Demo</h2>
+                    <ul>
+                        <li><i class="fa-solid fa-check"></i> Project dashboard</li>
+                        <li><i class="fa-solid fa-check"></i> DPR management</li>
+                        <li><i class="fa-solid fa-check"></i> Task tracking</li>
+                        <li><i class="fa-solid fa-check"></i> Basic reports</li>
+                    </ul>
+                    <a href="#contact" class="btn btn-yellow w-100">Request Price</a>
                 </div>
             </div>
-        </div>
-    </section>
 
-    <!-- CONTACT -->
-    <section id="contact" class="bg-light">
-        <div class="container">
-            <div class="section-title" data-aos="fade-up">
-                <h2>Connect With TEK-C</h2>
-                <p>We're here to help you build better.</p>
+            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
+                <div class="price-card featured">
+                    <h4>Professional</h4>
+                    <p>For growing teams managing multiple projects.</p>
+                    <h2>Popular</h2>
+                    <ul>
+                        <li><i class="fa-solid fa-check"></i> All starter features</li>
+                        <li><i class="fa-solid fa-check"></i> Cost & procurement</li>
+                        <li><i class="fa-solid fa-check"></i> RFI, MOM and approvals</li>
+                        <li><i class="fa-solid fa-check"></i> Document control</li>
+                    </ul>
+                    <a href="#contact" class="btn btn-yellow w-100">Book Demo</a>
+                </div>
             </div>
 
-            <div class="row g-4">
-                <div class="col-lg col-md-4 col-6" data-aos="fade-up">
-                    <div class="contact-card">
-                        <i class="bi bi-envelope"></i>
-                        <h6 class="fw-bold">Email</h6>
-                        <p class="text-muted mb-0">info@tekcglobal.com</p>
-                    </div>
-                </div>
-
-                <div class="col-lg col-md-4 col-6" data-aos="fade-up" data-aos-delay="100">
-                    <div class="contact-card">
-                        <i class="bi bi-telephone"></i>
-                        <h6 class="fw-bold">Phone</h6>
-                        <p class="text-muted mb-0">+91 72003 16099</p>
-                    </div>
-                </div>
-
-                <div class="col-lg col-md-4 col-6" data-aos="fade-up" data-aos-delay="200">
-                    <div class="contact-card">
-                        <i class="bi bi-linkedin"></i>
-                        <h6 class="fw-bold">LinkedIn</h6>
-                        <p class="text-muted mb-0">/company/tek-c-global</p>
-                    </div>
-                </div>
-
-                <div class="col-lg col-md-4 col-6" data-aos="fade-up" data-aos-delay="300">
-                    <div class="contact-card">
-                        <i class="bi bi-youtube"></i>
-                        <h6 class="fw-bold">YouTube</h6>
-                        <p class="text-muted mb-0">/tekcglobal</p>
-                    </div>
-                </div>
-
-                <div class="col-lg col-md-4 col-6" data-aos="fade-up" data-aos-delay="400">
-                    <div class="contact-card">
-                        <i class="bi bi-handshake"></i>
-                        <h6 class="fw-bold">Partner With Us</h6>
-                        <p class="text-muted mb-0">partner@tekcglobal.com</p>
-                    </div>
+            <div class="col-lg-4" data-aos="fade-up" data-aos-delay="200">
+                <div class="price-card">
+                    <h4>Enterprise</h4>
+                    <p>For large companies and project management firms.</p>
+                    <h2>Custom</h2>
+                    <ul>
+                        <li><i class="fa-solid fa-check"></i> Multi-project control</li>
+                        <li><i class="fa-solid fa-check"></i> Role-based access</li>
+                        <li><i class="fa-solid fa-check"></i> Custom reports</li>
+                        <li><i class="fa-solid fa-check"></i> Dedicated support</li>
+                    </ul>
+                    <a href="#contact" class="btn btn-yellow w-100">Contact Sales</a>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <!-- FINAL CTA -->
-    <section class="final-cta">
-        <div class="container">
-            <div class="row align-items-center">
-                <div class="col-lg-7" data-aos="fade-right">
-                    <p class="fw-bold mb-2">Start Your ERP Journey</p>
-                    <h2 class="display-5 fw-black">
-                        License <span class="yellow-text">TEK-C</span> for Your <br>
-                        Construction Group Today
-                    </h2>
-
-                    <div class="d-flex flex-wrap gap-3 mt-4">
-                        <a href="#" class="btn btn-yellow">
-                            <i class="bi bi-calendar2-check me-2"></i> Book a Live Demo
-                        </a>
-                        <a href="#" class="btn btn-light-custom">
-                            <i class="bi bi-telephone me-2"></i> Talk to Sales Team
-                        </a>
-                    </div>
-                </div>
-
-                <div class="col-lg-5 d-none d-lg-block" data-aos="zoom-in">
-                    <div class="hero-screen">
-                        <div class="stat-card-mini">
-                            <h5 class="fw-bold">ERP Analytics</h5>
-                            <div class="chart-line mb-3"></div>
-                            <div class="row g-3">
-                                <div class="col-6">
-                                    <div class="stat-card-mini">
-                                        <small>Projects</small>
-                                        <h3 class="fw-bold">8</h3>
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="stat-card-mini">
-                                        <small>Reports</small>
-                                        <h3 class="fw-bold">34</h3>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+<section class="final-cta" id="contact">
+    <div class="container text-center" data-aos="zoom-in">
+        <h2>Ready to Take Control of Your Projects?</h2>
+        <p>See your project inside TEK-C and understand how it can improve your execution workflow.</p>
+        <div class="d-flex justify-content-center gap-3 flex-wrap">
+            <a href="tel:+919876543210" class="btn btn-dark-custom">Book Your Live Demo <i class="fa-solid fa-arrow-right ms-2"></i></a>
+            <a href="mailto:info@tekcsoftware.com" class="btn btn-outline-dark fw-bold px-4 py-3 rounded-3">Contact Us <i class="fa-solid fa-arrow-right ms-2"></i></a>
         </div>
-    </section>
+    </div>
+</section>
 
-    <?php include 'includes/footer.php'; ?>
+<?php include 'includes/footer.php'; ?>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
 
-    <script>
-        AOS.init({
-            duration: 1000,
-            once: true,
-            offset: 80
+<script>
+AOS.init({
+    duration: 900,
+    once: true,
+    offset: 90
+});
+
+const navbar = document.getElementById('mainNavbar');
+const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
+const sections = document.querySelectorAll('section[id]');
+
+window.addEventListener('scroll', function(){
+    if(window.scrollY > 70){
+        navbar.classList.add('nav-fixed');
+    }else{
+        navbar.classList.remove('nav-fixed');
+    }
+
+    let currentSection = '';
+
+    sections.forEach(function(section){
+        const sectionTop = section.offsetTop - 140;
+        const sectionHeight = section.offsetHeight;
+
+        if(window.scrollY >= sectionTop && window.scrollY < sectionTop + sectionHeight){
+            currentSection = section.getAttribute('id');
+        }
+    });
+
+    navLinks.forEach(function(link){
+        link.classList.remove('active');
+
+        if(link.getAttribute('href') === '#' + currentSection){
+            link.classList.add('active');
+        }
+    });
+});
+
+navLinks.forEach(function(link){
+    link.addEventListener('click', function(){
+        navLinks.forEach(function(nav){
+            nav.classList.remove('active');
         });
 
-        // Navbar active link on scroll
-        const sections = document.querySelectorAll("section[id]");
-        const navLinks = document.querySelectorAll(".nav-link");
+        this.classList.add('active');
 
-        window.addEventListener("scroll", () => {
-            let current = "";
-
-            sections.forEach(section => {
-                const sectionTop = section.offsetTop - 130;
-                if (window.scrollY >= sectionTop) {
-                    current = section.getAttribute("id");
-                }
-            });
-
-            navLinks.forEach(link => {
-                link.classList.remove("active");
-                if (link.getAttribute("href") === "#" + current) {
-                    link.classList.add("active");
-                }
-            });
-        });
-
-        // Search highlight simple behaviour
-        document.querySelector(".search-box").addEventListener("keyup", function () {
-            const value = this.value.toLowerCase();
-            const cards = document.querySelectorAll(".module-card, .product-row");
-
-            cards.forEach(card => {
-                const text = card.innerText.toLowerCase();
-                card.style.opacity = value === "" || text.includes(value) ? "1" : ".25";
-                card.style.transform = value !== "" && text.includes(value) ? "scale(1.03)" : "";
-            });
-        });
-    </script>
+        const navMenu = document.getElementById('navMenu');
+        if(navMenu.classList.contains('show')){
+            new bootstrap.Collapse(navMenu).hide();
+        }
+    });
+});
+</script>
 
 </body>
-
 </html>

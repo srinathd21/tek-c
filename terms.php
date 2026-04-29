@@ -1,642 +1,421 @@
-<?php
-// Start session
-session_start();
-
-// Database configuration
-$host = 'localhost';
-$dbname = 'u209621005_tekc';
-$username = 'root';
-$password = '';
-
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    // Fetch stats
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM sites WHERE deleted_at IS NULL");
-    $siteCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM employees WHERE employee_status = 'active'");
-    $employeeCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM clients");
-    $clientCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-} catch(PDOException $e) {
-    $siteCount = 8;
-    $employeeCount = 18;
-    $clientCount = 3;
-}
-
-// Last updated date
-$lastUpdated = "April 28, 2026";
-
-// Construction images
-$constructionImages = [
-    'hero' => 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=1800&q=80',
-];
+    <?php
+// terms.php - Terms of Service / Terms & Conditions
+// Legal document governing use of TEK-C platform and services
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terms of Service | TEK-C Global Construction ERP</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terms of Service - TEK-C Construction Management Software</title>
 
-   <?php include('includes/links.php'); ?>
-    <style>
-        :root {
-            --dark: #101820;
-            --dark2: #151f28;
-            --yellow: #ffc329;
-            --yellow2: #ffb000;
-            --text: #1f2937;
-            --muted: #6b7280;
-            --border: #e9edf3;
-            --soft: #f7f9fc;
-        }
+<?php include 'includes/link.php'; ?>
 
-        * { font-family: "Inter", sans-serif; }
-        html { scroll-behavior: smooth; }
-        body { background: #fff; color: var(--text); overflow-x: hidden; }
+<style>
+:root{
+    --yellow:#f6ad22;
+    --yellow2:#ffc247;
+    --dark:#080b0d;
+    --black:#050607;
+    --text:#111;
+    --muted:#666;
+    --line:#e8e8e8;
+}
 
-        .navbar {
-            background: rgba(16, 24, 32, 0.96);
-            backdrop-filter: blur(14px);
-            padding: 15px 0;
-            box-shadow: 0 8px 35px rgba(0,0,0,.25);
-            position: fixed;
-            width: 100%;
-            top: 0;
-            z-index: 1000;
-        }
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
 
-        .navbar-brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: #fff !important;
-            font-weight: 900;
-        }
+html{
+    scroll-behavior:smooth;
+    scroll-padding-top:105px;
+}
 
-        .logo-box {
-            width: 48px;
-            height: 48px;
-            border-radius: 13px;
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            box-shadow: 0 8px 22px rgba(255, 195, 41, .4);
-        }
+body{
+    font-family:'Inter',sans-serif;
+    color:var(--text);
+    background:#fff;
+    overflow-x:hidden;
+    padding-top:88px;
+}
 
-        .logo-text span {
-            display: block;
-            font-size: 11px;
-            letter-spacing: 4px;
-            color: #cfd6df;
-            font-weight: 600;
-            margin-top: -3px;
-        }
+.section-title{
+    font-size:34px;
+    font-weight:900;
+    text-align:center;
+    margin-bottom:20px;
+    line-height:1.2;
+}
 
-        .nav-link {
-            color: #dbe3ec !important;
-            font-weight: 600;
-            margin: 0 8px;
-            position: relative;
-        }
+.text-yellow{
+    color:var(--yellow);
+}
 
-        .nav-link:hover, .nav-link.active { color: var(--yellow) !important; }
-        .nav-link.active::after {
-            content: "";
-            position: absolute;
-            left: 10px;
-            bottom: -8px;
-            height: 3px;
-            width: 35px;
-            background: var(--yellow);
-            border-radius: 20px;
-        }
+/* NAVBAR */
+.navbar{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    z-index:999;
+    padding:14px 0;
+    background:rgba(5,7,9,.96);
+    backdrop-filter:blur(16px);
+    box-shadow:0 8px 30px rgba(0,0,0,.28);
+    transition:.35s ease;
+}
 
-        .search-box {
-            background: rgba(255,255,255,.08);
-            border: 1px solid rgba(255,255,255,.1);
-            border-radius: 12px;
-            color: #fff;
-            padding: 11px 15px;
-            min-width: 260px;
-        }
+.navbar.nav-fixed{
+    padding:10px 0;
+    background:rgba(5,7,9,.98);
+}
 
-        .btn-yellow {
-            background: linear-gradient(135deg, var(--yellow), var(--yellow2));
-            color: #111;
-            font-weight: 800;
-            border: 0;
-            border-radius: 12px;
-            padding: 12px 24px;
-            transition: .35s;
-        }
+.logo{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    color:#fff;
+}
 
-        .btn-yellow:hover { transform: translateY(-3px); box-shadow: 0 18px 40px rgba(255, 179, 0, .45); }
+.logo-icon{
+    width:48px;
+    height:48px;
+    background:linear-gradient(135deg,#ffbe35,#e79510);
+    clip-path:polygon(50% 0,100% 35%,85% 35%,50% 15%,15% 35%,0 35%);
+}
 
-        .hero-terms {
-            background: linear-gradient(135deg, #101820 0%, #1a2a3a 100%);
-            padding: 180px 0 80px;
-            color: #fff;
-            position: relative;
-            overflow: hidden;
-        }
+.logo-text h3{
+    margin:0;
+    color:var(--yellow);
+    font-size:32px;
+    font-weight:900;
+    letter-spacing:.5px;
+}
 
-        .hero-terms::before {
-            content: "";
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            background: url('<?php echo $constructionImages['hero']; ?>') center/cover no-repeat;
-            opacity: 0.15;
-            z-index: 0;
-        }
+.logo-text span{
+    display:block;
+    color:#fff;
+    font-size:10px;
+    margin-top:-6px;
+    letter-spacing:.8px;
+}
 
-        .hero-terms .container { position: relative; z-index: 1; }
-        .hero-terms h1 { font-size: clamp(42px, 5vw, 68px); font-weight: 900; line-height: 1.1; }
-        .hero-terms .yellow-text { color: var(--yellow); }
+.navbar-nav{
+    background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:50px;
+    padding:7px;
+    backdrop-filter:blur(12px);
+}
 
-        section { padding: 60px 0; }
-        
-        .terms-card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 30px;
-            transition: .3s;
-        }
-        .terms-card:hover { border-color: var(--yellow); box-shadow: 0 10px 30px rgba(0,0,0,.05); }
-        
-        .terms-section {
-            margin-bottom: 40px;
-            padding-bottom: 30px;
-            border-bottom: 1px solid var(--border);
-        }
-        .terms-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-        
-        .terms-section h3 {
-            font-size: 24px;
-            font-weight: 800;
-            margin-bottom: 20px;
-            color: #111827;
-        }
-        .terms-section h3 i { color: var(--yellow); margin-right: 10px; }
-        
-        .terms-section h4 {
-            font-size: 18px;
-            font-weight: 700;
-            margin: 20px 0 10px;
-            color: #374151;
-        }
-        
-        .terms-section p { line-height: 1.8; color: #4b5563; margin-bottom: 15px; }
-        .terms-section ul, .terms-section ol { margin-bottom: 15px; padding-left: 20px; }
-        .terms-section li { margin-bottom: 8px; line-height: 1.6; color: #4b5563; }
-        
-        .effective-date {
-            background: #f8f9fa;
-            border-left: 4px solid var(--yellow);
-            padding: 15px 20px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-        }
-        
-        .table-of-contents {
-            background: #f8f9fa;
-            border-radius: 16px;
-            padding: 25px;
-            margin-bottom: 30px;
-        }
-        .table-of-contents h4 { margin-bottom: 15px; font-weight: 800; }
-        .table-of-contents ul { columns: 2; list-style: none; padding-left: 0; }
-        .table-of-contents li { margin-bottom: 10px; }
-        .table-of-contents a { text-decoration: none; color: #4b5563; transition: .3s; }
-        .table-of-contents a:hover { color: var(--yellow); padding-left: 5px; }
+.navbar-nav .nav-link{
+    color:#fff;
+    font-size:14px;
+    font-weight:700;
+    margin:0 2px;
+    padding:10px 16px !important;
+    border-radius:50px;
+    transition:.3s;
+}
 
-        footer {
-            background: #101820;
-            color: #d8dee8;
-            padding: 55px 0 25px;
-        }
-        footer h6 { color: #fff; font-weight: 900; margin-bottom: 18px; }
-        footer a {
-            display: block;
-            color: #aeb8c5;
-            text-decoration: none;
-            margin-bottom: 11px;
-            transition: .3s;
-        }
-        footer a:hover { color: var(--yellow); transform: translateX(5px); }
-        .social-icon {
-            width: 42px;
-            height: 42px;
-            background: #fff;
-            color: #101820;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            margin-right: 8px;
-            transition: .3s;
-        }
-        .social-icon:hover { background: var(--yellow); transform: translateY(-5px); }
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link.active{
+    color:#111;
+    background:linear-gradient(135deg,var(--yellow),var(--yellow2));
+    box-shadow:0 7px 18px rgba(246,173,34,.25);
+}
 
-        @media (max-width: 991px) {
-            .search-box { min-width: 100%; margin: 12px 0; }
-            .table-of-contents ul { columns: 1; }
-        }
-        
-        @media print {
-            .navbar, .search-box, .btn-yellow, footer, .hero-terms { display: none; }
-            body { padding-top: 0; }
-            .terms-card { box-shadow: none; border: 1px solid #ddd; }
-        }
-    </style>
+/* PAGE HEADER */
+.page-header{
+    background: linear-gradient(115deg, #0a0e12 0%, #161c24 100%);
+    padding: 80px 0 60px;
+    color: white;
+    text-align: center;
+}
+.page-header h1{
+    font-size: 52px;
+    font-weight: 900;
+    margin-bottom: 20px;
+}
+.page-header p{
+    font-size: 18px;
+    color: #ccc;
+    max-width: 680px;
+    margin: 0 auto;
+}
+
+/* TERMS CONTENT */
+.terms-content{
+    padding: 70px 0;
+    background: #fff;
+}
+.terms-card{
+    background: white;
+    border-radius: 28px;
+    padding: 48px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.05);
+    border: 1px solid #eee;
+}
+.terms-card h2{
+    font-size: 28px;
+    font-weight: 800;
+    margin: 35px 0 18px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--yellow);
+    display: inline-block;
+}
+.terms-card h2:first-of-type{
+    margin-top: 0;
+}
+.terms-card h3{
+    font-size: 22px;
+    font-weight: 700;
+    margin: 28px 0 15px 0;
+}
+.terms-card p{
+    font-size: 15px;
+    line-height: 1.7;
+    color: #444;
+    margin-bottom: 18px;
+}
+.terms-card ul, .terms-card ol{
+    margin: 15px 0 20px 25px;
+}
+.terms-card li{
+    font-size: 15px;
+    line-height: 1.7;
+    color: #444;
+    margin-bottom: 8px;
+}
+.terms-card .last-updated{
+    background: #f8f9fc;
+    padding: 12px 20px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    font-size: 14px;
+    color: #666;
+}
+.terms-card .important-note{
+    background: #fff8e7;
+    border-left: 4px solid var(--yellow);
+    padding: 18px 24px;
+    border-radius: 12px;
+    margin: 25px 0;
+}
+.terms-card .contact-box{
+    background: #fefaf2;
+    padding: 28px;
+    border-radius: 20px;
+    margin-top: 40px;
+    border-left: 5px solid var(--yellow);
+}
+.terms-card .contact-box h4{
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 12px;
+}
+.terms-card .contact-box a{
+    color: var(--yellow);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+/* FOOTER */
+.footer{
+    background:#07090b;
+    color:#fff;
+    padding:65px 0 20px;
+}
+.footer h5{
+    font-size:14px;
+    font-weight:900;
+    margin-bottom:18px;
+}
+.footer a{
+    display:block;
+    color:#d6d6d6;
+    font-size:13px;
+    margin:10px 0;
+}
+.footer a:hover{
+    color:var(--yellow);
+}
+.social a{
+    display:inline-flex;
+    width:34px;
+    height:34px;
+    align-items:center;
+    justify-content:center;
+    background:#1b2025;
+    border-radius:50%;
+    margin-right:8px;
+}
+.footer-bottom{
+    border-top:1px solid #222;
+    margin-top:32px;
+    padding-top:18px;
+    font-size:13px;
+    color:#bbb;
+}
+
+@media(max-width:991px){
+    body{padding-top:82px;}
+    .navbar-nav{
+        border-radius:18px;
+        margin-top:18px;
+        padding:12px;
+    }
+    .page-header h1{font-size: 38px;}
+    .terms-card{padding: 28px;}
+}
+@media(max-width:575px){
+    .section-title{font-size: 28px;}
+    .page-header h1{font-size: 30px;}
+    .terms-card h2{font-size: 24px;}
+}
+</style>
 </head>
-
 <body>
 
 <?php include 'includes/nav.php'; ?>
 
-<!-- Hero Section -->
-<section class="hero-terms">
-    <div class="container">
-        <div class="row justify-content-center text-center">
-            <div class="col-lg-8" data-aos="fade-up">
-                <h1>Terms of <span class="yellow-text">Service</span></h1>
-                <p class="lead mt-4">Please read these terms carefully before using TEK-C Global services.</p>
-                <div class="mt-4">
-                    <span class="badge bg-warning text-dark me-2 p-2"><i class="bi bi-file-text me-1"></i> Legally Binding</span>
-                    <span class="badge bg-warning text-dark me-2 p-2"><i class="bi bi-shield-check me-1"></i> Your Rights Protected</span>
-                    <span class="badge bg-warning text-dark p-2"><i class="bi bi-globe me-1"></i> Global Applicability</span>
-                </div>
-            </div>
-        </div>
+<section class="page-header">
+    <div class="container" data-aos="fade-up">
+        <h1>Terms of <span class="text-yellow">Service</span></h1>
+        <p>Please read these terms carefully before using the TEK-C platform.</p>
     </div>
 </section>
 
-<!-- Main Content -->
-<section style="padding-top: 0;">
+<section class="terms-content">
     <div class="container">
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="terms-card" data-aos="fade-up">
-                    
-                    <!-- Effective Date -->
-                    <div class="effective-date">
-                        <i class="bi bi-calendar-check text-warning me-2"></i>
-                        <strong>Effective Date:</strong> <?php echo $lastUpdated; ?>
-                        <br>
-                        <small class="text-muted">These Terms of Service apply to all TEK-C Global products and services.</small>
-                    </div>
-                    
-                    <!-- Table of Contents -->
-                    <div class="table-of-contents">
-                        <h4><i class="bi bi-list-ul text-warning me-2"></i> Table of Contents</h4>
-                        <ul>
-                            <li><a href="#acceptance">1. Acceptance of Terms</a></li>
-                            <li><a href="#changes">2. Changes to Terms</a></li>
-                            <li><a href="#eligibility">3. Eligibility</a></li>
-                            <li><a href="#accounts">4. User Accounts</a></li>
-                            <li><a href="#services">5. Description of Services</a></li>
-                            <li><a href="#fees">6. Fees and Payments</a></li>
-                            <li><a href="#user-obligations">7. User Obligations</a></li>
-                            <li><a href="#prohibited">8. Prohibited Activities</a></li>
-                            <li><a href="#intellectual-property">9. Intellectual Property</a></li>
-                            <li><a href="#data">10. Data Ownership and Privacy</a></li>
-                            <li><a href="#termination">11. Termination</a></li>
-                            <li><a href="#warranty">12. Disclaimer of Warranties</a></li>
-                            <li><a href="#liability">13. Limitation of Liability</a></li>
-                            <li><a href="#indemnification">14. Indemnification</a></li>
-                            <li><a href="#force-majeure">15. Force Majeure</a></li>
-                            <li><a href="#governing-law">16. Governing Law</a></li>
-                            <li><a href="#dispute-resolution">17. Dispute Resolution</a></li>
-                            <li><a href="#severability">18. Severability</a></li>
-                            <li><a href="#entire-agreement">19. Entire Agreement</a></li>
-                            <li><a href="#contact">20. Contact Information</a></li>
-                        </ul>
-                    </div>
-                    
-                    <!-- 1. Acceptance of Terms -->
-                    <div id="acceptance" class="terms-section">
-                        <h3><i class="bi bi-check-circle"></i> 1. Acceptance of Terms</h3>
-                        <p>By accessing or using TEK-C Global's website, software, and services (collectively, the "Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, please do not use our Service.</p>
-                        <p>These Terms constitute a legally binding agreement between you ("User," "you," or "your") and TEK-C Global ("Company," "we," "us," or "our"). By using our Service, you represent that you have the authority to bind your organization to these Terms.</p>
-                    </div>
-                    
-                    <!-- 2. Changes to Terms -->
-                    <div id="changes" class="terms-section">
-                        <h3><i class="bi bi-pencil-square"></i> 2. Changes to Terms</h3>
-                        <p>We reserve the right to modify these Terms at any time. We will notify you of material changes by:</p>
-                        <ul>
-                            <li>Posting the updated Terms on this page</li>
-                            <li>Sending an email notification to registered users</li>
-                            <li>Displaying a notice within our Service</li>
-                        </ul>
-                        <p>Your continued use of the Service after the effective date constitutes acceptance of the revised Terms. If you do not agree to the changes, you must stop using the Service and cancel your account.</p>
-                    </div>
-                    
-                    <!-- 3. Eligibility -->
-                    <div id="eligibility" class="terms-section">
-                        <h3><i class="bi bi-person-check"></i> 3. Eligibility</h3>
-                        <p>To use our Service, you must:</p>
-                        <ul>
-                            <li>Be at least 18 years of age</li>
-                            <li>Have the legal capacity to enter into a binding agreement</li>
-                            <li>Not be prohibited from using our Service under applicable laws</li>
-                            <li>Provide accurate and complete registration information</li>
-                        </ul>
-                        <p>If you are using the Service on behalf of an organization, you represent that you have the authority to bind that organization to these Terms.</p>
-                    </div>
-                    
-                    <!-- 4. User Accounts -->
-                    <div id="accounts" class="terms-section">
-                        <h3><i class="bi bi-person-badge"></i> 4. User Accounts</h3>
-                        <h4>4.1 Account Registration</h4>
-                        <p>You must create an account to access certain features of our Service. You agree to provide accurate, current, and complete information during registration and to update it promptly.</p>
-                        
-                        <h4>4.2 Account Security</h4>
-                        <p>You are responsible for maintaining the confidentiality of your login credentials and for all activities that occur under your account. You agree to:</p>
-                        <ul>
-                            <li>Notify us immediately of any unauthorized access or security breach</li>
-                            <li>Use strong passwords and enable two-factor authentication where available</li>
-                            <li>Not share your account credentials with others</li>
-                            <li>Log out of your account after each session</li>
-                        </ul>
-                        <p>We are not liable for any loss or damage arising from your failure to comply with these requirements.</p>
-                        
-                        <h4>4.3 Account Types</h4>
-                        <p>We offer different account types (e.g., individual, team, enterprise). Each account type has specific features, limits, and pricing. You may upgrade or downgrade your account at any time, subject to applicable fees.</p>
-                    </div>
-                    
-                    <!-- 5. Description of Services -->
-                    <div id="services" class="terms-section">
-                        <h3><i class="bi bi-grid-3x3-gap-fill"></i> 5. Description of Services</h3>
-                        <p>TEK-C Global provides a construction ERP platform that includes but is not limited to:</p>
-                        <ul>
-                            <li>Site and project management</li>
-                            <li>Daily Progress Reports (DPR) and documentation</li>
-                            <li>Quotation and tendering management</li>
-                            <li>HR and payroll management</li>
-                            <li>Document control system</li>
-                            <li>Analytics and reporting dashboards</li>
-                            <li>Mobile application for field staff</li>
-                            <li>API access for integrations</li>
-                        </ul>
-                        <p>We reserve the right to modify, suspend, or discontinue any part of the Service at any time, with or without notice. We will not be liable to you or any third party for any modification, suspension, or discontinuation.</p>
-                    </div>
-                    
-                    <!-- 6. Fees and Payments -->
-                    <div id="fees" class="terms-section">
-                        <h3><i class="bi bi-currency-rupee"></i> 6. Fees and Payments</h3>
-                        <h4>6.1 Subscription Fees</h4>
-                        <p>Certain features of our Service require payment of subscription fees. All fees are stated in Indian Rupees (INR) and are exclusive of applicable taxes (GST, etc.).</p>
-                        
-                        <h4>6.2 Billing</h4>
-                        <p>We use third-party payment processors to handle billing. By subscribing to a paid plan, you authorize us to charge your selected payment method on a recurring basis (monthly or annually).</p>
-                        
-                        <h4>6.3 Refunds</h4>
-                        <p>Subscription fees are non-refundable except as required by law. If you cancel your subscription, you will not receive a refund for any prepaid fees. You may continue to use the Service until the end of your current billing period.</p>
-                        
-                        <h4>6.4 Fee Changes</h4>
-                        <p>We may change our fees at any time. We will notify you at least 30 days before any fee change. Your continued use of the Service after the fee change constitutes acceptance of the new fees.</p>
-                        
-                        <h4>6.5 Late Payments</h4>
-                        <p>If your payment is late, we may suspend your access to the Service until payment is received. We may charge interest on late payments at the rate of 1.5% per month or the maximum permitted by law.</p>
-                    </div>
-                    
-                    <!-- 7. User Obligations -->
-                    <div id="user-obligations" class="terms-section">
-                        <h3><i class="bi bi-list-check"></i> 7. User Obligations</h3>
-                        <p>You agree to:</p>
-                        <ul>
-                            <li>Use the Service in compliance with all applicable laws and regulations</li>
-                            <li>Maintain the security of your account and data</li>
-                            <li>Provide accurate and complete information</li>
-                            <li>Use the Service only for legitimate business purposes</li>
-                            <li>Cooperate with us in investigating any suspected violations</li>
-                            <li>Report any bugs, errors, or security vulnerabilities you discover</li>
-                        </ul>
-                    </div>
-                    
-                    <!-- 8. Prohibited Activities -->
-                    <div id="prohibited" class="terms-section">
-                        <h3><i class="bi bi-ban"></i> 8. Prohibited Activities</h3>
-                        <p>You may not:</p>
-                        <ul>
-                            <li>Use the Service for any illegal purpose or in violation of any laws</li>
-                            <li>Attempt to gain unauthorized access to our systems or other users' accounts</li>
-                            <li>Interfere with or disrupt the integrity or performance of the Service</li>
-                            <li>Reverse engineer, decompile, or disassemble any part of the Service</li>
-                            <li>Use automated scripts or bots to access or interact with the Service</li>
-                            <li>Upload malicious code, viruses, or harmful content</li>
-                            <li>Scrape, crawl, or copy data from the Service without permission</li>
-                            <li>Resell, sublicense, or distribute the Service to third parties</li>
-                            <li>Use the Service to store or transmit sensitive personal information without proper safeguards</li>
-                            <li>Impersonate any person or entity or falsely state your affiliation</li>
-                        </ul>
-                    </div>
-                    
-                    <!-- 9. Intellectual Property -->
-                    <div id="intellectual-property" class="terms-section">
-                        <h3><i class="bi bi-c-circle"></i> 9. Intellectual Property</h3>
-                        <h4>9.1 Our Intellectual Property</h4>
-                        <p>The Service, including its code, design, layout, graphics, logos, and documentation, is owned by TEK-C Global and is protected by copyright, trademark, and other intellectual property laws. You may not copy, modify, or create derivative works without our express written permission.</p>
-                        
-                        <h4>9.2 Your Content</h4>
-                        <p>You retain ownership of all data, documents, and information you upload to the Service ("Your Content"). By using the Service, you grant us a limited license to host, process, and display Your Content as necessary to provide the Service to you.</p>
-                        
-                        <h4>9.3 Feedback</h4>
-                        <p>If you provide us with feedback, suggestions, or ideas about the Service, you grant us an unrestricted, perpetual, royalty-free license to use that feedback for any purpose without compensation to you.</p>
-                    </div>
-                    
-                    <!-- 10. Data Ownership and Privacy -->
-                    <div id="data" class="terms-section">
-                        <h3><i class="bi bi-database"></i> 10. Data Ownership and Privacy</h3>
-                        <p>You own all data you input into the Service. We do not claim ownership of Your Content. Our collection and use of personal information is governed by our <a href="privacy-policy.php">Privacy Policy</a>.</p>
-                        <p>We may collect and use aggregated, anonymized data for analytics, product improvement, and marketing purposes. This data does not identify individual users.</p>
-                    </div>
-                    
-                    <!-- 11. Termination -->
-                    <div id="termination" class="terms-section">
-                        <h3><i class="bi bi-x-octagon"></i> 11. Termination</h3>
-                        <h4>11.1 Termination by You</h4>
-                        <p>You may cancel your account at any time by contacting our support team or through your account settings. Upon cancellation, you will lose access to the Service and your data may be deleted after 30 days.</p>
-                        
-                        <h4>11.2 Termination by Us</h4>
-                        <p>We may suspend or terminate your account immediately for:</p>
-                        <ul>
-                            <li>Violation of these Terms</li>
-                            <li>Non-payment of fees</li>
-                            <li>Illegal or harmful conduct</li>
-                            <li>Extended periods of inactivity (12+ months)</li>
-                        </ul>
-                        
-                        <h4>11.3 Data Export</h4>
-                        <p>Upon termination, we will provide you with the ability to export Your Content for 30 days. After that period, we may delete your data permanently.</p>
-                    </div>
-                    
-                    <!-- 12. Disclaimer of Warranties -->
-                    <div id="warranty" class="terms-section">
-                        <h3><i class="bi bi-exclamation-triangle"></i> 12. Disclaimer of Warranties</h3>
-                        <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. WE DO NOT WARRANT THAT:</p>
-                        <ul>
-                            <li>The Service will be uninterrupted, secure, or error-free</li>
-                            <li>Any defects or errors will be corrected</li>
-                            <li>The Service will meet your specific requirements</li>
-                            <li>Results obtained from the Service will be accurate or reliable</li>
-                        </ul>
-                        <p>TO THE FULLEST EXTENT PERMITTED BY LAW, WE DISCLAIM ALL WARRANTIES, INCLUDING IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.</p>
-                    </div>
-                    
-                    <!-- 13. Limitation of Liability -->
-                    <div id="liability" class="terms-section">
-                        <h3><i class="bi bi-shield-exclamation"></i> 13. Limitation of Liability</h3>
-                        <p>TO THE MAXIMUM EXTENT PERMITTED BY LAW, TEK-C GLOBAL AND ITS OFFICERS, DIRECTORS, EMPLOYEES, AND AGENTS SHALL NOT BE LIABLE FOR:</p>
-                        <ul>
-                            <li>INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES</li>
-                            <li>LOSS OF PROFITS, REVENUE, DATA, OR GOODWILL</li>
-                            <li>COSTS OF PROCURING SUBSTITUTE GOODS OR SERVICES</li>
-                            <li>UNAUTHORIZED ACCESS TO OR ALTERATION OF YOUR DATA</li>
-                        </ul>
-                        <p>OUR TOTAL LIABILITY FOR ANY CLAIM ARISING OUT OF OR RELATING TO THESE TERMS OR THE SERVICE SHALL NOT EXCEED THE AMOUNT YOU PAID US IN THE 12 MONTHS PRECEDING THE CLAIM.</p>
-                        <p>SOME JURISDICTIONS DO NOT ALLOW LIMITATIONS ON LIABILITY, SO THIS LIMITATION MAY NOT APPLY TO YOU.</p>
-                    </div>
-                    
-                    <!-- 14. Indemnification -->
-                    <div id="indemnification" class="terms-section">
-                        <h3><i class="bi bi-shield-plus"></i> 14. Indemnification</h3>
-                        <p>You agree to indemnify, defend, and hold harmless TEK-C Global from any claims, damages, losses, liabilities, and expenses (including attorney's fees) arising from:</p>
-                        <ul>
-                            <li>Your use of the Service</li>
-                            <li>Your violation of these Terms</li>
-                            <li>Your violation of any third-party rights, including intellectual property or privacy rights</li>
-                            <li>Your content or data</li>
-                        </ul>
-                    </div>
-                    
-                    <!-- 15. Force Majeure -->
-                    <div id="force-majeure" class="terms-section">
-                        <h3><i class="bi bi-cloud-lightning"></i> 15. Force Majeure</h3>
-                        <p>We shall not be liable for any delay or failure to perform resulting from causes outside our reasonable control, including but not limited to natural disasters, war, terrorism, riots, embargoes, acts of government, labor disputes, internet failures, or power outages.</p>
-                    </div>
-                    
-                    <!-- 16. Governing Law -->
-                    <div id="governing-law" class="terms-section">
-                        <h3><i class="bi bi-gavel"></i> 16. Governing Law</h3>
-                        <p>These Terms shall be governed by and construed in accordance with the laws of India, without regard to its conflict of law principles. The courts in Dharmapuri, Tamil Nadu shall have exclusive jurisdiction over any disputes arising from these Terms.</p>
-                    </div>
-                    
-                    <!-- 17. Dispute Resolution -->
-                    <div id="dispute-resolution" class="terms-section">
-                        <h3><i class="bi bi-file-text"></i> 17. Dispute Resolution</h3>
-                        <h4>17.1 Informal Resolution</h4>
-                        <p>Before filing a formal claim, you agree to contact us to attempt to resolve the dispute informally. We will attempt to resolve the dispute within 30 days.</p>
-                        
-                        <h4>17.2 Arbitration</h4>
-                        <p>If we cannot resolve the dispute informally, any dispute arising from these Terms shall be resolved through binding arbitration administered by the Indian Council of Arbitration. The arbitration shall be conducted in English in Chennai, Tamil Nadu.</p>
-                        
-                        <h4>17.3 Class Action Waiver</h4>
-                        <p>YOU AGREE TO RESOLVE DISPUTES ON AN INDIVIDUAL BASIS AND WAIVE THE RIGHT TO PARTICIPATE IN A CLASS ACTION OR REPRESENTATIVE ACTION.</p>
-                    </div>
-                    
-                    <!-- 18. Severability -->
-                    <div id="severability" class="terms-section">
-                        <h3><i class="bi bi-journal-code"></i> 18. Severability</h3>
-                        <p>If any provision of these Terms is found to be unenforceable or invalid, that provision shall be limited or eliminated to the minimum extent necessary, and the remaining provisions shall remain in full force and effect.</p>
-                    </div>
-                    
-                    <!-- 19. Entire Agreement -->
-                    <div id="entire-agreement" class="terms-section">
-                        <h3><i class="bi bi-file-earmark-text"></i> 19. Entire Agreement</h3>
-                        <p>These Terms, together with our <a href="privacy-policy.php">Privacy Policy</a>, constitute the entire agreement between you and TEK-C Global regarding the Service and supersede all prior agreements and understandings.</p>
-                    </div>
-                    
-                    <!-- 20. Contact Information -->
-                    <div id="contact" class="terms-section">
-                        <h3><i class="bi bi-envelope"></i> 20. Contact Information</h3>
-                        <p>If you have any questions about these Terms, please contact us:</p>
-                        <ul style="list-style: none; padding-left: 0;">
-                            <li><i class="bi bi-envelope-fill text-warning me-2"></i> <strong>Email:</strong> legal@tekcglobal.com</li>
-                            <li><i class="bi bi-telephone-fill text-warning me-2"></i> <strong>Phone:</strong> +91 72003 16099</li>
-                            <li><i class="bi bi-geo-alt-fill text-warning me-2"></i> <strong>Address:</strong> Dharmapuri, Tamil Nadu, India</li>
-                            <li><i class="bi bi-person-badge text-warning me-2"></i> <strong>Legal Officer:</strong> legal@tekcglobal.com</li>
-                        </ul>
-                    </div>
-                    
-                    <!-- Acknowledgment -->
-                    <div class="alert alert-light mt-4" style="background: #f8f9fa; border-left: 4px solid var(--yellow);">
-                        <i class="bi bi-hand-index-thumb text-warning me-2"></i>
-                        <strong>Acknowledgment:</strong> By using TEK-C Global services, you acknowledge that you have read, understood, and agree to be bound by these Terms of Service.
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Quick Stats Section -->
-<section class="bg-light">
-    <div class="container">
-        <div class="row g-4 text-center">
-            <div class="col-md-3 col-6" data-aos="fade-up">
-                <div class="stat-card-mini" style="background: #fff; padding: 20px; border-radius: 16px; border: 1px solid var(--border);">
-                    <i class="bi bi-building fs-2 text-warning"></i>
-                    <h3 class="fw-bold mt-2"><?php echo $siteCount; ?></h3>
-                    <p class="text-muted small mb-0">Active Sites Under Terms</p>
-                </div>
-            </div>
-            <div class="col-md-3 col-6" data-aos="fade-up" data-aos-delay="100">
-                <div class="stat-card-mini" style="background: #fff; padding: 20px; border-radius: 16px; border: 1px solid var(--border);">
-                    <i class="bi bi-people fs-2 text-warning"></i>
-                    <h3 class="fw-bold mt-2"><?php echo $employeeCount; ?></h3>
-                    <p class="text-muted small mb-0">Users Bound by Terms</p>
-                </div>
-            </div>
-            <div class="col-md-3 col-6" data-aos="fade-up" data-aos-delay="200">
-                <div class="stat-card-mini" style="background: #fff; padding: 20px; border-radius: 16px; border: 1px solid var(--border);">
-                    <i class="bi bi-building fs-2 text-warning"></i>
-                    <h3 class="fw-bold mt-2"><?php echo $clientCount; ?></h3>
-                    <p class="text-muted small mb-0">Client Organizations</p>
-                </div>
-            </div>
-            <div class="col-md-3 col-6" data-aos="fade-up" data-aos-delay="300">
-                <div class="stat-card-mini" style="background: #fff; padding: 20px; border-radius: 16px; border: 1px solid var(--border);">
-                    <i class="bi bi-shield-check fs-2 text-warning"></i>
-                    <h3 class="fw-bold mt-2">100%</h3>
-                    <p class="text-muted small mb-0">Compliance Committed</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Contact Call to Action -->
-<section class="final-cta" style="background: linear-gradient(135deg, #101820 0%, #1a2a3a 100%); color: #fff; padding: 70px 0; position: relative; overflow: hidden;">
-    <div class="container text-center">
         <div class="row justify-content-center">
-            <div class="col-lg-8" data-aos="fade-up">
-                <h2 class="display-5 fw-black">Questions About <span class="yellow-text">Terms</span>?</h2>
-                <p class="mt-3 fs-5">Our legal team is available to address your concerns</p>
-                <div class="d-flex flex-wrap gap-3 justify-content-center mt-4">
-                    <a href="contact.php" class="btn btn-yellow btn-lg">
-                        <i class="bi bi-envelope me-2"></i> Contact Legal Team
-                    </a>
-                    <a href="#" class="btn btn-outline-yellow btn-lg" onclick="window.print();">
-                        <i class="bi bi-printer me-2"></i> Print Terms
-                    </a>
+            <div class="col-lg-10" data-aos="fade-up">
+                <div class="terms-card">
+                    <div class="last-updated">
+                        <i class="fa-regular fa-calendar-alt me-2"></i> Effective Date: January 15, 2025
+                    </div>
+
+                    <div class="important-note">
+                        <i class="fa-solid fa-scale-balanced text-yellow me-2"></i> <strong>Legal Agreement</strong><br>
+                        By accessing or using TEK-C Construction Management Software, you agree to be bound by these Terms of Service. If you do not agree, please do not use our platform.
+                    </div>
+
+                    <h2>1. Acceptance of Terms</h2>
+                    <p>These Terms of Service ("Terms") govern your access to and use of TEK-C Construction Management Software, including any related websites, applications, APIs, and services (collectively, the "Service"). The Service is provided by TEK-C ("Company," "we," "us," or "our"). By creating an account, accessing, or using the Service, you acknowledge that you have read, understood, and agree to be bound by these Terms, including any future modifications.</p>
+
+                    <h2>2. Eligibility</h2>
+                    <p>To use the Service, you must:</p>
+                    <ul>
+                        <li>Be at least 18 years of age or the age of majority in your jurisdiction.</li>
+                        <li>Have the legal capacity to enter into a binding agreement.</li>
+                        <li>Provide accurate, current, and complete information during registration.</li>
+                        <li>Not be prohibited from using the Service under applicable laws.</li>
+                    </ul>
+                    <p>If you are using the Service on behalf of an organization, you represent that you have authority to bind that organization to these Terms.</p>
+
+                    <h2>3. Account Registration & Security</h2>
+                    <p>You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to:</p>
+                    <ul>
+                        <li>Notify us immediately of any unauthorized access or security breach.</li>
+                        <li>Use strong passwords and enable multi-factor authentication where available.</li>
+                        <li>Not share your account credentials with unauthorized individuals.</li>
+                        <li>Accept responsibility for all actions taken under your account.</li>
+                    </ul>
+                    <p>We reserve the right to suspend or terminate accounts that violate these Terms or pose a security risk.</p>
+
+                    <h2>4. Subscription Plans & Payments</h2>
+                    <h3>4.1 Paid Plans</h3>
+                    <p>Certain features of TEK-C require a paid subscription. By purchasing a subscription, you agree to pay the applicable fees as described during checkout. All fees are in Indian Rupees (INR) unless otherwise specified.</p>
+                    
+                    <h3>4.2 Billing & Renewal</h3>
+                    <p>Subscriptions automatically renew at the end of each billing cycle (monthly or yearly) unless you cancel before the renewal date. You authorize us to charge your payment method for renewal fees. Cancellation requests must be submitted through your account settings or by contacting support.</p>
+                    
+                    <h3>4.3 Refund Policy</h3>
+                    <p>We offer a 14-day free trial for new users. For paid subscriptions, refunds are generally not provided for partial billing periods. However, if you experience technical issues that cannot be resolved, please contact our support team for review on a case-by-case basis.</p>
+                    
+                    <h3>4.4 Fee Changes</h3>
+                    <p>We may adjust subscription fees with 30 days' advance notice via email. Continued use after fee changes constitutes acceptance of the new pricing.</p>
+
+                    <h2>5. Free Trial</h2>
+                    <p>New users may be eligible for a 14-day free trial. Trial periods are limited to one per organization. At the end of the trial, you must purchase a subscription to continue using the Service, or your account will be downgraded or deactivated.</p>
+
+                    <h2>6. User Responsibilities & Prohibited Conduct</h2>
+                    <p>You agree to use the Service only for lawful purposes and in accordance with these Terms. You shall not:</p>
+                    <ul>
+                        <li>Upload, share, or store illegal, infringing, or harmful content.</li>
+                        <li>Attempt to gain unauthorized access to other user accounts or systems.</li>
+                        <li>Reverse engineer, decompile, or disassemble any part of the Service.</li>
+                        <li>Use the Service to transmit malware, viruses, or other harmful code.</li>
+                        <li>Interfere with or disrupt the integrity or performance of the Service.</li>
+                        <li>Use automated scripts or bots to scrape or extract data without authorization.</li>
+                        <li>Share or resell access to the Service to third parties without written permission.</li>
+                        <li>Violate any applicable local, state, national, or international laws.</li>
+                    </ul>
+
+                    <h2>7. Data Ownership & Intellectual Property</h2>
+                    <h3>7.1 Your Data</h3>
+                    <p>You retain full ownership of all data, documents, and information you upload or create within TEK-C ("Your Data"). We do not claim ownership over Your Data. You grant us a limited license to access, process, and store Your Data solely to provide the Service to you.</p>
+                    
+                    <h3>7.2 Our Intellectual Property</h3>
+                    <p>The Service, including its code, design, features, algorithms, trademarks, and logos, is owned by TEK-C and protected by copyright, trademark, and other intellectual property laws. You may not copy, modify, or create derivative works without our express written consent.</p>
+                    
+                    <h3>7.3 Feedback</h3>
+                    <p>If you provide suggestions, ideas, or feedback about the Service, you grant us a perpetual, royalty-free license to use and implement such feedback without compensation.</p>
+
+                    <h2>8. Data Security & Privacy</h2>
+                    <p>We take data security seriously. Our data handling practices are outlined in our <a href="privacy-policy.php" class="text-yellow">Privacy Policy</a>. By using the Service, you consent to the collection and use of your information as described in the Privacy Policy.</p>
+                    <p>While we implement industry-standard security measures, no system is 100% secure. You are responsible for backing up your critical data.</p>
+
+                    <h2>9. Service Availability & Modifications</h2>
+                    <p>We strive to maintain high availability of the Service but do not guarantee uninterrupted access. We may perform scheduled maintenance, which will be communicated in advance when possible. We reserve the right to modify, suspend, or discontinue any feature of the Service with reasonable notice.</p>
+
+                    <h2>10. Third-Party Integrations</h2>
+                    <p>TEK-C may integrate with third-party services (e.g., payment gateways, cloud storage). We are not responsible for the practices, security, or reliability of these third-party services. Your use of third-party integrations is subject to their respective terms of service.</p>
+
+                    <h2>11. Termination & Suspension</h2>
+                    <p>Either party may terminate your subscription at any time. Upon termination:</p>
+                    <ul>
+                        <li>You will lose access to your account and data.</li>
+                        <li>We will retain your data for 90 days after termination, after which it will be permanently deleted (unless legal obligations require longer retention).</li>
+                        <li>No refunds will be provided for prepaid but unused subscription periods.</li>
+                    </ul>
+                    <p>We may suspend or terminate your account immediately for violations of these Terms, illegal activity, or to protect the security of other users.</p>
+
+                    <h2>12. Disclaimer of Warranties</h2>
+                    <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS OR IMPLIED. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR SECURE. YOU ASSUME FULL RESPONSIBILITY FOR YOUR USE OF THE SERVICE AND ANY CONSTRUCTION DECISIONS MADE BASED ON INFORMATION PROVIDED THROUGH THE PLATFORM.</p>
+
+                    <h2>13. Limitation of Liability</h2>
+                    <p>TO THE MAXIMUM EXTENT PERMITTED BY LAW, TEK-C AND ITS OFFICERS, DIRECTORS, EMPLOYEES, AND AFFILIATES SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO LOSS OF PROFITS, DATA, OR BUSINESS OPPORTUNITIES, ARISING OUT OF OR RELATED TO YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY SHALL NOT EXCEED THE AMOUNT YOU PAID US DURING THE TWELVE (12) MONTHS PRIOR TO THE CLAIM.</p>
+
+                    <h2>14. Indemnification</h2>
+                    <p>You agree to indemnify and hold harmless TEK-C and its affiliates from any claims, damages, losses, or expenses (including reasonable legal fees) arising out of your use of the Service, violation of these Terms, or infringement of any third-party rights.</p>
+
+                    <h2>15. Governing Law & Dispute Resolution</h2>
+                    <p>These Terms shall be governed by the laws of India, without regard to conflict of law principles. Any disputes arising from these Terms or your use of the Service shall be resolved through binding arbitration in Hyderabad, Telangana, in accordance with the Arbitration and Conciliation Act, 1996. Each party shall bear its own arbitration costs. Class actions and jury trials are waived.</p>
+
+                    <h2>16. Force Majeure</h2>
+                    <p>We shall not be liable for delays or failures in performance resulting from causes beyond our reasonable control, including natural disasters, pandemics, war, terrorism, labor disputes, or internet outages.</p>
+
+                    <h2>17. Modifications to Terms</h2>
+                    <p>We may update these Terms from time to time. Material changes will be notified via email or prominent notice on our platform at least 30 days in advance. Your continued use of the Service after the effective date constitutes acceptance of the revised Terms.</p>
+
+                    <h2>18. Severability</h2>
+                    <p>If any provision of these Terms is found to be unenforceable or invalid, that provision shall be limited or removed to the minimum extent necessary, and the remaining provisions shall remain in full force and effect.</p>
+
+                    <h2>19. Entire Agreement</h2>
+                    <p>These Terms, together with the Privacy Policy, constitute the entire agreement between you and TEK-C regarding your use of the Service and supersede all prior agreements.</p>
+
+                    <div class="contact-box">
+                        <h4><i class="fa-regular fa-envelope me-2"></i> Contact Information</h4>
+                        <p>If you have questions about these Terms, please contact us:</p>
+                        <p><strong>Email:</strong> <a href="mailto:legal@tekcsoftware.com">legal@tekcsoftware.com</a><br>
+                        <strong>Address:</strong> 3rd Floor, UKB Tower, Hitech City, Hyderabad - 500081, Telangana, India<br>
+                        <strong>Phone:</strong> +91 40 6789 1234</p>
+                        <p class="mb-0 mt-3"><small>For legal notices, please send via registered mail to the above address.</small></p>
+                    </div>
                 </div>
-                <p class="mt-4 small">For legal inquiries only. For technical support, please visit our <a href="help-center.php" class="text-warning">Help Center</a>.</p>
             </div>
         </div>
     </div>
@@ -645,42 +424,22 @@ $constructionImages = [
 <?php include 'includes/footer.php'; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
 
 <script>
-    AOS.init({ duration: 1000, once: true, offset: 80 });
+AOS.init({ duration: 700, once: true });
 
-    // Smooth scroll for anchor links
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-    });
+const navbar = document.getElementById('mainNavbar');
+window.addEventListener('scroll', () => {
+    if(window.scrollY > 70) navbar.classList.add('nav-fixed');
+    else navbar.classList.remove('nav-fixed');
+});
 
-    // Navbar active link on scroll
-    const sections = document.querySelectorAll("section[id]");
-    const navLinks = document.querySelectorAll(".nav-link");
-
-    window.addEventListener("scroll", () => {
-        let current = "";
-        sections.forEach(section => {
-            const sectionTop = section.offsetTop - 130;
-            if (window.scrollY >= sectionTop) {
-                current = section.getAttribute("id");
-            }
-        });
-        navLinks.forEach(link => {
-            link.classList.remove("active");
-            if (link.getAttribute("href") === "#" + current) {
-                link.classList.add("active");
-            }
-        });
-    });
+// Active link highlight - none for terms page
+const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
+navLinks.forEach(link => {
+    link.classList.remove('active');
+});
 </script>
-
 </body>
 </html>
