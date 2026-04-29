@@ -3,10 +3,10 @@
         <div class="row g-4">
             <div class="col-lg-3">
                 <div class="logo mb-3">
-                    <div class="logo-icon"></div>
+                   
                     <div class="logo-text">
-                        <h3>TEK-C</h3>
-                        <span>Construction Management Software</span>
+                        <img src="assets/logo.png" alt="" width="50">
+                        <span class="mt-2">Construction Management Software</span>
                     </div>
                 </div>
                 <p style="font-size:14px;color:#ccc;">Control the Process. Command the Project.</p>
@@ -44,6 +44,7 @@
             <div class="col-lg-3 product-box">
                 <h5>A Product of</h5>
                 <div class="ukb-logo text-white">
+                    <img src="assets/ukb-logo.jpeg" alt=""width="100"><br>
                     <span class="text-yellow">UKB</span> GROUP
                 </div>
                 <p style="font-size:13px;color:#bbb;margin-top:12px;">© 2026 All Rights Reserved.</p>

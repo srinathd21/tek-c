@@ -826,7 +826,7 @@ img.dashboard-screen{
     }
 
     .logo-text h3{
-        font-size:26px;
+        font-size:20px;
     }
 
     .logo-icon{

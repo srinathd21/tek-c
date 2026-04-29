@@ -5,11 +5,28 @@ function activeMenu($page, $currentPage) {
     return ($currentPage === $page) ? 'active' : '';
 }
 ?>
+<style>
+    .logo{
+        width: 40px;
+    }
+    
+    footer a{
+        text-decoration: none;
+    }
+    .logo-text{
+        font-size: 15px !important;
+    }
+    @media(max-width:991px){
+    section{
+        overflow-x: hidden;
+    }
+}
 
+</style>
 <nav class="navbar navbar-expand-lg" id="mainNavbar">
     <div class="container">
         <a class="navbar-brand logo" href="index.php">
-            <div class="logo-icon"></div>
+            <img src="assets/logo.png" class="logo"></img>
             <div class="logo-text">
                 <h3>TEK-C</h3>
                 <span>Construction Software</span>
