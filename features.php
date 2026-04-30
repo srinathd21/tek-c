@@ -613,15 +613,6 @@ window.addEventListener('scroll', function(){
     }
 });
 
-// Active link highlighting (optional)
-const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
-navLinks.forEach(link => {
-    if(link.getAttribute('href') === '#features'){
-        link.classList.add('active');
-    } else {
-        link.classList.remove('active');
-    }
-});
 </script>
 </body>
 </html>

@@ -1324,51 +1324,6 @@ AOS.init({
     offset: 90
 });
 
-const navbar = document.getElementById('mainNavbar');
-const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
-const sections = document.querySelectorAll('section[id]');
-
-window.addEventListener('scroll', function(){
-    if(window.scrollY > 70){
-        navbar.classList.add('nav-fixed');
-    }else{
-        navbar.classList.remove('nav-fixed');
-    }
-
-    let currentSection = '';
-
-    sections.forEach(function(section){
-        const sectionTop = section.offsetTop - 140;
-        const sectionHeight = section.offsetHeight;
-
-        if(window.scrollY >= sectionTop && window.scrollY < sectionTop + sectionHeight){
-            currentSection = section.getAttribute('id');
-        }
-    });
-
-    navLinks.forEach(function(link){
-        link.classList.remove('active');
-
-        if(link.getAttribute('href') === '#' + currentSection){
-            link.classList.add('active');
-        }
-    });
-});
-
-navLinks.forEach(function(link){
-    link.addEventListener('click', function(){
-        navLinks.forEach(function(nav){
-            nav.classList.remove('active');
-        });
-
-        this.classList.add('active');
-
-        const navMenu = document.getElementById('navMenu');
-        if(navMenu.classList.contains('show')){
-            new bootstrap.Collapse(navMenu).hide();
-        }
-    });
-});
 </script>
 
 </body>

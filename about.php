@@ -580,15 +580,7 @@ window.addEventListener('scroll', () => {
     else navbar.classList.remove('nav-fixed');
 });
 
-// Active link highlight for about
-const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
-navLinks.forEach(link => {
-    if(link.getAttribute('href') === '#about'){
-        link.classList.add('active');
-    } else {
-        link.classList.remove('active');
-    }
-});
+
 </script>
 </body>
 </html>
