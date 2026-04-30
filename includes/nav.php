@@ -20,6 +20,15 @@ function activeMenu($page, $currentPage) {
     section{
         overflow-x: hidden;
     }
+    #book-now-btn{
+        margin: 10px 0px;
+        position: relative;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    .navbar-nav>li{
+        
+    }
 }
 
 </style>
@@ -59,7 +68,7 @@ function activeMenu($page, $currentPage) {
                 </li>
             </ul>
 
-            <a href="book-demo.php" class="btn btn-yellow <?php echo activeMenu('book-demo.php', $currentPage); ?>">
+            <a href="book-demo.php" id="book-now-btn" class="btn btn-yellow <?php echo activeMenu('book-demo.php', $currentPage); ?>">
                 Book Live Demo
             </a>
         </div>
