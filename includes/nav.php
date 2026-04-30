@@ -26,8 +26,17 @@ function activeMenu($page, $currentPage) {
         left: 50%;
         transform: translateX(-50%);
     }
-    .navbar-nav>li{
-        
+   
+    #toggle-btn{
+        background-color: #101010 !important;
+        border: 1px solid #bdbdbd;
+        color: #fff !important;
+        padding: 8px 15px;
+    }
+    #toggle-btn>span{
+        color: white !important;
+        background-color: white;
+        font-size: 10px;
     }
 }
 
@@ -42,8 +51,8 @@ function activeMenu($page, $currentPage) {
             </div>
         </a>
 
-        <button class="navbar-toggler bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
-            <span class="navbar-toggler-icon"></span>
+        <button id="toggle-btn" class="navbar-toggler bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+            <i class="fa-solid fa-bars"></i>
         </button>
 
         <div class="collapse navbar-collapse" id="navMenu">
