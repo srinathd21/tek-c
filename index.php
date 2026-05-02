@@ -47,7 +47,7 @@ section{
 }
 
 .section-title{
-    font-size:34px;
+    font-size:26px;
     font-weight:900;
     text-align:center;
     margin-bottom:34px;
@@ -199,7 +199,7 @@ section{
 }
 
 .hero h1{
-    font-size:62px;
+    font-size:45px;
     font-weight:900;
     line-height:1.08;
     margin-bottom:28px;
@@ -251,7 +251,7 @@ section{
 }
 
 .dashboard-screen{
-    background:#f7f7f7;
+    
     border-radius:14px;
     overflow:hidden;
     width:100%;
@@ -355,16 +355,6 @@ img.dashboard-screen{
     overflow:hidden;
 }
 
-.solution:after{
-    content:"";
-    position:absolute;
-    right:0;
-    bottom:0;
-    width:55%;
-    height:100%;
-    background:url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80') center/cover;
-    opacity:.08;
-}
 
 .solution h2{
     font-size:42px;
@@ -409,7 +399,7 @@ img.dashboard-screen{
 }
 
 .dark-strip h2{
-    font-size:36px;
+    font-size:30px;
     font-weight:900;
     line-height:1.2;
 }
@@ -488,7 +478,7 @@ img.dashboard-screen{
 }
 
 .preview h2{
-    font-size:34px;
+    font-size:30px;
     font-weight:900;
     line-height:1.25;
     margin-bottom:18px;
@@ -560,7 +550,7 @@ img.dashboard-screen{
 }
 
 .role-card p{
-    font-size:13px;
+    font-size:15px;
     margin:0;
     color:#555;
     line-height:1.6;
@@ -573,15 +563,13 @@ img.dashboard-screen{
 }
 
 .ukb-box{
-    background:#f8f8f8;
-    border-radius:18px;
-    padding:34px 20px;
+    
     height:100%;
     min-height:260px;
     display:flex;
     align-items:center;
     justify-content:center;
-    border:1px solid var(--line);
+    
 }
 
 .ukb-logo{
@@ -843,7 +831,7 @@ img.dashboard-screen{
     }
 
     .section-title{
-        font-size:26px;
+        font-size:22px;
     }
 
     .phone{
@@ -905,17 +893,9 @@ img.dashboard-screen{
             </div>
 
             <div class="col-lg-6" data-aos="zoom-in">
-                <div class="dashboard-device float">
+                
                     <img src="assets/dashboard.png" class="dashboard-screen" alt="Dashboard">
-                    <div class="phone">
-                        <h6>Daily Reports</h6>
-                        <div class="phone-line"></div>
-                        <div class="phone-line"></div>
-                        <div class="phone-line"></div>
-                        <div class="phone-line"></div>
-                    </div>
-                </div>
-                <div class="laptop-base"></div>
+                
             </div>
         </div>
     </div>
@@ -985,10 +965,7 @@ img.dashboard-screen{
             </div>
 
             <div class="col-lg-7 solution-img" data-aos="fade-left">
-                <div class="dashboard-device">
-                    <img src="assets/report.png" class="dashboard-screen" alt="Report">
-                </div>
-                <div class="laptop-base"></div>
+                <img src="assets/dashboard2.png" class="dashboard-screen" alt="Report">
             </div>
         </div>
     </div>
@@ -999,26 +976,27 @@ img.dashboard-screen{
         <div class="row align-items-center g-5">
             <div class="col-lg-3" data-aos="fade-right">
                 <h2>Not Built by Coders.<br><span class="text-yellow">Built by Builders.</span></h2>
-                <p>Developed from real construction project workflows and execution challenges.</p>
+                <p>Developed from real projects by <br>
+UKB Construction Management.</p>
             </div>
 
             <div class="col-lg-9">
                 <div class="row g-0">
                     <div class="col-md-3 col-6 diff-item" data-aos="zoom-in">
                         <i class="fa-solid fa-building-shield"></i>
-                        <h5>Manage residential & commercial projects</h5>
+                        <h5>Managing premium residental & commercial projects</h5>
                     </div>
                     <div class="col-md-3 col-6 diff-item" data-aos="zoom-in" data-aos-delay="100">
                         <i class="fa-solid fa-eye-slash"></i>
-                        <h5>Solve real site visibility problems</h5>
+                        <h5>Handlink real site challenges daily</h5>
                     </div>
                     <div class="col-md-3 col-6 diff-item" data-aos="zoom-in" data-aos-delay="200">
                         <i class="fa-solid fa-crosshairs"></i>
-                        <h5>Convert proven workflows into digital control</h5>
+                        <h5>Converting proven workflows into a digital system</h5>
                     </div>
                     <div class="col-md-3 col-6 diff-item" data-aos="zoom-in" data-aos-delay="300">
                         <i class="fa-solid fa-house-lock"></i>
-                        <h5>Practical, reliable and results-driven</h5>
+                        <h5>Practical, reliable and results-driven approach</h5>
                     </div>
                 </div>
             </div>
@@ -1118,7 +1096,7 @@ img.dashboard-screen{
     <div class="container">
         <div class="row align-items-center g-5">
             <div class="col-lg-3" data-aos="fade-right">
-                <h2>See Your Project — Live & Structured</h2>
+                <h2>See Your Project Live & Structured</h2>
                 <p>One platform. All project information at your fingertips.</p>
                 <ul class="check-list">
                     <li><i class="fa-solid fa-check"></i> Live progress tracking</li>
@@ -1186,8 +1164,8 @@ img.dashboard-screen{
 
             <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="80">
                 <div class="role-card">
-                    <i class="fa-solid fa-user-helmet-safety"></i>
-                    <h5>Project Consultants</h5>
+                   <i class="fa-solid fa-user-tie"></i>
+                    <h5>Project Management Consultants (PMC)</h5>
                     <p>Manage multiple projects with ease and clarity.</p>
                 </div>
             </div>
@@ -1195,7 +1173,7 @@ img.dashboard-screen{
             <div class="col-lg-3 col-md-6" data-aos="fade-up" data-aos-delay="160">
                 <div class="role-card">
                     <i class="fa-solid fa-people-group"></i>
-                    <h5>Engineers & Teams</h5>
+                    <h5>Engineers & Project Teams</h5>
                     <p>Stay updated, accountable and on track.</p>
                 </div>
             </div>
@@ -1216,9 +1194,12 @@ img.dashboard-screen{
         <div class="row g-5 align-items-center">
             <div class="col-lg-2" data-aos="fade-right">
                 <div class="ukb-box">
-                    <div class="ukb-logo">
-                        <span class="text-yellow">UKB</span><br>
+                    <div class="ukb-logo d-flex">
+                        <img src="assets/ukb.png" alt="" width="100">
+                        <div>
+                            <span class="text-yellow">UKB</span><br>
                         <small style="font-size:14px;">CONSTRUCTION<br>MANAGEMENT</small>
+                        </div>
                     </div>
                 </div>
             </div>
