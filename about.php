@@ -636,12 +636,10 @@ a{text-decoration:none;}
                 </p>
 
                 <div class="hero-actions">
-                    <a href="contact.php" class="btn btn-yellow">
-                        Book Live Demo <i class="fa-solid fa-arrow-right ms-2"></i>
+                    <a href="tel:+91 78290 42156" class="btn btn-yellow">
+                        Contact us<i class="fa-solid fa-arrow-right ms-2"></i>
                     </a>
-                    <a href="#" class="btn btn-outline-light-custom">
-                        <i class="fa-solid fa-play me-2"></i> Watch Our Story
-                    </a>
+                    
                 </div>
             </div>
         </div>
@@ -935,10 +933,8 @@ a{text-decoration:none;}
             </div>
 
             <div class="col-lg-6 text-lg-end" data-aos="fade-left">
-                <a href="contact.php" class="btn btn-yellow me-2 mb-2">
-                    Book Live Demo <i class="fa-solid fa-arrow-right ms-2"></i>
-                </a>
-                <a href="contact.php" class="btn btn-outline-light-custom mb-2">
+               
+                <a href="tel:+91 78290 42156" class="btn btn-outline-light-custom mb-2">
                     Contact Us <i class="fa-solid fa-arrow-right ms-2"></i>
                 </a>
             </div>

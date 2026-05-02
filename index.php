@@ -520,7 +520,7 @@ img.dashboard-screen{
 
 /* ROLES */
 .roles{
-    padding:90px 0;
+    padding:90px 0 0;
 }
 
 .role-card{
@@ -806,6 +806,15 @@ img.dashboard-screen{
     .price-card.featured{
         transform:none;
     }
+    .ukb-box{
+    
+    height:100%;
+    min-height:0px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    
+}
 }
 
 @media(max-width:575px){
@@ -858,7 +867,7 @@ img.dashboard-screen{
     .roles,
     .authority,
     .pricing{
-        padding:65px 0;
+        padding:65px 0 0 !important;
     }
 
     .final-cta h2{
@@ -887,7 +896,7 @@ img.dashboard-screen{
                 </div>
 
                 <div class="hero-buttons">
-                    <a href="tel:" class="btn btn-yellow pulse"><i class="fa-solid fa-mobile me-2"></i> Contact us <i class="fa-solid fa-arrow-right ms-2"></i></a>
+                    <a href="tel:+91 78290 42156" class="btn btn-yellow pulse"><i class="fa-solid fa-mobile me-2"></i> Contact us <i class="fa-solid fa-arrow-right ms-2"></i></a>
                     <a href="#dashboard" class="btn btn-outline-light-custom">See Dashboard <i class="fa-regular fa-circle-play ms-2"></i></a>
                 </div>
             </div>
@@ -1212,7 +1221,7 @@ UKB Construction Management.</p>
                     <li><i class="fa-solid fa-check"></i> Practical module structure</li>
                     <li><i class="fa-solid fa-check"></i> Real construction project clarity</li>
                 </ul>
-                <a href="#contact" class="btn btn-yellow">Know More About UKB <i class="fa-solid fa-arrow-right ms-2"></i></a>
+                <a href="https://ukbpmc.com/" class="btn btn-yellow">Know More About UKB <i class="fa-solid fa-arrow-right ms-2"></i></a>
             </div>
 
             <div class="col-lg-6" data-aos="fade-left">
@@ -1288,7 +1297,7 @@ UKB Construction Management.</p>
         <p>See your project inside TEK-C and understand how it can improve your execution workflow.</p>
         <div class="d-flex justify-content-center gap-3 flex-wrap">
             <!-- <a href="tel:+919876543210" class="btn btn-dark-custom">Book Your Live Demo <i class="fa-solid fa-arrow-right ms-2"></i></a> -->
-            <a href="mailto:info@tekcsoftware.com" class="btn btn-outline-dark fw-bold px-4 py-3 rounded-3">Contact Us <i class="fa-solid fa-arrow-right ms-2"></i></a>
+            <a href="tel:+91 78290 42156" class="btn btn-outline-dark fw-bold px-4 py-3 rounded-3">Contact Us <i class="fa-solid fa-arrow-right ms-2"></i></a>
         </div>
     </div>
 </section>

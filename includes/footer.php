@@ -3,10 +3,18 @@
         <div class="row g-4">
             <div class="col-lg-3">
                 <div class="logo mb-3">
-                   
+
                     <div class="logo-text">
-                        <img src="assets/logo.png" alt="" width="50">
-                  
+                        <a class="navbar-brand logo d-flex" href="index.php">
+                            <img src="assets/tek-c.png" class="logo"></img>
+                            <div class="logo-text text-center">
+                                <div class="logo-text-span d-flex">
+                                    <span>TEK</span>
+                                    <span>-C</span>
+                                </div>
+                                <span>GLOBAL</span>
+                            </div>
+                        </a>
                     </div>
                 </div>
                 <p style="font-size:14px;color:#ccc;">Control the Process. Command the Project.</p>
@@ -22,7 +30,7 @@
                 <h5>PRODUCT</h5>
                 <a href="features.php">Features</a>
                 <a href="modules.php">Modules</a>
-              
+
                 <a href="pricing.php">Pricing</a>
             </div>
 
@@ -44,8 +52,8 @@
             <div class="col-lg-3 product-box">
                 <h5>A Product of</h5>
                 <div class="ukb-logo text-white">
-                    <img src="assets/ukb-logo.jpeg" alt=""width="100"><br>
-                    <span class="text-yellow">UKB</span> GROUP
+                    <img src="assets/ukb-logo.jpeg" alt="" width="100"><br>
+
                 </div>
                 <p style="font-size:13px;color:#bbb;margin-top:12px;">© 2026 All Rights Reserved.</p>
             </div>

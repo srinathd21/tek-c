@@ -376,8 +376,8 @@ body{
                 <div class="info-card">
                     <div class="info-icon"><i class="fa-solid fa-phone-volume"></i></div>
                     <h4>Call Us</h4>
-                    <p><strong>Sales:</strong> +91 1800 123 4567</p>
-                    <p><strong>Support:</strong> +91 98765 43210</p>
+                    <p><strong>Sales:</strong> +91 78290 42156</p>
+                    <p><strong>Support:</strong> +91 080 26 630 203</p>
                     <p class="mt-2"><small>Mon-Fri, 9AM - 6PM IST</small></p>
                 </div>
             </div>
@@ -385,9 +385,9 @@ body{
                 <div class="info-card">
                     <div class="info-icon"><i class="fa-regular fa-envelope"></i></div>
                     <h4>Email Us</h4>
-                    <p><strong>General:</strong> <a href="mailto:hello@tekcsoftware.com">hello@tekcsoftware.com</a></p>
-                    <p><strong>Support:</strong> <a href="mailto:support@tekcsoftware.com">support@tekcsoftware.com</a></p>
-                    <p><strong>Sales:</strong> <a href="mailto:sales@tekcsoftware.com">sales@tekcsoftware.com</a></p>
+                    
+                    <p><strong>Support:</strong> <a href="mailto:support@tekcsoftware.com">admin@ukbpmc.com</a></p>
+                    
                 </div>
             </div>
             <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
@@ -457,17 +457,12 @@ body{
             <div class="col-lg-6" data-aos="fade-left">
                 <div class="map-container mb-4">
                     <!-- Google Maps Embed - Works without API key! -->
-                    <iframe 
-                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3806.456789012345!2d78.3772!3d17.4435!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bcb93f6c0b8f8d5%3A0x8b5a5c5e5f5a5c5e!2sHitech%20City%2C%20Hyderabad%2C%20Telangana!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin" 
-                        allowfullscreen="" 
-                        loading="lazy" 
-                        referrerpolicy="no-referrer-when-downgrade">
-                    </iframe>
+                   <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3888.8178154748894!2d77.6173357738729!3d12.919428087391124!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bae15af51d330cb%3A0xfa0371be1bfebc80!2sUKB%20Construction%20Management%20Pvt%20Ltd!5e0!3m2!1sen!2sin!4v1777727057236!5m2!1sen!2sin" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
                 </div>
                 <div class="bg-white p-4 rounded-4 text-center border">
                     <i class="fa-solid fa-location-dot text-yellow fs-3 mb-2"></i>
-                    <p class="mb-0"><strong>Registered Office:</strong> 3rd Floor, UKB Tower, Hitech City, Hyderabad - 500081, Telangana, India</p>
-                    <a href="https://www.google.com/maps/dir//Hitech+City+Hyderabad" target="_blank" class="btn btn-sm btn-outline-dark mt-3 rounded-pill">
+                    <p class="mb-0"><strong>Registered Office:</strong> #86, 35th Main Road, 4th A Cross Rd, Dollar Scheme Colony, 1st Stage, BTM Layout, Bengaluru, Karnataka 560068</p>
+                    <a href="https://maps.app.goo.gl/mbGBwy69Vzx44123A" target="_blank" class="btn btn-sm btn-outline-dark mt-3 rounded-pill">
                         <i class="fa-solid fa-directions me-1"></i> Get Directions
                     </a>
                 </div>
@@ -480,34 +475,17 @@ body{
 <section class="offices-section">
     <div class="container">
         <h2 class="section-title" data-aos="fade-up">Our offices</h2>
-        <div class="row g-4">
-            <div class="col-md-4" data-aos="fade-up">
+        <div class="row g-4 text-center">
+            <div class="col-md-12" data-aos="fade-up">
                 <div class="office-card">
-                    <h4><i class="fa-solid fa-building me-2 text-yellow"></i> Hyderabad (HQ)</h4>
-                    <p><i class="fa-solid fa-location-dot"></i> 3rd Floor, UKB Tower, Hitech City, Hyderabad - 500081</p>
+                    <h4><i class="fa-solid fa-building me-2 text-yellow"></i> Bengaluru</h4>
+                    <p><i class="fa-solid fa-location-dot"></i> #86, 35th Main Road, 4th A Cross Rd, Dollar Scheme Colony, 1st Stage, BTM Layout, Bengaluru, Karnataka 560068</p>
                     <p><i class="fa-regular fa-clock"></i> Mon-Fri: 9AM - 6PM</p>
-                    <p><i class="fa-solid fa-phone"></i> +91 40 6789 1234</p>
+                    <p><i class="fa-solid fa-phone"></i> +91 78290 42156</p>
                     <a href="https://www.google.com/maps/search/?api=1&query=Hitech+City+Hyderabad" target="_blank" class="btn btn-sm btn-outline-dark mt-2 rounded-pill">View on map <i class="fa-regular fa-arrow-up-right-from-square ms-1"></i></a>
                 </div>
             </div>
-            <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
-                <div class="office-card">
-                    <h4><i class="fa-solid fa-city me-2 text-yellow"></i> Mumbai</h4>
-                    <p><i class="fa-solid fa-location-dot"></i> 12th Floor, Interface-11, Malad West, Mumbai - 400064</p>
-                    <p><i class="fa-regular fa-clock"></i> Mon-Fri: 9AM - 6PM</p>
-                    <p><i class="fa-solid fa-phone"></i> +91 22 4567 8901</p>
-                    <a href="https://www.google.com/maps/search/?api=1&query=Malad+West+Mumbai" target="_blank" class="btn btn-sm btn-outline-dark mt-2 rounded-pill">View on map <i class="fa-regular fa-arrow-up-right-from-square ms-1"></i></a>
-                </div>
-            </div>
-            <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
-                <div class="office-card">
-                    <h4><i class="fa-solid fa-charging-station me-2 text-yellow"></i> Bengaluru</h4>
-                    <p><i class="fa-solid fa-location-dot"></i> WeWork Galaxy, Residency Road, Bengaluru - 560025</p>
-                    <p><i class="fa-regular fa-clock"></i> Mon-Fri: 9AM - 6PM</p>
-                    <p><i class="fa-solid fa-phone"></i> +91 80 9876 5432</p>
-                    <a href="https://www.google.com/maps/search/?api=1&query=Residency+Road+Bangalore" target="_blank" class="btn btn-sm btn-outline-dark mt-2 rounded-pill">View on map <i class="fa-regular fa-arrow-up-right-from-square ms-1"></i></a>
-                </div>
-            </div>
+            
         </div>
     </div>
 </section>
