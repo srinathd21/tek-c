@@ -34,6 +34,9 @@ function activeMenu($page, $currentPage)
         font-size: 15px !important;
         letter-spacing: 1px;
     }
+     #login-btn-mobile{
+            display: none;
+        }
     @media(max-width:991px) {
         section {
             overflow-x: hidden;
@@ -58,11 +61,14 @@ function activeMenu($page, $currentPage)
             background-color: white;
             font-size: 10px;
         }
+        #login-btn-mobile{
+            display: block;
+        }
     }
 </style>
 <nav class="navbar navbar-expand-lg" id="mainNavbar">
     <div class="container">
-        <a class="navbar-brand logo" href="index.php">
+        <a class="navbar-brand logo me-auto" href="index.php">
             <img src="assets/tek-c.png" class="logo"></img>
             <div class="logo-text text-center">
                 <div class="logo-text-span d-flex">
@@ -72,7 +78,10 @@ function activeMenu($page, $currentPage)
                 <span>GLOBAL</span>
             </div>
         </a>
-
+         <a href="erp/" id="login-btn-mobile"
+                class="btn btn-yellow mx-3 py-2 px-4 <?php echo activeMenu('book-demo.php', $currentPage); ?>">
+                Login
+            </a>
         <button id="toggle-btn" class="navbar-toggler bg-light" type="button" data-bs-toggle="collapse"
             data-bs-target="#navMenu">
             <i class="fa-solid fa-bars"></i>
@@ -109,5 +118,6 @@ function activeMenu($page, $currentPage)
                 Login
             </a>
         </div>
+        
     </div>
 </nav>

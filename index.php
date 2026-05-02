@@ -886,7 +886,7 @@ img.dashboard-screen{
         <div class="row align-items-center g-5">
             <div class="col-lg-6" data-aos="fade-right">
                 <h1>Control the <span class="text-yellow">Process.</span><br>Command the <span class="text-yellow">Project.</span></h1>
-                <p>Construction Management Software built for real sites - by UKB Construction Management</p>
+                <p>Construction Management Software built for real sites <br>- by UKB Construction Management</p>
 
                 <div class="hero-points">
                     <div><i class="fa-solid fa-shield-halved"></i> Real-time Tracking</div>

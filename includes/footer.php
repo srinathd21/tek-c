@@ -31,7 +31,7 @@
                 <a href="features.php">Features</a>
                 <a href="modules.php">Modules</a>
 
-                <a href="pricing.php">Pricing</a>
+                
             </div>
 
             <div class="col-lg-2 col-6">
