@@ -6,7 +6,7 @@
                    
                     <div class="logo-text">
                         <img src="assets/logo.png" alt="" width="50">
-                        <span class="mt-2">Construction Management Software</span>
+                  
                     </div>
                 </div>
                 <p style="font-size:14px;color:#ccc;">Control the Process. Command the Project.</p>

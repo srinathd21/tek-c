@@ -32,7 +32,7 @@ function activeMenu($page, $currentPage)
     }
     .logo-text>span {
         font-size: 15px !important;
-        letter-spacing: 4px;
+        letter-spacing: 1px;
     }
     @media(max-width:991px) {
         section {
@@ -69,7 +69,7 @@ function activeMenu($page, $currentPage)
                     <span>TEK</span>
                     <span>-C</span>
                 </div>
-                <span>Global</span>
+                <span>GLOBAL</span>
             </div>
         </a>
 

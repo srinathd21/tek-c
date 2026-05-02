@@ -877,7 +877,7 @@ img.dashboard-screen{
         <div class="row align-items-center g-5">
             <div class="col-lg-6" data-aos="fade-right">
                 <h1>Control the <span class="text-yellow">Process.</span><br>Command the <span class="text-yellow">Project.</span></h1>
-                <p>Construction Management Software built for real sites, live tracking, daily reporting, approvals, procurement, workforce and project control.</p>
+                <p>Construction Management Software built for real sites - by UKB Construction Management</p>
 
                 <div class="hero-points">
                     <div><i class="fa-solid fa-shield-halved"></i> Real-time Tracking</div>
@@ -887,7 +887,7 @@ img.dashboard-screen{
                 </div>
 
                 <div class="hero-buttons">
-                    <a href="#contact" class="btn btn-yellow pulse"><i class="fa-regular fa-calendar me-2"></i> Book Live Demo <i class="fa-solid fa-arrow-right ms-2"></i></a>
+                    <a href="tel:" class="btn btn-yellow pulse"><i class="fa-solid fa-mobile me-2"></i> Contact us <i class="fa-solid fa-arrow-right ms-2"></i></a>
                     <a href="#dashboard" class="btn btn-outline-light-custom">See Dashboard <i class="fa-regular fa-circle-play ms-2"></i></a>
                 </div>
             </div>
@@ -905,8 +905,8 @@ img.dashboard-screen{
     <div class="container">
         <h2 class="section-title" data-aos="fade-up">Construction Projects Don’t Fail in Design... They Fail in Execution</h2>
 
-        <div class="row g-4">
-            <div class="col-lg col-md-4 col-6" data-aos="fade-up">
+        <div class="row g-4 text-center">
+            <div class="col-lg col-md-6 col-6" data-aos="fade-up">
                 <div class="problem-card">
                     <div class="icon-circle"><i class="fa-brands fa-whatsapp"></i></div>
                     <h5>Updates lost in WhatsApp groups</h5>
@@ -914,7 +914,7 @@ img.dashboard-screen{
                 </div>
             </div>
 
-            <div class="col-lg col-md-4 col-6" data-aos="fade-up" data-aos-delay="80">
+            <div class="col-lg col-md-6 col-6" data-aos="fade-up" data-aos-delay="80">
                 <div class="problem-card">
                     <div class="icon-circle"><i class="fa-regular fa-clock"></i></div>
                     <h5>Delays due to unclear instructions</h5>
@@ -922,7 +922,7 @@ img.dashboard-screen{
                 </div>
             </div>
 
-            <div class="col-lg col-md-4 col-6" data-aos="fade-up" data-aos-delay="160">
+            <div class="col-lg col-md-6 col-6" data-aos="fade-up" data-aos-delay="160">
                 <div class="problem-card">
                     <div class="icon-circle"><i class="fa-regular fa-eye-slash"></i></div>
                     <h5>No visibility on real progress</h5>
@@ -930,7 +930,7 @@ img.dashboard-screen{
                 </div>
             </div>
 
-            <div class="col-lg col-md-4 col-6" data-aos="fade-up" data-aos-delay="240">
+            <div class="col-lg col-md-6 col-6" data-aos="fade-up" data-aos-delay="240">
                 <div class="problem-card">
                     <div class="icon-circle"><i class="fa-solid fa-indian-rupee-sign"></i></div>
                     <h5>Cost overruns from poor tracking</h5>
@@ -938,7 +938,7 @@ img.dashboard-screen{
                 </div>
             </div>
 
-            <div class="col-lg col-md-4 col-12" data-aos="fade-up" data-aos-delay="320">
+            <div class="col-lg col-md-12 col-12" data-aos="fade-up" data-aos-delay="320">
                 <div class="problem-card">
                     <div class="icon-circle"><i class="fa-solid fa-people-group"></i></div>
                     <h5>Confusion in vendor coordination</h5>
@@ -1108,7 +1108,7 @@ UKB Construction Management.</p>
 
             <div class="col-lg-5" data-aos="zoom-in">
                 <div class="dashboard-device">
-                    <img src="assets/progress.png" class="dashboard-screen" alt="Progress">
+                    <img src="assets/erp.png" class="dashboard-screen" alt="Progress">
                 </div>
             </div>
 
@@ -1228,7 +1228,7 @@ UKB Construction Management.</p>
     </div>
 </section>
 
-<section class="pricing" id="pricing">
+<!-- <section class="pricing" id="pricing">
     <div class="container">
         <h2 class="section-title" data-aos="fade-up">Simple Plans for Every Construction Business</h2>
         <p class="section-subtitle" data-aos="fade-up">Choose the right package based on your project size, team size and reporting needs.</p>
@@ -1280,14 +1280,14 @@ UKB Construction Management.</p>
             </div>
         </div>
     </div>
-</section>
+</section> -->
 
 <section class="final-cta" id="contact">
     <div class="container text-center" data-aos="zoom-in">
         <h2>Ready to Take Control of Your Projects?</h2>
         <p>See your project inside TEK-C and understand how it can improve your execution workflow.</p>
         <div class="d-flex justify-content-center gap-3 flex-wrap">
-            <a href="tel:+919876543210" class="btn btn-dark-custom">Book Your Live Demo <i class="fa-solid fa-arrow-right ms-2"></i></a>
+            <!-- <a href="tel:+919876543210" class="btn btn-dark-custom">Book Your Live Demo <i class="fa-solid fa-arrow-right ms-2"></i></a> -->
             <a href="mailto:info@tekcsoftware.com" class="btn btn-outline-dark fw-bold px-4 py-3 rounded-3">Contact Us <i class="fa-solid fa-arrow-right ms-2"></i></a>
         </div>
     </div>
