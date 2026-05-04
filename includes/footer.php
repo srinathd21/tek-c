@@ -1,6 +1,6 @@
 <footer class="footer">
     <div class="container">
-        <div class="row g-4">
+        <div class="row g-4" id="footer-container">
             <div class="col-lg-3">
                 <div class="logo mb-3">
 
@@ -17,7 +17,7 @@
                         </a>
                     </div>
                 </div>
-                <p style="font-size:14px;color:#ccc;">Control the Process. Command the Project.</p>
+                <!-- <p style="font-size:14px;color:#ccc;">Control the Process. Command the Project.</p> -->
                 <div class="social">
                     <a href="#"><i class="fab fa-linkedin-in"></i></a>
                     <a href="#"><i class="fab fa-instagram"></i></a>

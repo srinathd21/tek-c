@@ -1201,19 +1201,9 @@ UKB Construction Management.</p>
 <section class="authority" id="modules">
     <div class="container">
         <div class="row g-5 align-items-center">
-            <div class="col-lg-2" data-aos="fade-right">
-                <div class="ukb-box">
-                    <div class="ukb-logo d-flex">
-                        <img src="assets/ukb.png" alt="" width="100">
-                        <div>
-                            <span class="text-yellow">UKB</span><br>
-                        <small style="font-size:14px;">CONSTRUCTION<br>MANAGEMENT</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
+           
 
-            <div class="col-lg-4" data-aos="fade-up">
+            <div class="col-lg-6" data-aos="fade-up">
                 <h2 style="font-weight:900;">Backed by Real Projects. Not Theory.</h2>
                 <p>Developed and tested across multiple live projects handled by <b>UKB Construction Management</b>.</p>
                 <ul class="check-list">

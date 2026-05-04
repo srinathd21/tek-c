@@ -23,25 +23,53 @@ function activeMenu($page, $currentPage)
         font-size: 15px !important;
         margin-top: 5px;
     }
-    .logo-text-span>span:nth-child(1),.logo-text-span>span:nth-child(2){
+
+    .logo-text-span>span:nth-child(1),
+    .logo-text-span>span:nth-child(2) {
         font-size: 20px;
         font-weight: 700;
     }
-    .logo-text-span>span:nth-child(2){
+
+    .logo-text-span>span:nth-child(2) {
         color: #fbb938;
     }
+
     .logo-text>span {
         font-size: 15px !important;
         letter-spacing: 1px;
     }
-     #login-btn-mobile{
-            display: none;
-        }
+
+    #login-btn-mobile {
+        display: none;
+    }
+
+    #footer-container>div {
+        position: relative;
+    }
+
+    #footer-container>div::before {
+        content: "";
+        position: absolute;
+        left: -50px;
+        top: 0;
+        height: 100%;
+        border-left: 1px solid #343434;
+    }
+
+    /* Remove border for first item */
+    #footer-container>div:first-child::before {
+        border-left: none;
+    }
+
     @media(max-width:991px) {
+        
+
         section {
             overflow-x: hidden;
         }
-
+        #footer-container>div::before {
+            border-left: none;
+        }
         #login-btn {
             margin: 10px 0px;
             position: relative;
@@ -61,7 +89,8 @@ function activeMenu($page, $currentPage)
             background-color: white;
             font-size: 10px;
         }
-        #login-btn-mobile{
+
+        #login-btn-mobile {
             display: block;
         }
     }
@@ -78,10 +107,10 @@ function activeMenu($page, $currentPage)
                 <span>GLOBAL</span>
             </div>
         </a>
-         <a href="erp/" id="login-btn-mobile"
-                class="btn btn-yellow mx-3 py-2 px-4 <?php echo activeMenu('book-demo.php', $currentPage); ?>">
-                Login
-            </a>
+        <a href="erp/" id="login-btn-mobile"
+            class="btn btn-yellow mx-3 py-2 px-4 <?php echo activeMenu('book-demo.php', $currentPage); ?>">
+            Login
+        </a>
         <button id="toggle-btn" class="navbar-toggler bg-light" type="button" data-bs-toggle="collapse"
             data-bs-target="#navMenu">
             <i class="fa-solid fa-bars"></i>
@@ -118,6 +147,6 @@ function activeMenu($page, $currentPage)
                 Login
             </a>
         </div>
-        
+
     </div>
 </nav>

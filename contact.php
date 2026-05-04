@@ -495,15 +495,16 @@ body{
     <div class="container">
         <h3>Frequently asked questions</h3>
         <p class="mb-4">Quick answers to common questions. Or <a href="#contact" class="text-yellow">contact support directly.</a></p>
-        <div class="row justify-content-center text-start">
-            <div class="col-md-5">
+        <div class="row justify-content-center  text-center">
+            <div class="col-6">
                 <div class="mb-3"><strong>❓ How fast is support response?</strong><br>Typical response within 2-4 business hours.</div>
+                
+            </div>
+            <div class="col-6">
+               
                 <div><strong>❓ Do you offer onsite training?</strong><br>Yes, for Enterprise plans we provide onsite onboarding.</div>
             </div>
-            <div class="col-md-5">
-                <div class="mb-3"><strong>❓ Is there a free trial?</strong><br>Absolutely. 14-day trial with full access.</div>
-                <div><strong>❓ Can I get a custom quote?</strong><br>Yes, contact our sales team for volume pricing.</div>
-            </div>
+           
         </div>
     </div>
 </section>

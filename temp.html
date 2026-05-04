@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infinity Katalyst Engineering</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+<link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<style>
+:root{
+    --navy:#061b3a;
+    --navy2:#082348;
+    --orange:#ef7723;
+    --orange2:#f7943d;
+    --light:#f7f9fc;
+    --text:#10172f;
+    --muted:#637083;
+}
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'Inter',sans-serif;
+    color:var(--text);
+    background:#fff;
+    overflow-x:hidden;
+}
+
+a{
+    text-decoration:none;
+}
+
+.navbar{
+    height:86px;
+    background:#fff;
+    box-shadow:0 4px 18px rgba(8,25,55,.08);
+    z-index:999;
+}
+
+.logo-wrap{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.logo-mark{
+    font-size:42px;
+    font-weight:900;
+    font-style:italic;
+    letter-spacing:-4px;
+    line-height:1;
+}
+
+.logo-mark .blue{color:var(--navy);}
+.logo-mark .orange{color:var(--orange);}
+
+.logo-text{
+    border-left:1px solid #ddd;
+    padding-left:12px;
+    font-size:12px;
+    letter-spacing:4px;
+    font-weight:800;
+    line-height:1.3;
+    color:var(--navy);
+}
+
+.nav-link{
+    color:#1d2940!important;
+    font-weight:700;
+    font-size:14px;
+    margin:0 10px;
+    position:relative;
+}
+
+.nav-link.active::after,
+.nav-link:hover::after{
+    content:"";
+    position:absolute;
+    left:10px;
+    bottom:-9px;
+    width:34px;
+    height:3px;
+    background:var(--orange);
+    border-radius:20px;
+}
+
+.btn-orange{
+    background:linear-gradient(135deg,var(--orange),var(--orange2));
+    color:#fff;
+    border:0;
+    font-weight:800;
+    border-radius:8px;
+    padding:12px 24px;
+    box-shadow:0 8px 22px rgba(239,119,35,.28);
+}
+
+.btn-orange:hover{
+    color:#fff;
+    transform:translateY(-2px);
+}
+
+.btn-navy{
+    background:var(--navy);
+    color:#fff;
+    border-radius:8px;
+    padding:12px 32px;
+    font-weight:800;
+}
+
+.btn-navy:hover{
+    background:#0b2b59;
+    color:#fff;
+}
+
+.hero{
+    min-height:520px;
+    padding-top:86px;
+    background:
+    linear-gradient(90deg,rgba(255,255,255,.96) 0%,rgba(255,255,255,.88) 36%,rgba(255,255,255,.25) 62%,rgba(255,255,255,.02) 100%),
+    url("https://images.unsplash.com/photo-1581093588401-fbb62a02f120?auto=format&fit=crop&w=1800&q=80");    background-size:cover;
+    background-position:center;
+    display:flex;
+    align-items:center;
+}
+
+.hero-content{
+    max-width:760px;
+}
+
+.tag{
+    display:inline-block;
+    background:var(--orange);
+    color:#fff;
+    padding:6px 20px;
+    border-radius:5px;
+    font-size:14px;
+    font-weight:900;
+    letter-spacing:2px;
+    margin-bottom:18px;
+}
+
+.hero h1{
+    font-size:64px;
+    line-height:1.05;
+    font-weight:900;
+    color:var(--navy);
+    letter-spacing:-2px;
+    margin-bottom:22px;
+}
+
+.hero p{
+    font-size:20px;
+    color:#24304a;
+    font-weight:700;
+    max-width:760px;
+    margin-bottom:24px;
+}
+
+.hero-points{
+    display:flex;
+    gap:30px;
+    flex-wrap:wrap;
+    margin-bottom:28px;
+}
+
+.hero-point{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding-right:28px;
+    border-right:1px solid #d7dce5;
+}
+
+.hero-point:last-child{
+    border-right:0;
+}
+
+.hero-point i{
+    width:40px;
+    height:40px;
+    background:var(--navy);
+    color:#fff;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+.hero-point span{
+    font-weight:800;
+    color:var(--navy);
+    font-size:14px;
+    line-height:1.2;
+}
+
+.section{
+    padding:60px 0;
+}
+
+.about-img{
+    height:250px;
+    border-radius:18px;
+    overflow:hidden;
+}
+
+.about-img img,
+.factory-img img,
+.industry-card img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+}
+
+.section-kicker{
+    color:var(--orange);
+    font-size:12px;
+    font-weight:900;
+    letter-spacing:2px;
+    text-transform:uppercase;
+}
+
+.section-title{
+    color:var(--navy);
+    font-size:28px;
+    font-weight:900;
+    margin-bottom:14px;
+}
+
+.about p{
+    color:#445064;
+    font-weight:500;
+    line-height:1.7;
+}
+
+.mini-features{
+    display:flex;
+    gap:20px;
+    flex-wrap:wrap;
+    margin-top:22px;
+}
+
+.mini-feature{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-weight:800;
+    color:var(--navy);
+    font-size:14px;
+}
+
+.mini-feature i{
+    width:34px;
+    height:34px;
+    border:1px solid #d9e0ea;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--navy);
+}
+
+.service-card{
+    border:0;
+    border-radius:14px;
+    background:#fff;
+    padding:24px;
+    height:100%;
+    box-shadow:0 8px 28px rgba(12,31,63,.08);
+    transition:.3s;
+}
+
+.service-card:hover{
+    transform:translateY(-7px);
+    box-shadow:0 14px 38px rgba(12,31,63,.14);
+}
+
+.service-card i{
+    font-size:36px;
+    color:var(--navy);
+    margin-bottom:16px;
+}
+
+.service-card h5{
+    font-size:16px;
+    font-weight:900;
+    color:var(--navy);
+}
+
+.service-card p{
+    font-size:13px;
+    color:#566274;
+    margin:0;
+    line-height:1.5;
+}
+
+.why{
+    background:#f8fafc;
+}
+
+.why-card{
+    text-align:center;
+    padding:26px 16px;
+    border-right:1px solid #dde3ec;
+    height:100%;
+}
+
+.why-card:last-child{
+    border-right:0;
+}
+
+.why-card i{
+    font-size:34px;
+    color:var(--orange);
+    margin-bottom:15px;
+}
+
+.why-card h6{
+    font-weight:900;
+    color:var(--navy);
+    font-size:15px;
+}
+
+.why-card p{
+    color:#596578;
+    font-size:13px;
+    line-height:1.45;
+    margin:0;
+}
+
+.factory-img{
+    height:240px;
+    border-radius:18px;
+    overflow:hidden;
+}
+
+.industry-card{
+    height:120px;
+    border-radius:14px;
+    overflow:hidden;
+    position:relative;
+    color:#fff;
+}
+
+.industry-card::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:linear-gradient(90deg,rgba(6,27,58,.88),rgba(6,27,58,.35));
+    z-index:1;
+}
+
+.industry-content{
+    position:absolute;
+    inset:0;
+    z-index:2;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    padding:24px;
+}
+
+.industry-content i{
+    width:52px;
+    height:52px;
+    background:var(--navy);
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:22px;
+}
+
+.industry-content h5{
+    margin:0;
+    font-weight:900;
+}
+
+.industry-tabs{
+    display:flex;
+    justify-content:space-around;
+    align-items:center;
+    gap:12px;
+    padding:26px 0;
+    flex-wrap:wrap;
+}
+
+.industry-tab{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    color:var(--navy);
+    font-weight:800;
+    font-size:14px;
+}
+
+.industry-tab i{
+    color:var(--orange);
+    font-size:24px;
+}
+
+.cta-footer{
+    background:
+        linear-gradient(rgba(6,27,58,.86),rgba(6,27,58,.92)),
+        url("https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1600&q=80");
+    background-size:cover;
+    background-position:center;
+    color:#fff;
+}
+
+.cta-bar{
+    padding:42px 0;
+    border-bottom:1px solid rgba(255,255,255,.12);
+}
+
+.cta-bar h2{
+    font-size:32px;
+    font-weight:900;
+    margin:0;
+}
+
+.footer-main{
+    padding:42px 0 30px;
+    background:#061b3a;
+}
+
+.footer-logo .logo-mark{
+    font-size:48px;
+}
+
+.footer-logo .logo-text{
+    color:#fff;
+    border-color:rgba(255,255,255,.25);
+}
+
+.footer-desc{
+    color:#b8c4d8;
+    font-size:14px;
+    line-height:1.7;
+    margin-top:18px;
+}
+
+.footer-title{
+    color:#fff;
+    font-weight:900;
+    font-size:14px;
+    margin-bottom:18px;
+}
+
+.footer-links a,
+.footer-contact div{
+    display:block;
+    color:#c8d3e4;
+    font-size:14px;
+    margin-bottom:10px;
+}
+
+.footer-contact i{
+    color:#fff;
+    width:20px;
+}
+
+.footer-bottom{
+    border-top:1px solid rgba(255,255,255,.1);
+    padding-top:18px;
+    color:#9dacbf;
+    font-size:13px;
+}
+
+@media(max-width:991px){
+    .navbar{
+        height:auto;
+    }
+    .hero{
+        padding-top:110px;
+        min-height:auto;
+        padding-bottom:60px;
+    }
+    .hero h1{
+        font-size:42px;
+    }
+    .hero p{
+        font-size:16px;
+    }
+    .hero-point{
+        border-right:0;
+    }
+}
+
+@media(max-width:575px){
+    .hero h1{
+        font-size:34px;
+    }
+    .logo-mark{
+        font-size:34px;
+    }
+    .logo-text{
+        font-size:10px;
+        letter-spacing:2px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<nav class="navbar navbar-expand-lg fixed-top">
+    <div class="container-fluid px-lg-5">
+        <a class="navbar-brand logo-wrap" href="#">
+            <div class="logo-mark"><span class="blue">IK</span><span class="orange">E</span></div>
+            <div class="logo-text">
+                INFINITY KATALYST<br>ENGINEERING
+            </div>
+        </a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="mainNav">
+            <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
+                <li class="nav-item"><a class="nav-link active" href="#home">Home</a></li>
+                <li class="nav-item"><a class="nav-link" href="#about">About</a></li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#services" data-bs-toggle="dropdown">Services</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#services">CQV</a></li>
+                        <li><a class="dropdown-item" href="#services">Process Optimization</a></li>
+                        <li><a class="dropdown-item" href="#services">CSV Validation</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item"><a class="nav-link" href="#industries">Industries</a></li>
+                <li class="nav-item"><a class="nav-link" href="#why">Why Choose Us</a></li>
+                <li class="nav-item"><a class="nav-link" href="#contact">Contact</a></li>
+            </ul>
+
+            <a href="#contact" class="btn btn-orange">Get Consultation <i class="fa-solid fa-chevron-right ms-2"></i></a>
+        </div>
+    </div>
+</nav>
+
+<section class="hero" id="home">
+    <div class="container-fluid px-lg-5">
+        <div class="hero-content" data-aos="fade-right">
+            <span class="tag">END-TO-END</span>
+            <h1>End-to-End<br>Engineering Experts</h1>
+            <p>Precision-led engineering, CQV, process optimization, and regulatory excellence for regulated industries.</p>
+
+            <div class="hero-points">
+                <div class="hero-point">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>Regulatory<br>Excellence</span>
+                </div>
+                <div class="hero-point">
+                    <i class="fa-solid fa-check"></i>
+                    <span>Risk-Based<br>Validation</span>
+                </div>
+                <div class="hero-point">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>Operational<br>Excellence</span>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-3">
+                <a href="#services" class="btn btn-navy">Explore Our Services <i class="fa-solid fa-chevron-right ms-3"></i></a>
+                <a href="#contact" class="btn btn-outline-warning px-4 fw-bold">Get Consultation <i class="fa-solid fa-chevron-right ms-3"></i></a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section about" id="about">
+    <div class="container-fluid px-lg-5">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-5" data-aos="fade-right">
+                <div class="about-img">
+                    <img src="https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=900&q=80" alt="">
+                </div>
+            </div>
+
+            <div class="col-lg-7" data-aos="fade-left">
+                <div class="section-kicker">Who We Are</div>
+                <h2 class="section-title">Engineering with Purpose</h2>
+                <p>Infinity Katalyst Engineering (IKE) is a specialized engineering and consulting firm delivering precision-led solutions for regulated industries.</p>
+                <p>We partner with organizations to ensure operational excellence, regulatory compliance, and sustainable performance.</p>
+
+                <div class="mini-features">
+                    <div class="mini-feature"><i class="fa-solid fa-shield-heart"></i> Regulatory Expertise</div>
+                    <div class="mini-feature"><i class="fa-solid fa-check"></i> Risk-Based Approach</div>
+                    <div class="mini-feature"><i class="fa-solid fa-people-arrows"></i> End-to-End Execution</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section pt-0" id="services">
+    <div class="container-fluid px-lg-5">
+        <div class="text-center mb-4">
+            <div class="section-kicker">Our Integrated Engineering Services</div>
+            <h2 class="section-title">Solutions That Drive Compliance & Performance</h2>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4" data-aos="zoom-in">
+                <div class="service-card">
+                    <i class="fa-solid fa-clipboard-check"></i>
+                    <h5>Commissioning, Qualification & Validation (CQV)</h5>
+                    <p>Systems and equipment designed, tested, and validated to ensure regulatory compliance.</p>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
+                <div class="service-card">
+                    <i class="fa-solid fa-gear"></i>
+                    <h5>Process Optimization</h5>
+                    <p>Enhancing efficiency, productivity, and consistency across manufacturing processes.</p>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="200">
+                <div class="service-card">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <h5>FDA & EMA Compliance Support</h5>
+                    <p>Guiding organizations through complex regulatory frameworks to achieve and maintain compliance.</p>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-4" data-aos="zoom-in">
+                <div class="service-card">
+                    <i class="fa-solid fa-database"></i>
+                    <h5>Data Integrity & Computer System Validation (CSV)</h5>
+                    <p>Ensuring accuracy, reliability, and compliance of digital systems and data processes.</p>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
+                <div class="service-card">
+                    <i class="fa-solid fa-robot"></i>
+                    <h5>Process Automation</h5>
+                    <p>Integrating advanced automation solutions to improve control, efficiency, and scalability.</p>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="200">
+                <div class="service-card">
+                    <i class="fa-solid fa-users-gear"></i>
+                    <h5>Integrated Engineering Services</h5>
+                    <p>End-to-end engineering services from concept to commissioning and beyond.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section why" id="why">
+    <div class="container-fluid px-lg-5">
+        <div class="section-kicker">Why Choose IKE</div>
+        <h2 class="section-title">Your Trusted Engineering Partner</h2>
+
+        <div class="row g-0 align-items-stretch">
+            <div class="col-md-6 col-lg-2" data-aos="fade-up">
+                <div class="why-card">
+                    <i class="fa-regular fa-shield-check"></i>
+                    <h6>Proven Expertise</h6>
+                    <p>Deep expertise in regulated environments across industries.</p>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-2" data-aos="fade-up" data-aos-delay="100">
+                <div class="why-card">
+                    <i class="fa-regular fa-clipboard-list"></i>
+                    <h6>Compliance & Audit Readiness</h6>
+                    <p>Strong focus on compliance and audit readiness.</p>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-2" data-aos="fade-up" data-aos-delay="200">
+                <div class="why-card">
+                    <i class="fa-solid fa-cubes"></i>
+                    <h6>Customized Solutions</h6>
+                    <p>Customized, scalable engineering solutions to fit your business needs.</p>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-2" data-aos="fade-up" data-aos-delay="300">
+                <div class="why-card">
+                    <i class="fa-solid fa-gauge-high"></i>
+                    <h6>Efficient Execution</h6>
+                    <p>Efficient project execution with reduced risk.</p>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-2" data-aos="fade-up" data-aos-delay="400">
+                <div class="why-card">
+                    <i class="fa-solid fa-book-open"></i>
+                    <h6>Regulatory Knowledge</h6>
+                    <p>Extensive knowledge of global regulatory standards.</p>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-2" data-aos="fade-up" data-aos-delay="500">
+                <div class="why-card">
+                    <i class="fa-regular fa-handshake"></i>
+                    <h6>End-to-End Delivery</h6>
+                    <p>End-to-end project execution from planning to performance.</p>
+                </div>
+            </div>
+        </div>
+
+        
+    </div>
+</section>
+
+<section class="section" id="industries">
+    <div class="container-fluid px-lg-5">
+        <div class="text-center mb-4">
+            <div class="section-kicker">Industries We Serve</div>
+            <h2 class="section-title">Expertise Across Regulated Industries</h2>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-md-4" data-aos="fade-up">
+                <div class="industry-card">
+                    <img src="https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=800&q=80">
+                    <div class="industry-content">
+                        <i class="fa-solid fa-flask"></i>
+                        <h5>Biopharma</h5>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
+                <div class="industry-card">
+                    <img src="https://images.unsplash.com/photo-1587854692152-cbe660dbde88?auto=format&fit=crop&w=800&q=80">
+                    <div class="industry-content">
+                        <i class="fa-solid fa-capsules"></i>
+                        <h5>Pharmaceutical</h5>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
+                <div class="industry-card">
+                    <img src="https://images.unsplash.com/photo-1589927986089-35812388d1f4?auto=format&fit=crop&w=800&q=80">
+                    <div class="industry-content">
+                        <i class="fa-solid fa-wheat-awn"></i>
+                        <h5>Food Processing</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mb-4">
+            <a href="#services" class="btn btn-orange">Explore All Services <i class="fa-solid fa-arrow-right ms-2"></i></a>
+        </div>
+
+        <div class="text-center">
+            <div class="section-kicker">Industries We Serve</div>
+            <h2 class="section-title">Supporting Critical Industries</h2>
+        </div>
+
+        <div class="industry-tabs">
+            <div class="industry-tab"><i class="fa-solid fa-capsules"></i> Biopharma</div>
+            <div class="industry-tab"><i class="fa-solid fa-vials"></i> Pharmaceutical</div>
+            <div class="industry-tab"><i class="fa-solid fa-utensils"></i> Food Processing</div>
+            <div class="industry-tab"><i class="fa-regular fa-heart-pulse"></i> Medical Devices</div>
+            <div class="industry-tab"><i class="fa-brands fa-pagelines"></i> Nutraceuticals</div>
+        </div>
+    </div>
+</section>
+
+<footer class="cta-footer" id="contact">
+    <div class="container-fluid px-lg-5">
+        <div class="cta-bar d-flex justify-content-between align-items-center flex-wrap gap-4">
+            <div>
+                <h2>Let’s Build a Smarter,<br>Compliant, and Sustainable Future.</h2>
+                <p class="mb-0 mt-2">Partner with IKE for engineering solutions that drive performance and purpose.</p>
+            </div>
+            <a href="#" class="btn btn-orange">Get in Touch <i class="fa-solid fa-arrow-right ms-2"></i></a>
+        </div>
+    </div>
+
+    <div class="footer-main">
+        <div class="container-fluid px-lg-5">
+            <div class="row g-4">
+                <div class="col-lg-3">
+                    <div class="footer-logo logo-wrap">
+                        <div class="logo-mark"><span class="blue text-white">IK</span><span class="orange">E</span></div>
+                        <div class="logo-text">
+                            INFINITY KATALYST<br>ENGINEERING
+                        </div>
+                    </div>
+                    <p class="footer-desc">Engineering possibilities. Delivered with precision, compliance, and purpose.</p>
+                </div>
+
+                <div class="col-lg-3">
+                    <div class="footer-title">QUICK LINKS</div>
+                    <div class="row">
+                        <div class="col-6 footer-links">
+                            <a href="#home">Home</a>
+                            <a href="#about">About Us</a>
+                            <a href="#services">Services</a>
+                            <a href="#industries">Industries</a>
+                        </div>
+                        <div class="col-6 footer-links">
+                            <a href="#">Insights</a>
+                            <a href="#">Careers</a>
+                            <a href="#contact">Contact Us</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-2">
+                    <div class="footer-title">SERVICES</div>
+                    <div class="footer-links">
+                        <a href="#services">CQV</a>
+                        <a href="#services">Process Optimization</a>
+                        <a href="#services">Compliance Support</a>
+                        <a href="#services">CSV Validation</a>
+                        <a href="#services">Process Automation</a>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="footer-title">CONTACT US</div>
+                    <div class="footer-contact">
+                        <div><i class="fa-solid fa-phone"></i> 97867 42263</div>
+                        <div><i class="fa-solid fa-envelope"></i> infinitykatalystengineering@gmail.com</div>
+                        <div><i class="fa-solid fa-globe"></i> infinitykatalyst.com</div>
+                        <div><i class="fa-solid fa-location-dot"></i> Dharmapuri, India</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom d-flex justify-content-between align-items-center flex-wrap gap-2 mt-4">
+                <div>© 2025 Infinity Katalyst Engineering (IKE). All Rights Reserved.</div>
+                <div>Privacy Policy &nbsp; | &nbsp; Terms of Use</div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+
+<script>
+AOS.init({
+    duration: 900,
+    once: true,
+    offset: 80
+});
+
+document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', function () {
+        document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'));
+        this.classList.add('active');
+    });
+});
+</script>
+
+</body>
+</html>
