@@ -719,7 +719,7 @@ img.dashboard-screen{
 }
 
 .product-box{
-    border-left:1px solid #333;
+    
     padding-left:40px;
 }
 
