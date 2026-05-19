@@ -473,7 +473,7 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                         <a href="apply-leave.php" class="btn-action">
                             <i class="bi bi-calendar-plus"></i> Apply Leave
                         </a>
-                        <a href="my-leaves.php" class="btn-action">
+                        <a href="leave-requests.php" class="btn-action">
                             <i class="bi bi-list-check"></i> My Leaves
                         </a>
                     </div>

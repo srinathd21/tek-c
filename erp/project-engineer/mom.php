@@ -1030,21 +1030,48 @@ $defaultPmc = "M/s. UKB Construction Management Pvt Ltd";
                         </div>
 
                         <div class="grid-3">
-                            <div>
-                                <label class="form-label">MOM No / Revision</label>
-                                <input type="text" class="form-control" name="revisions" placeholder="e.g., MOM #22" value="<?php echo pv('revisions', $formRevisions); ?>">
-                            </div>
-                            <div>
-                                <label class="form-label">MOM Date</label>
-                                <input type="date" class="form-control" name="mom_date" value="<?php echo pv('mom_date', $formMOMDate); ?>">
-                            </div>
+
+    <div>
+        <label class="form-label">MOM No</label>
+        <input
+            type="text"
+            class="form-control"
+            name="mom_no"
+            value="<?php echo e($formMomNo); ?>"
+            readonly
+        >
+    </div>
+
+    <div>
+        <label class="form-label">MOM No / Revision</label>
+        <input
+            type="text"
+            class="form-control"
+            name="revisions"
+            placeholder="e.g., REV-01"
+            value="<?php echo pv('revisions', $formRevisions); ?>"
+        >
+    </div>
+
+    <div>
+        <label class="form-label">MOM Date</label>
+        <input
+            type="date"
+            class="form-control"
+            name="mom_date"
+            value="<?php echo pv('mom_date', $formMOMDate); ?>"
+        >
+    </div>
+
+</div>
+
+
+
+                        <div class="grid-3 mt-3">
                             <div>
                                 <label class="form-label">Issued Date</label>
                                 <input type="date" class="form-control" name="issued_date" value="<?php echo pv('issued_date', $formIssuedDate); ?>">
                             </div>
-                        </div>
-
-                        <div class="grid-2 mt-3">
                             <div>
                                 <label class="form-label">Date / Place</label>
                                 <input type="text" class="form-control" name="meeting_date_place" placeholder="e.g., 03-01-2026 & 04-01-2026 / Site" value="<?php echo pv('meeting_date_place', $formMeetingDatePlace); ?>">

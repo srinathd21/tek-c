@@ -90,20 +90,20 @@
 
 </div>
     <!-- Payroll -->
-    <a class="side-link" data-bs-toggle="collapse" href="#menuPayroll">
-      <i class="bi bi-cash-coin"></i><span class="label">Payroll</span>
-      <span class="ms-auto label"><i class="bi bi-chevron-down"></i></span>
-    </a>
+    <!--<a class="side-link" data-bs-toggle="collapse" href="#menuPayroll">-->
+    <!--  <i class="bi bi-cash-coin"></i><span class="label">Payroll</span>-->
+    <!--  <span class="ms-auto label"><i class="bi bi-chevron-down"></i></span>-->
+    <!--</a>-->
 
-    <div class="collapse ps-2" id="menuPayroll">
-      <a class="side-link" href="payroll.php">
-        <i class="bi bi-receipt"></i><span class="label">Payroll</span>
-      </a>
+    <!--<div class="collapse ps-2" id="menuPayroll">-->
+    <!--  <a class="side-link" href="payroll.php">-->
+    <!--    <i class="bi bi-receipt"></i><span class="label">Payroll</span>-->
+    <!--  </a>-->
 
-      <a class="side-link" href="payslips.php">
-        <i class="bi bi-file-earmark-text"></i><span class="label">Payslips</span>
-      </a>
-    </div>
+    <!--  <a class="side-link" href="payslips.php">-->
+    <!--    <i class="bi bi-file-earmark-text"></i><span class="label">Payslips</span>-->
+    <!--  </a>-->
+    <!--</div>-->
 
     <!-- Mail -->
     <a class="side-link" data-bs-toggle="collapse" href="#menuMail">
@@ -141,10 +141,6 @@
       </a>
     </div>
 
-    <!-- Reports Hub -->
-    <a class="side-link" href="reports-hub.php">
-      <i class="bi bi-bar-chart"></i><span class="label">Reports Hub</span>
-    </a>
     <!-- My Profile -->
 <a class="side-link" data-bs-toggle="collapse" href="#menuMyProfile">
   <i class="bi bi-person-circle"></i>
@@ -174,10 +170,10 @@
     <span class="label">My Leave History</span>
   </a>
 
-  <a class="side-link" href="salary-loan.php">
-    <i class="bi bi-cash-stack"></i>
-    <span class="label">Salary Loan</span>
-  </a>
+  <!--<a class="side-link" href="salary-loan.php">-->
+  <!--  <i class="bi bi-cash-stack"></i>-->
+  <!--  <span class="label">Salary Loan</span>-->
+  <!--</a>-->
 
 </div>
     <!-- Logout -->

@@ -492,14 +492,7 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                         <h1 class="h3 fw-bold text-dark mb-1">Attendance Regularization Requests</h1>
                         <p class="text-muted mb-0">Review and process employee attendance correction requests</p>
                     </div>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <a href="attendance.php" class="btn-action">
-                            <i class="bi bi-box-arrow-in-right"></i> Punch In/Out
-                        </a>
-                        <a href="manage-regulations.php" class="btn-action">
-                            <i class="bi bi-gear"></i> Manage Regulations
-                        </a>
-                    </div>
+                   
                 </div>
                 
                 <!-- Flash Messages -->

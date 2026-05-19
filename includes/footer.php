@@ -17,12 +17,14 @@
                         </a>
                     </div>
                 </div>
+
                 <!-- <p style="font-size:14px;color:#ccc;">Control the Process. Command the Project.</p> -->
+
                 <div class="social">
                     <a href="#"><i class="fab fa-linkedin-in"></i></a>
                     <a href="#"><i class="fab fa-instagram"></i></a>
                     <a href="#"><i class="fab fa-youtube"></i></a>
-                    <a href="#"><i class="fa-solid fa-envelope"></i></a>
+                    <a href="mailto:contact@tekcglobal.com"><i class="fa-solid fa-envelope"></i></a>
                 </div>
             </div>
 
@@ -30,8 +32,6 @@
                 <h5>PRODUCT</h5>
                 <a href="features.php">Features</a>
                 <a href="modules.php">Modules</a>
-
-                
             </div>
 
             <div class="col-lg-2 col-6">
@@ -39,7 +39,7 @@
                 <a href="about.php">About Us</a>
                 <a href="contact.php">Contact Us</a>
                 <a href="privacy-policy.php">Privacy Policy</a>
-                <a href="terms.php">Terms & Conditions</a>
+                <a href="terms.php">Terms &amp; Conditions</a>
             </div>
 
             <div class="col-lg-2 col-6">
@@ -53,9 +53,11 @@
                 <h5>A Product of</h5>
                 <div class="ukb-logo text-white">
                     <img src="assets/ukb-logo.jpeg" alt="" width="100"><br>
-
                 </div>
-                <p style="font-size:13px;color:#bbb;margin-top:12px;">© 2026 All Rights Reserved.</p>
+
+                <p style="font-size:13px;color:#bbb;margin-top:12px;">
+                    Developed from real construction projects by UKB Construction Management.
+                </p>
             </div>
         </div>
 

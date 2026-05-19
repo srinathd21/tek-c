@@ -709,7 +709,7 @@
         <div class="container">
             <div class="row g-5 align-items-center">
                 <div class="col-lg-6" data-aos="fade-right">
-                    <img src="https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?auto=format&fit=crop&w=900&q=80"
+                    <img src="Downloads/about.png"
                         class="story-img" alt="Construction project">
                 </div>
 

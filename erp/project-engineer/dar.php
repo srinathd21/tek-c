@@ -122,6 +122,40 @@ if (!hasColumn($conn, 'dar_reports', 'incharge')) {
   @mysqli_query($conn, "ALTER TABLE dar_reports ADD COLUMN incharge VARCHAR(120) NULL AFTER division");
 }
 
+// ---------------- Company Divisions ----------------
+// Division names are managed from company-settings.php.
+// This page only loads active division names and stores the selected name in dar_reports.division.
+mysqli_query($conn, "
+CREATE TABLE IF NOT EXISTS company_divisions (
+  id INT(11) NOT NULL AUTO_INCREMENT,
+  company_id INT(11) NOT NULL DEFAULT 1,
+  division_name VARCHAR(150) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY unique_company_division (company_id, division_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+");
+
+$divisionOptions = [];
+$divisionResult = mysqli_query($conn, "
+  SELECT division_name
+  FROM company_divisions
+  WHERE company_id = 1
+    AND is_active = 1
+    AND TRIM(division_name) <> ''
+  ORDER BY division_name ASC
+");
+if ($divisionResult) {
+  while ($drow = mysqli_fetch_assoc($divisionResult)) {
+    $dname = trim((string)($drow['division_name'] ?? ''));
+    if ($dname !== '') $divisionOptions[] = $dname;
+  }
+  mysqli_free_result($divisionResult);
+}
+$divisionOptions = array_values(array_unique($divisionOptions));
+
 // ---------------- Assigned Sites ----------------
 $sites = [];
 
@@ -310,6 +344,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_dar'])) {
   if ($error === '' && $site_id <= 0) $error = "Please choose a site.";
   if ($error === '' && $dar_no === '') $error = "DAR No is required.";
   if ($error === '' && $dar_date === '') $error = "DAR Date is required.";
+  if ($error === '' && $division === '') $error = "Please select a division.";
+  if ($error === '' && !empty($divisionOptions) && !in_array($division, $divisionOptions, true)) {
+    $error = "Invalid division selected. Please select from saved divisions.";
+  }
   if ($error === '' && $report_distribute_to === '') $error = "Report Distribute To is required.";
 
   // Activity rows (Planned / Achieved / Planned Tomorrow / Remarks)
@@ -392,8 +430,8 @@ $formSiteId = $siteId;
 $formDarNo  = $defaultDarNo;
 $formDarDate = date('Y-m-d');
 
-// default Division & Incharge (edit if you want different)
-$defaultDivision = "QS Division";
+// default Division & Incharge
+$defaultDivision = $_POST['division'] ?? ($divisionOptions[0] ?? '');
 $defaultIncharge = $preparedBy;
 
 if ($defaultDistribute === '' && $site) {
@@ -650,8 +688,22 @@ if ($defaultDistribute === '' && $site) {
 
             <div class="grid-2">
               <div>
-                <label class="form-label">Division</label>
-                <input class="form-control" name="division" value="<?php echo e($defaultDivision); ?>" placeholder="e.g. QS Division">
+                <label class="form-label">Division <span class="text-danger">*</span></label>
+                <select class="form-select" name="division" required>
+                  <option value="">-- Select Division --</option>
+                  <?php foreach ($divisionOptions as $divisionName): ?>
+                    <option value="<?php echo e($divisionName); ?>" <?php echo ($defaultDivision === $divisionName ? 'selected' : ''); ?>>
+                      <?php echo e($divisionName); ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+                <?php if (empty($divisionOptions)): ?>
+                  <div class="small-muted mt-1 text-danger">
+                    No divisions found. Add division names in Company Settings first.
+                  </div>
+                <?php else: ?>
+                  <div class="small-muted mt-1">Divisions are loaded from Company Settings.</div>
+                <?php endif; ?>
               </div>
               <div>
                 <label class="form-label">Incharge</label>
@@ -750,13 +802,16 @@ if ($defaultDistribute === '' && $site) {
             </div>
 
             <div class="d-flex justify-content-end mt-3">
-              <button type="submit" class="btn-primary-tek" <?php echo ($formSiteId<=0 ? 'disabled' : ''); ?>>
+              <button type="submit" class="btn-primary-tek" <?php echo (($formSiteId<=0 || empty($divisionOptions)) ? 'disabled' : ''); ?>>
                 <i class="bi bi-check2-circle"></i> Submit DAR
               </button>
             </div>
 
             <?php if ($formSiteId<=0): ?>
               <div class="small-muted mt-2"><i class="bi bi-info-circle"></i> Select a site above to enable submit.</div>
+            <?php endif; ?>
+            <?php if (empty($divisionOptions)): ?>
+              <div class="small-muted mt-2 text-danger"><i class="bi bi-info-circle"></i> Add divisions in Company Settings to enable submit.</div>
             <?php endif; ?>
           </div>
         </form>

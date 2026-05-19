@@ -178,12 +178,12 @@
       <a class="side-sublink" href="payslips.php">
         <i class="bi bi-receipt"></i><span class="label">Payslips</span>
       </a>
-      <a class="side-sublink" href="hr-policy.php">
-        <i class="bi bi-file-earmark-text"></i><span class="label">HR Policy</span>
-      </a>
-      <a class="side-sublink" href="salary-loan.php">
-        <i class="bi bi-cash-stack"></i><span class="label">Salary Loan Eligibility</span>
-      </a>
+      <!--<a class="side-sublink" href="hr-policy.php">-->
+      <!--  <i class="bi bi-file-earmark-text"></i><span class="label">HR Policy</span>-->
+      <!--</a>-->
+      <!--<a class="side-sublink" href="salary-loan.php">-->
+      <!--  <i class="bi bi-cash-stack"></i><span class="label">Salary Loan Eligibility</span>-->
+      <!--</a>-->
       <a class="side-sublink" href="attendance-regularization.php">
         <i class="bi bi-pencil-square"></i><span class="label">Attendance Regularization</span>
       </a>
@@ -196,24 +196,24 @@
     </div>
 
     <!-- ========== HR MASTER SECTION (NEW) ========== -->
-    <button class="side-link side-toggle" type="button"
-            id="hrMasterToggle"
-            aria-expanded="false"
-            aria-controls="hrMasterMenu"
-            title="HR Master">
-      <i class="bi bi-database-gear"></i>
-      <span class="label">HR Master</span>
-      <i class="bi bi-chevron-down chevron ms-auto"></i>
-    </button>
+    <!--<button class="side-link side-toggle" type="button"-->
+    <!--        id="hrMasterToggle"-->
+    <!--        aria-expanded="false"-->
+    <!--        aria-controls="hrMasterMenu"-->
+    <!--        title="HR Master">-->
+    <!--  <i class="bi bi-database-gear"></i>-->
+    <!--  <span class="label">HR Master</span>-->
+    <!--  <i class="bi bi-chevron-down chevron ms-auto"></i>-->
+    <!--</button>-->
 
-    <div class="side-submenu" id="hrMasterMenu" hidden>
-      <a class="side-sublink" href="manage-stakeholder-types.php">
-        <i class="bi bi-people-fill"></i><span class="label">Manage Stakeholder Types</span>
-      </a>
-      <a class="side-sublink" href="vfs_packages.php">
-        <i class="bi bi-box-seam"></i><span class="label">VFS Packages</span>
-      </a>
-    </div>
+    <!--<div class="side-submenu" id="hrMasterMenu" hidden>-->
+    <!--  <a class="side-sublink" href="manage-stakeholder-types.php">-->
+    <!--    <i class="bi bi-people-fill"></i><span class="label">Manage Stakeholder Types</span>-->
+    <!--  </a>-->
+    <!--  <a class="side-sublink" href="vfs_packages.php">-->
+    <!--    <i class="bi bi-box-seam"></i><span class="label">VFS Packages</span>-->
+    <!--  </a>-->
+    <!--</div>-->
 
     <!-- Logout -->
     <a class="side-link" href="logout.php" id="logoutLink">

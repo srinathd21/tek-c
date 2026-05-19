@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TEK-C Construction Management Software</title>
+<title>TEK-C Global - Construction Management Software</title>
 
 <?php include 'includes/link.php'; ?>
 
@@ -886,7 +886,7 @@ img.dashboard-screen{
         <div class="row align-items-center g-5">
             <div class="col-lg-6" data-aos="fade-right">
                 <h1>Control the <span class="text-yellow">Process.</span><br>Command the <span class="text-yellow">Project.</span></h1>
-                <p>Construction Management Software built for real sites <br>- by UKB Construction Management</p>
+                <p>Construction management software built for real sites <br>— by UKB Construction Management</p>
 
                 <div class="hero-points">
                     <div><i class="fa-solid fa-shield-halved"></i> Real-time Tracking</div>
@@ -896,7 +896,7 @@ img.dashboard-screen{
                 </div>
 
                 <div class="hero-buttons">
-                    <a href="tel:+91 78290 42156" class="btn btn-yellow pulse"><i class="fa-solid fa-mobile me-2"></i> Contact us <i class="fa-solid fa-arrow-right ms-2"></i></a>
+                    <a href="tel:+917829042156" class="btn btn-yellow pulse"><i class="fa-solid fa-mobile me-2"></i> Contact Us <i class="fa-solid fa-arrow-right ms-2"></i></a>
                     <a href="#dashboard" class="btn btn-outline-light-custom">See Dashboard <i class="fa-regular fa-circle-play ms-2"></i></a>
                 </div>
             </div>
@@ -912,13 +912,13 @@ img.dashboard-screen{
 
 <section class="problem">
     <div class="container">
-        <h2 class="section-title" data-aos="fade-up">Construction Projects Don’t Fail in Design... They Fail in Execution</h2>
+        <h2 class="section-title" data-aos="fade-up">Construction Projects Don’t Fail in Design. They Fail in Execution.</h2>
 
         <div class="row g-4 text-center">
             <div class="col-lg col-md-6 col-6" data-aos="fade-up">
                 <div class="problem-card">
                     <div class="icon-circle"><i class="fa-brands fa-whatsapp"></i></div>
-                    <h5>Updates lost in WhatsApp groups</h5>
+                    <h5>Updates get lost in WhatsApp groups</h5>
                     <p>Important information gets buried and missed.</p>
                 </div>
             </div>
@@ -927,15 +927,15 @@ img.dashboard-screen{
                 <div class="problem-card">
                     <div class="icon-circle"><i class="fa-regular fa-clock"></i></div>
                     <h5>Delays due to unclear instructions</h5>
-                    <p>No clear communication leads to rework.</p>
+                    <p>Poor communication leads to rework and delays.</p>
                 </div>
             </div>
 
             <div class="col-lg col-md-6 col-6" data-aos="fade-up" data-aos-delay="160">
                 <div class="problem-card">
                     <div class="icon-circle"><i class="fa-regular fa-eye-slash"></i></div>
-                    <h5>No visibility on real progress</h5>
-                    <p>Difficult to track actual site progress.</p>
+                    <h5>No visibility into real progress</h5>
+                    <p>It becomes difficult to track actual site progress.</p>
                 </div>
             </div>
 
@@ -943,7 +943,7 @@ img.dashboard-screen{
                 <div class="problem-card">
                     <div class="icon-circle"><i class="fa-solid fa-indian-rupee-sign"></i></div>
                     <h5>Cost overruns from poor tracking</h5>
-                    <p>Uncontrolled expenses eat into profits.</p>
+                    <p>Uncontrolled expenses reduce project profitability.</p>
                 </div>
             </div>
 
@@ -951,7 +951,7 @@ img.dashboard-screen{
                 <div class="problem-card">
                     <div class="icon-circle"><i class="fa-solid fa-people-group"></i></div>
                     <h5>Confusion in vendor coordination</h5>
-                    <p>No clarity on approvals and responsibilities.</p>
+                    <p>No clarity on approvals, responsibilities, and follow-ups.</p>
                 </div>
             </div>
         </div>
@@ -964,13 +964,13 @@ img.dashboard-screen{
             <div class="col-lg-5" data-aos="fade-right">
                 <h2>Introducing <span class="text-yellow">TEK-C</span> —<br>Your Construction<br>Command Center</h2>
                 <ul class="check-list">
-                    <li><i class="fa-solid fa-circle-check"></i> Real-time site tracking & updates</li>
-                    <li><i class="fa-solid fa-circle-check"></i> Structured DPR, MOM & RFI management</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Real-time site tracking and updates</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Structured DPR, MOM, and RFI management</li>
                     <li><i class="fa-solid fa-circle-check"></i> Clear approval workflows</li>
-                    <li><i class="fa-solid fa-circle-check"></i> Cost & procurement control</li>
+                    <li><i class="fa-solid fa-circle-check"></i> Cost and procurement control</li>
                     <li><i class="fa-solid fa-circle-check"></i> Team accountability at every level</li>
                 </ul>
-                <p>From planning to handover — everything in one powerful and simple system.</p>
+                <p>From planning to handover, everything stays in one simple and powerful system.</p>
             </div>
 
             <div class="col-lg-7 solution-img" data-aos="fade-left">
@@ -985,19 +985,18 @@ img.dashboard-screen{
         <div class="row align-items-center g-5">
             <div class="col-lg-3" data-aos="fade-right">
                 <h2>Not Built by Coders.<br><span class="text-yellow">Built by Builders.</span></h2>
-                <p>Developed from real projects by <br>
-UKB Construction Management.</p>
+                <p>Developed from real projects by <br>UKB Construction Management.</p>
             </div>
 
             <div class="col-lg-9">
                 <div class="row g-0">
                     <div class="col-md-3 col-6 diff-item" data-aos="zoom-in">
                         <i class="fa-solid fa-building-shield"></i>
-                        <h5>Managing premium residental & commercial projects</h5>
+                        <h5>Managing premium residential and commercial projects</h5>
                     </div>
                     <div class="col-md-3 col-6 diff-item" data-aos="zoom-in" data-aos-delay="100">
                         <i class="fa-solid fa-eye-slash"></i>
-                        <h5>Handlink real site challenges daily</h5>
+                        <h5>Handling real site challenges daily</h5>
                     </div>
                     <div class="col-md-3 col-6 diff-item" data-aos="zoom-in" data-aos-delay="200">
                         <i class="fa-solid fa-crosshairs"></i>
@@ -1005,7 +1004,7 @@ UKB Construction Management.</p>
                     </div>
                     <div class="col-md-3 col-6 diff-item" data-aos="zoom-in" data-aos-delay="300">
                         <i class="fa-solid fa-house-lock"></i>
-                        <h5>Practical, reliable and results-driven approach</h5>
+                        <h5>Practical, reliable, and results-driven approach</h5>
                     </div>
                 </div>
             </div>
@@ -1015,7 +1014,7 @@ UKB Construction Management.</p>
 
 <section class="features" id="features">
     <div class="container">
-        <h2 class="section-title" data-aos="fade-up">Everything You Need to Run a Project — In One Place</h2>
+        <h2 class="section-title" data-aos="fade-up">Everything You Need to Run Projects — In One Place</h2>
 
         <div class="row g-4">
             <div class="col-lg-3 col-md-6" data-aos="fade-up">
@@ -1023,7 +1022,7 @@ UKB Construction Management.</p>
                     <i class="fa-regular fa-clipboard"></i>
                     <div>
                         <h5>Daily Reporting System</h5>
-                        <p>DPR, MOM, RFI and site reports documented clearly.</p>
+                        <p>DPR, MOM, RFI, and site reports documented clearly.</p>
                     </div>
                 </div>
             </div>
@@ -1033,7 +1032,7 @@ UKB Construction Management.</p>
                     <i class="fa-solid fa-indian-rupee-sign"></i>
                     <div>
                         <h5>Cost & Procurement Control</h5>
-                        <p>Vendor tracking, budget visibility and cost analytics.</p>
+                        <p>Vendor tracking, budget visibility, and cost analytics.</p>
                     </div>
                 </div>
             </div>
@@ -1073,7 +1072,7 @@ UKB Construction Management.</p>
                     <i class="fa-solid fa-chart-column"></i>
                     <div>
                         <h5>Management Dashboard</h5>
-                        <p>Real-time insights, delays, risk alerts and reports.</p>
+                        <p>Real-time insights, delay alerts, risk alerts, and reports.</p>
                     </div>
                 </div>
             </div>
@@ -1093,7 +1092,7 @@ UKB Construction Management.</p>
                     <i class="fa-solid fa-mobile-screen-button"></i>
                     <div>
                         <h5>Mobile App Access</h5>
-                        <p>Access your projects anytime from your mobile.</p>
+                        <p>Access your projects anytime from mobile devices.</p>
                     </div>
                 </div>
             </div>
@@ -1105,8 +1104,8 @@ UKB Construction Management.</p>
     <div class="container">
         <div class="row align-items-center g-5">
             <div class="col-lg-3" data-aos="fade-right">
-                <h2>See Your Project Live & Structured</h2>
-                <p>One platform. All project information at your fingertips.</p>
+                <h2>See Your Project Live and Structured</h2>
+                <p>One platform with all project information at your fingertips.</p>
                 <ul class="check-list">
                     <li><i class="fa-solid fa-check"></i> Live progress tracking</li>
                     <li><i class="fa-solid fa-check"></i> Real-time dashboards</li>
@@ -1175,7 +1174,7 @@ UKB Construction Management.</p>
                 <div class="role-card">
                    <i class="fa-solid fa-user-tie"></i>
                     <h5>Project Management Consultants (PMC)</h5>
-                    <p>Manage multiple projects with ease and clarity.</p>
+                    <p>Manage multiple projects with better control, clarity, and accountability.</p>
                 </div>
             </div>
 
@@ -1183,7 +1182,7 @@ UKB Construction Management.</p>
                 <div class="role-card">
                     <i class="fa-solid fa-people-group"></i>
                     <h5>Engineers & Project Teams</h5>
-                    <p>Stay updated, accountable and on track.</p>
+                    <p>Stay updated, accountable, and on track.</p>
                 </div>
             </div>
 
@@ -1191,7 +1190,7 @@ UKB Construction Management.</p>
                 <div class="role-card">
                     <i class="fa-solid fa-helmet-safety"></i>
                     <h5>Contractors & Vendors</h5>
-                    <p>Better coordination, approvals and timely payments.</p>
+                    <p>Better coordination, faster approvals, and timely payments.</p>
                 </div>
             </div>
         </div>
@@ -1287,7 +1286,7 @@ UKB Construction Management.</p>
         <p>See your project inside TEK-C and understand how it can improve your execution workflow.</p>
         <div class="d-flex justify-content-center gap-3 flex-wrap">
             <!-- <a href="tel:+919876543210" class="btn btn-dark-custom">Book Your Live Demo <i class="fa-solid fa-arrow-right ms-2"></i></a> -->
-            <a href="tel:+91 78290 42156" class="btn btn-outline-dark fw-bold px-4 py-3 rounded-3">Contact Us <i class="fa-solid fa-arrow-right ms-2"></i></a>
+            <a href="tel:+917829042156" class="btn btn-outline-dark fw-bold px-4 py-3 rounded-3">Contact Us <i class="fa-solid fa-arrow-right ms-2"></i></a>
         </div>
     </div>
 </section>

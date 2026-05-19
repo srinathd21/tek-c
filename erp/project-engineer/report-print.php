@@ -227,20 +227,9 @@ if (!$canAccess) {
   die("You are not allowed to view this DPR");
 }
 
-// PMC name (manager name if exists)
-$pmcName = 'UKB Construction Management Pvt Ltd';
-if (!empty($row['manager_employee_id'])) {
-  $mid = (int)$row['manager_employee_id'];
-  $st2 = mysqli_prepare($conn, "SELECT full_name FROM employees WHERE id=? LIMIT 1");
-  if ($st2) {
-    mysqli_stmt_bind_param($st2, "i", $mid);
-    mysqli_stmt_execute($st2);
-    $r2 = mysqli_stmt_get_result($st2);
-    $mrow = mysqli_fetch_assoc($r2);
-    if (!empty($mrow['full_name'])) $pmcName = $mrow['full_name'];
-    mysqli_stmt_close($st2);
-  }
-}
+// PMC name should be the company name from company_details table
+// Do not show manager/employee name here.
+$pmcName = $companyName;
 
 // Map data
 $data = [];

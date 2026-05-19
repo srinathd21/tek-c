@@ -198,7 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "issssdsdsdssssssssssddiss",
+            "issssdsssdssssssssssddiss",
             $client_id,                      // i
             $project_name,                   // s
             $project_type,                   // s

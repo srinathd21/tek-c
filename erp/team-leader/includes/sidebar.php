@@ -44,9 +44,9 @@
     </div>
 
     <!-- Checklist -->
-    <a class="side-link" href="checklist.php">
-      <i class="bi bi-card-checklist"></i><span class="label">Checklist</span>
-    </a>
+    <!--<a class="side-link" href="checklist.php">-->
+    <!--  <i class="bi bi-card-checklist"></i><span class="label">Checklist</span>-->
+    <!--</a>-->
 
     <!-- ----------------- Team Lead Options ----------------- -->
 
@@ -88,9 +88,9 @@
     </div>
 
     <!-- Task Approval -->
-    <a class="side-link" href="task-approval.php">
-      <i class="bi bi-check2-square"></i><span class="label">Task Approval</span>
-    </a>
+    <!--<a class="side-link" href="task-approval.php">-->
+    <!--  <i class="bi bi-check2-square"></i><span class="label">Task Approval</span>-->
+    <!--</a>-->
 
     <!-- Mail -->
     <a class="side-link" data-bs-toggle="collapse" href="#mailMenu">
@@ -108,9 +108,9 @@
     </div>
 
     <!-- Reports Hub -->
-    <a class="side-link" href="reports-hub.php">
-      <i class="bi bi-bar-chart-line"></i><span class="label">Reports Hub</span>
-    </a>
+    <!--<a class="side-link" href="reports-hub.php">-->
+    <!--  <i class="bi bi-bar-chart-line"></i><span class="label">Reports Hub</span>-->
+    <!--</a>-->
 
     <!-- HR -->
     <a class="side-link" data-bs-toggle="collapse" href="#hrMenu">
@@ -121,10 +121,10 @@
       <a class="side-link" href="my-profile.php"><i class="bi bi-person-circle"></i><span class="label">Profile</span></a>
       <a class="side-link" href="my-attendance.php"><i class="bi bi-person-badge"></i><span class="label">Attendance Profile</span></a>
       <a class="side-link" href="leave-ledger.php"><i class="bi bi-journal-bookmark"></i><span class="label">Leave Ledger</span></a>
-      <a class="side-link" href="payslips.php"><i class="bi bi-receipt"></i><span class="label">Payslips</span></a>
-      <a class="side-link" href="hr-policy.php"><i class="bi bi-file-earmark-medical"></i><span class="label">HR Policy</span></a>
-      <a class="side-link" href="salary-loan.php"><i class="bi bi-cash-stack"></i><span class="label">Salary Loan</span></a>
-      <a class="side-link" href="attendance-regularization.php"><i class="bi bi-calendar2-check"></i><span class="label">Attendance Regularization</span></a>
+      <!--<a class="side-link" href="payslips.php"><i class="bi bi-receipt"></i><span class="label">Payslips</span></a>-->
+      <!--<a class="side-link" href="hr-policy.php"><i class="bi bi-file-earmark-medical"></i><span class="label">HR Policy</span></a>-->
+      <!--<a class="side-link" href="salary-loan.php"><i class="bi bi-cash-stack"></i><span class="label">Salary Loan</span></a>-->
+      <!--<a class="side-link" href="attendance-regularization.php"><i class="bi bi-calendar2-check"></i><span class="label">Attendance Regularization</span></a>-->
       <a class="side-link" href="apply-leave.php"><i class="bi bi-calendar-plus"></i><span class="label">Apply Leave</span></a>
       <a class="side-link" href="my-leave-history.php"><i class="bi bi-clock-history"></i><span class="label">My Leave History</span></a>
     </div>

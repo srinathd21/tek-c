@@ -361,7 +361,7 @@ $pdf->AddPage();
 /* ================= HEADER DATA ================= */
 $pdf->DataField('Project:', clean_text($row['project_name'] ?? ''));
 $pdf->DataField('Client:', clean_text($row['client_name'] ?? ''));
-$pdf->DataField('PMC:', clean_text($row['pmc_lead'] ?? ''));
+$pdf->DataField('PMC:', clean_text($companyName));
 $pdf->DataField('Date:', safe_date_dmy($row['checklist_date'] ?? ''));
 $pdf->DataField('Doc No.:', clean_text($row['doc_no'] ?? ''));
 

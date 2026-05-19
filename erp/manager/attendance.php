@@ -302,9 +302,7 @@ $loggedName = $_SESSION['employee_name'] ?? 'HR';
               <a href="attendance-export.php?month=<?php echo $selectedMonth; ?>&year=<?php echo $selectedYear; ?>" class="btn btn-outline-secondary me-2" style="font-weight:800;">
                 <i class="bi bi-download"></i> Export
               </a>
-              <a href="attendance-regularization.php" class="btn btn-primary" style="font-weight:800;">
-                <i class="bi bi-clock-history"></i> Regularization
-              </a>
+              
             </div>
           </div>
 
