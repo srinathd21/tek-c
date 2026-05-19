@@ -1,3 +1,306 @@
+<?php
+session_start();
+require_once 'includes/db-config.php';
+
+date_default_timezone_set('Asia/Kolkata');
+
+$conn = get_db_connection();
+if (!$conn) {
+  die("Database connection failed.");
+}
+
+$success = '';
+$error = '';
+
+function e($v){
+  return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+}
+
+function safeDate($v, $format='d M Y', $dash='—'){
+  $v = trim((string)$v);
+  if ($v === '' || $v === '0000-00-00') return $dash;
+  $ts = strtotime($v);
+  return $ts ? date($format, $ts) : e($v);
+}
+
+function showMoney($v, $dash='—'){
+  if ($v === null) return $dash;
+  $v = trim((string)$v);
+  if ($v === '') return $dash;
+  if (!is_numeric($v)) return e($v);
+
+  $num = (float)$v;
+  if ($num >= 10000000) return number_format($num / 10000000, 2) . 'Cr';
+  if ($num >= 100000) return number_format($num / 100000, 2) . 'L';
+  return number_format($num, 2);
+}
+
+function initials($name){
+  $name = trim((string)$name);
+  if ($name === '') return 'NA';
+  $parts = preg_split('/\s+/', $name);
+  $a = strtoupper(substr($parts[0] ?? 'N', 0, 1));
+  $b = strtoupper(substr($parts[count($parts)-1] ?? 'A', 0, 1));
+  return $a . $b;
+}
+
+function projectStatusBadge($start, $end){
+  $today = date('Y-m-d');
+  $start = trim((string)$start);
+  $end = trim((string)$end);
+
+  if ($end !== '' && $end !== '0000-00-00' && $end < $today) {
+    return ['Completed', 'ontrack'];
+  }
+
+  if ($start !== '' && $start !== '0000-00-00' && $start > $today) {
+    return ['Upcoming', 'joined'];
+  }
+
+  return ['Ongoing', 'progressing'];
+}
+
+function bindParams(mysqli_stmt $stmt, string $types, array $values){
+  if ($types === '') return true;
+  $refs = [];
+  $refs[] = $types;
+  foreach ($values as $k => $v) {
+    $refs[] = &$values[$k];
+  }
+  return call_user_func_array([$stmt, 'bind_param'], $refs);
+}
+
+$current_employee_id = (int)($_SESSION['employee_id'] ?? $_SESSION['user_id'] ?? 0);
+$current_employee_name = (string)($_SESSION['employee_name'] ?? $_SESSION['user_name'] ?? '');
+
+// Detect optional team lead column
+$hasTeamLeadCol = false;
+$chk = mysqli_query($conn, "SHOW COLUMNS FROM sites LIKE 'team_lead_employee_id'");
+if ($chk) {
+  $hasTeamLeadCol = mysqli_num_rows($chk) > 0;
+  mysqli_free_result($chk);
+}
+
+$teamLeadSelect = $hasTeamLeadCol ? "s.team_lead_employee_id," : "NULL AS team_lead_employee_id,";
+$teamLeadJoin = $hasTeamLeadCol ? "LEFT JOIN employees tl ON tl.id = s.team_lead_employee_id" : "LEFT JOIN employees tl ON 1=0";
+
+$employeeFilterParts = [
+  "s.manager_employee_id = ?",
+  "EXISTS (SELECT 1 FROM site_project_engineers spe_self WHERE spe_self.site_id = s.id AND spe_self.employee_id = ?)"
+];
+
+$filterTypes = "ii";
+$filterValues = [$current_employee_id, $current_employee_id];
+
+if ($hasTeamLeadCol) {
+  $employeeFilterParts[] = "s.team_lead_employee_id = ?";
+  $filterTypes .= "i";
+  $filterValues[] = $current_employee_id;
+}
+
+$employeeProjectFilter = "(" . implode(" OR ", $employeeFilterParts) . ")";
+
+/* ---------------- My Projects ---------------- */
+$projects = [];
+
+$sqlProjects = "
+  SELECT
+    s.*,
+    c.client_name,
+    c.company_name,
+    c.mobile_number AS client_mobile,
+    c.email AS client_email,
+    c.state AS client_state,
+
+    $teamLeadSelect
+
+    m.full_name AS manager_name,
+    m.designation AS manager_designation,
+
+    tl.full_name AS team_lead_name,
+    tl.designation AS team_lead_designation,
+
+    GROUP_CONCAT(
+      DISTINCT CONCAT(
+        COALESCE(pe.full_name,''),'|',
+        COALESCE(pe.designation,'')
+      )
+      ORDER BY pe.full_name
+      SEPARATOR '||'
+    ) AS engineers_concat
+
+  FROM sites s
+  INNER JOIN clients c ON c.id = s.client_id
+  LEFT JOIN employees m ON m.id = s.manager_employee_id
+  $teamLeadJoin
+  LEFT JOIN site_project_engineers spe ON spe.site_id = s.id
+  LEFT JOIN employees pe ON pe.id = spe.employee_id
+  WHERE s.deleted_at IS NULL
+    AND $employeeProjectFilter
+  GROUP BY s.id
+  ORDER BY s.created_at DESC
+";
+
+$stmtProjects = mysqli_prepare($conn, $sqlProjects);
+if ($stmtProjects) {
+  bindParams($stmtProjects, $filterTypes, $filterValues);
+  mysqli_stmt_execute($stmtProjects);
+  $res = mysqli_stmt_get_result($stmtProjects);
+  if ($res) $projects = mysqli_fetch_all($res, MYSQLI_ASSOC);
+  mysqli_stmt_close($stmtProjects);
+} else {
+  $error = "Error fetching projects: " . mysqli_error($conn);
+}
+
+/* ---------------- Stats ---------------- */
+$total_projects = count($projects);
+$ongoing = 0;
+$upcoming = 0;
+$completed = 0;
+$alerts = 0;
+$upcoming_tasks = 0;
+
+$today = date('Y-m-d');
+$next30 = date('Y-m-d', strtotime('+30 days'));
+
+foreach ($projects as $p) {
+  $start = $p['start_date'] ?? '';
+  $end = $p['expected_completion_date'] ?? '';
+
+  if (!empty($end) && $end !== '0000-00-00' && $end < $today) {
+    $completed++;
+  } elseif (!empty($start) && $start !== '0000-00-00' && $start > $today) {
+    $upcoming++;
+  } else {
+    $ongoing++;
+  }
+
+  if (!empty($end) && $end !== '0000-00-00' && $end >= $today && $end <= $next30) {
+    $upcoming_tasks++;
+  }
+
+  if (!empty($end) && $end !== '0000-00-00' && $end < $today) {
+    $alerts++;
+  }
+}
+
+/* ---------------- Team Members under My Projects ---------------- */
+$team_members = [];
+$sqlTeam = "
+  SELECT DISTINCT
+    e.id,
+    e.full_name,
+    e.employee_code,
+    e.department,
+    e.designation,
+    e.date_of_joining,
+    e.employee_status
+  FROM employees e
+  WHERE e.id IN (
+    SELECT s.manager_employee_id
+    FROM sites s
+    WHERE s.deleted_at IS NULL
+      AND s.manager_employee_id IS NOT NULL
+      AND $employeeProjectFilter
+
+    " . ($hasTeamLeadCol ? "
+    UNION
+    SELECT s.team_lead_employee_id
+    FROM sites s
+    WHERE s.deleted_at IS NULL
+      AND s.team_lead_employee_id IS NOT NULL
+      AND $employeeProjectFilter
+    " : "") . "
+
+    UNION
+    SELECT spe.employee_id
+    FROM site_project_engineers spe
+    INNER JOIN sites s ON s.id = spe.site_id
+    WHERE s.deleted_at IS NULL
+      AND $employeeProjectFilter
+  )
+  ORDER BY e.date_of_joining DESC, e.id DESC
+  LIMIT 5
+";
+
+$teamTypes = $filterTypes . ($hasTeamLeadCol ? $filterTypes : '') . $filterTypes;
+$teamValues = array_merge($filterValues, ($hasTeamLeadCol ? $filterValues : []), $filterValues);
+
+$stmtTeam = mysqli_prepare($conn, $sqlTeam);
+if ($stmtTeam) {
+  bindParams($stmtTeam, $teamTypes, $teamValues);
+  mysqli_stmt_execute($stmtTeam);
+  $resTeam = mysqli_stmt_get_result($stmtTeam);
+  if ($resTeam) $team_members = mysqli_fetch_all($resTeam, MYSQLI_ASSOC);
+  mysqli_stmt_close($stmtTeam);
+}
+
+$employee_count = count($team_members);
+
+/* ---------------- Recent Projects ---------------- */
+$recent_projects = array_slice($projects, 0, 5);
+$ongoing_projects = [];
+foreach ($projects as $p) {
+  [$lbl] = projectStatusBadge($p['start_date'] ?? '', $p['expected_completion_date'] ?? '');
+  if ($lbl === 'Ongoing') $ongoing_projects[] = $p;
+}
+$ongoing_projects = array_slice($ongoing_projects, 0, 5);
+
+/* ---------------- Recent Activity ---------------- */
+$recent_activity = [];
+$projectIds = array_map(fn($p) => (int)$p['id'], $projects);
+
+if (!empty($projectIds)) {
+  $placeholders = implode(',', array_fill(0, count($projectIds), '?'));
+  $types = str_repeat('i', count($projectIds));
+
+  $sqlActivity = "
+    SELECT
+      employee_name,
+      activity_type,
+      module,
+      description,
+      reference_id,
+      created_at
+    FROM activity_logs
+    WHERE reference_id IN ($placeholders)
+      AND (
+        UPPER(module) IN ('PROJECT', 'PROJECTS', 'SITE', 'SITES')
+        OR module LIKE '%project%'
+        OR module LIKE '%site%'
+      )
+    ORDER BY created_at DESC
+    LIMIT 6
+  ";
+
+  $stmtAct = mysqli_prepare($conn, $sqlActivity);
+  if ($stmtAct) {
+    bindParams($stmtAct, $types, $projectIds);
+    mysqli_stmt_execute($stmtAct);
+    $resAct = mysqli_stmt_get_result($stmtAct);
+    if ($resAct) $recent_activity = mysqli_fetch_all($resAct, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmtAct);
+  }
+}
+
+/* ---------------- Charts ---------------- */
+$barCompleted = [$completed, $ongoing, $upcoming];
+$barPending = [$alerts, $upcoming_tasks, max(0, $total_projects - $completed)];
+
+$deptCounts = [];
+foreach ($team_members as $tm) {
+  $dept = trim((string)($tm['department'] ?? 'Other'));
+  if ($dept === '') $dept = 'Other';
+  $deptCounts[$dept] = ($deptCounts[$dept] ?? 0) + 1;
+}
+
+if (empty($deptCounts)) {
+  $deptCounts = ['Projects' => max(1, $total_projects)];
+}
+
+$deptLabels = array_keys($deptCounts);
+$deptData = array_values($deptCounts);
+?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -10,16 +313,10 @@
   <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
   <link rel="manifest" href="assets/fav/site.webmanifest">
 
-  <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-
-  <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
-  <!-- TEK-C Custom Styles -->
   <link href="assets/css/layout-styles.css" rel="stylesheet" />
   <link href="assets/css/topbar.css" rel="stylesheet" />
   <link href="assets/css/footer.css" rel="stylesheet" />
@@ -36,9 +333,7 @@
       --dash-radius: 16px;
     }
 
-    body {
-      background: var(--dash-bg);
-    }
+    body { background: var(--dash-bg); }
 
     .content-scroll {
       flex: 1 1 auto;
@@ -71,6 +366,33 @@
       color: var(--dash-muted);
       font-size: 12px;
       font-weight: 600;
+    }
+
+    .dash-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .primary-btn {
+      border: 0;
+      background: #111827;
+      color: #fff;
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 11px;
+      font-size: 12px;
+      font-weight: 900;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .primary-btn:hover {
+      background: #020617;
+      color: #fff;
     }
 
     .panel {
@@ -113,6 +435,7 @@
       display: grid;
       place-items: center;
       color: var(--dash-muted);
+      text-decoration: none;
       transition: .2s ease;
     }
 
@@ -199,13 +522,7 @@
       white-space: nowrap;
     }
 
-    .compact-table tbody tr {
-      transition: .15s ease;
-    }
-
-    .compact-table tbody tr:hover {
-      background: #fbfdff;
-    }
+    .compact-table tbody tr:hover { background: #fbfdff; }
 
     .table-title-cell {
       display: flex;
@@ -297,9 +614,7 @@
       font-size: 12px;
     }
 
-    .muted-link:hover {
-      color: #111827;
-    }
+    .muted-link:hover { color: #111827; }
 
     .avatar-mini {
       width: 28px;
@@ -354,13 +669,8 @@
       font-size: 11px;
     }
 
-    .chart-wrap {
-      height: 188px;
-    }
-
-    .donut-wrap {
-      height: 220px;
-    }
+    .chart-wrap { height: 188px; }
+    .donut-wrap { height: 220px; }
 
     .legend {
       display: flex;
@@ -386,18 +696,32 @@
       background: #999;
     }
 
-    @media (max-width: 991.98px) {
-      .content-scroll {
-        padding: 14px;
-      }
+    .empty-state {
+      padding: 22px;
+      text-align: center;
+      color: var(--dash-muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
 
+    @media (max-width: 991.98px) {
+      .content-scroll { padding: 14px; }
       .dashboard-heading {
         align-items: flex-start;
         flex-direction: column;
       }
+      .compact-table { min-width: 720px; }
+    }
 
-      .compact-table {
-        min-width: 720px;
+    @media (max-width: 768px) {
+      .content-scroll { padding: 12px 10px 12px !important; }
+      .dashboard-wrapper {
+        padding-left: 6px !important;
+        padding-right: 6px !important;
+      }
+      .panel {
+        padding: 12px !important;
+        border-radius: 14px;
       }
     }
   </style>
@@ -418,9 +742,27 @@
           <div class="dashboard-heading">
             <div>
               <h1>Dashboard</h1>
-              <p>Compact overview of projects, employees, activity and performance.</p>
+              <p>
+                Compact overview of projects assigned to
+                <?php echo $current_employee_name !== '' ? e($current_employee_name) : 'this employee'; ?>.
+              </p>
+            </div>
+
+            <div class="dash-actions">
+              <a href="projects.php" class="primary-btn">
+                <i class="bi bi-folder2-open"></i> My Projects
+              </a>
+              
             </div>
           </div>
+
+          <?php if ($error): ?>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              <?php echo e($error); ?>
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          <?php endif; ?>
 
           <!-- Stats -->
           <div class="row g-3 mb-3">
@@ -428,8 +770,8 @@
               <div class="stat-card">
                 <div class="stat-ic blue"><i class="bi bi-folder2"></i></div>
                 <div>
-                  <div class="stat-label">Active Projects</div>
-                  <div class="stat-value">12</div>
+                  <div class="stat-label">My Active Projects</div>
+                  <div class="stat-value"><?php echo (int)$total_projects; ?></div>
                 </div>
               </div>
             </div>
@@ -438,8 +780,8 @@
               <div class="stat-card">
                 <div class="stat-ic orange"><i class="bi bi-clock-history"></i></div>
                 <div>
-                  <div class="stat-label">Upcoming Tasks</div>
-                  <div class="stat-value">24</div>
+                  <div class="stat-label">Due in 30 Days</div>
+                  <div class="stat-value"><?php echo (int)$upcoming_tasks; ?></div>
                 </div>
               </div>
             </div>
@@ -448,8 +790,8 @@
               <div class="stat-card">
                 <div class="stat-ic green"><i class="bi bi-people-fill"></i></div>
                 <div>
-                  <div class="stat-label">Employees</div>
-                  <div class="stat-value">256</div>
+                  <div class="stat-label">My Team Members</div>
+                  <div class="stat-value"><?php echo (int)$employee_count; ?></div>
                 </div>
               </div>
             </div>
@@ -458,8 +800,8 @@
               <div class="stat-card">
                 <div class="stat-ic red"><i class="bi bi-exclamation-triangle-fill"></i></div>
                 <div>
-                  <div class="stat-label">Alerts</div>
-                  <div class="stat-value">5</div>
+                  <div class="stat-label">Overdue / Alerts</div>
+                  <div class="stat-value"><?php echo (int)$alerts; ?></div>
                 </div>
               </div>
             </div>
@@ -474,11 +816,11 @@
                 <div class="panel-header">
                   <div>
                     <h3 class="panel-title">Ongoing Projects</h3>
-                    <div class="panel-subtitle">Current project status and timelines</div>
+                    <div class="panel-subtitle">Current project status and timelines under this employee</div>
                   </div>
-                  <button class="panel-menu" type="button" aria-label="More">
-                    <i class="bi bi-three-dots"></i>
-                  </button>
+                  <a class="panel-menu" href="projects.php" aria-label="View all">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                  </a>
                 </div>
 
                 <div class="table-responsive compact-table-wrap">
@@ -494,81 +836,43 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="table-icon"><i class="bi bi-building"></i></div>
-                            <div>
-                              <div class="table-primary-text">Tower A Construction</div>
-                              <div class="table-secondary-text">Commercial block</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td><span class="badge-pill ontrack"><span class="mini-dot"></span> On Track</span></td>
-                        <td>06 Mar 2021</td>
-                        <td>01 Jul 2021</td>
-                        <td>John Doe</td>
-                        <td class="text-end">
-                          <a class="muted-link" href="#"><i class="bi bi-box-arrow-up-right"></i></a>
-                        </td>
-                      </tr>
-
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="table-icon"><i class="bi bi-shop"></i></div>
-                            <div>
-                              <div class="table-primary-text">Mall Renovation</div>
-                              <div class="table-secondary-text">Interior upgrade</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td><span class="badge-pill progressing"><span class="mini-dot"></span> Progressing</span></td>
-                        <td>10 Mar 2021</td>
-                        <td>15 Jul 2021</td>
-                        <td>Michael Smith</td>
-                        <td class="text-end">
-                          <a class="muted-link" href="#"><i class="bi bi-box-arrow-up-right"></i></a>
-                        </td>
-                      </tr>
-
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="table-icon"><i class="bi bi-tools"></i></div>
-                            <div>
-                              <div class="table-primary-text">Can Staff</div>
-                              <div class="table-secondary-text">Workforce setup</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td><span class="badge-pill atrisk"><span class="mini-dot"></span> At Risk</span></td>
-                        <td>02 Mar 2021</td>
-                        <td>01 Jul 2021</td>
-                        <td>David Lee</td>
-                        <td class="text-end">
-                          <a class="muted-link" href="#"><i class="bi bi-box-arrow-up-right"></i></a>
-                        </td>
-                      </tr>
-
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="table-icon"><i class="bi bi-kanban"></i></div>
-                            <div>
-                              <div class="table-primary-text">Moore Project</div>
-                              <div class="table-secondary-text">Planning phase</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td><span class="badge-pill delayed"><span class="mini-dot"></span> Delayed</span></td>
-                        <td>02 Mar 2021</td>
-                        <td>01 Jul 2021</td>
-                        <td>Sarah Paul</td>
-                        <td class="text-end">
-                          <a class="muted-link" href="#"><i class="bi bi-box-arrow-up-right"></i></a>
-                        </td>
-                      </tr>
+                      <?php if (empty($ongoing_projects)): ?>
+                        <tr>
+                          <td colspan="6">
+                            <div class="empty-state">No ongoing projects assigned.</div>
+                          </td>
+                        </tr>
+                      <?php else: ?>
+                        <?php foreach ($ongoing_projects as $p): ?>
+                          <?php [$stLabel, $stClass] = projectStatusBadge($p['start_date'] ?? '', $p['expected_completion_date'] ?? ''); ?>
+                          <tr>
+                            <td>
+                              <div class="table-title-cell">
+                                <div class="table-icon"><i class="bi bi-building"></i></div>
+                                <div>
+                                  <div class="table-primary-text"><?php echo e($p['project_name'] ?? ''); ?></div>
+                                  <div class="table-secondary-text">
+                                    <?php echo e($p['project_type'] ?? ''); ?> • <?php echo e($p['project_location'] ?? ''); ?>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span class="badge-pill <?php echo e($stClass); ?>">
+                                <span class="mini-dot"></span> <?php echo e($stLabel); ?>
+                              </span>
+                            </td>
+                            <td><?php echo e(safeDate($p['start_date'] ?? '')); ?></td>
+                            <td><?php echo e(safeDate($p['expected_completion_date'] ?? '')); ?></td>
+                            <td><?php echo !empty($p['manager_name']) ? e($p['manager_name']) : 'Not Assigned'; ?></td>
+                            <td class="text-end">
+                              <a class="muted-link" href="view-site.php?id=<?php echo (int)$p['id']; ?>">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                              </a>
+                            </td>
+                          </tr>
+                        <?php endforeach; ?>
+                      <?php endif; ?>
                     </tbody>
                   </table>
                 </div>
@@ -581,8 +885,8 @@
               <div class="panel">
                 <div class="panel-header">
                   <div>
-                    <h3 class="panel-title">Progress Overview</h3>
-                    <div class="panel-subtitle">Weekly project progress</div>
+                    <h3 class="panel-title">Project Overview</h3>
+                    <div class="panel-subtitle">Completed, ongoing and upcoming</div>
                   </div>
                   <button class="panel-menu" type="button" aria-label="More">
                     <i class="bi bi-three-dots"></i>
@@ -600,15 +904,15 @@
           <!-- New tables row -->
           <div class="row g-3 mb-3">
 
-            <!-- Recent Joined Employees -->
+            <!-- Team Members -->
             <div class="col-12 col-xl-6">
               <div class="panel">
                 <div class="panel-header">
                   <div>
-                    <h3 class="panel-title">Recent Joined Employees</h3>
-                    <div class="panel-subtitle">Latest employee onboarding list</div>
+                    <h3 class="panel-title">Team Members</h3>
+                    <div class="panel-subtitle">Employees linked with your projects</div>
                   </div>
-                  <a class="muted-link" href="onboarding.php">View All</a>
+                  <a class="muted-link" href="projects.php">View Projects</a>
                 </div>
 
                 <div class="table-responsive compact-table-wrap">
@@ -622,65 +926,38 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="avatar-mini">AK</div>
-                            <div>
-                              <div class="table-primary-text">Arun Kumar</div>
-                              <div class="table-secondary-text">EMP-1024</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>Site Engineer</td>
-                        <td>12 May 2026</td>
-                        <td><span class="badge-pill joined"><span class="mini-dot"></span> Joined</span></td>
-                      </tr>
-
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="avatar-mini">SP</div>
-                            <div>
-                              <div class="table-primary-text">Sneha Priya</div>
-                              <div class="table-secondary-text">EMP-1023</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>HR Executive</td>
-                        <td>10 May 2026</td>
-                        <td><span class="badge-pill ontrack"><span class="mini-dot"></span> Active</span></td>
-                      </tr>
-
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="avatar-mini">MR</div>
-                            <div>
-                              <div class="table-primary-text">Manoj Raj</div>
-                              <div class="table-secondary-text">EMP-1022</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>Supervisor</td>
-                        <td>08 May 2026</td>
-                        <td><span class="badge-pill progressing"><span class="mini-dot"></span> Training</span></td>
-                      </tr>
-
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="avatar-mini">DV</div>
-                            <div>
-                              <div class="table-primary-text">Divya V</div>
-                              <div class="table-secondary-text">EMP-1021</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>Accountant</td>
-                        <td>05 May 2026</td>
-                        <td><span class="badge-pill ontrack"><span class="mini-dot"></span> Active</span></td>
-                      </tr>
+                      <?php if (empty($team_members)): ?>
+                        <tr>
+                          <td colspan="4">
+                            <div class="empty-state">No team members found for assigned projects.</div>
+                          </td>
+                        </tr>
+                      <?php else: ?>
+                        <?php foreach ($team_members as $tm): ?>
+                          <?php
+                            $status = trim((string)($tm['employee_status'] ?? 'active'));
+                            $statusClass = strtolower($status) === 'active' ? 'ontrack' : 'delayed';
+                          ?>
+                          <tr>
+                            <td>
+                              <div class="table-title-cell">
+                                <div class="avatar-mini"><?php echo e(initials($tm['full_name'] ?? '')); ?></div>
+                                <div>
+                                  <div class="table-primary-text"><?php echo e($tm['full_name'] ?? ''); ?></div>
+                                  <div class="table-secondary-text"><?php echo e($tm['employee_code'] ?? ''); ?></div>
+                                </div>
+                              </div>
+                            </td>
+                            <td><?php echo e($tm['designation'] ?? ''); ?></td>
+                            <td><?php echo e(safeDate($tm['date_of_joining'] ?? '')); ?></td>
+                            <td>
+                              <span class="badge-pill <?php echo e($statusClass); ?>">
+                                <span class="mini-dot"></span> <?php echo e($status ?: '—'); ?>
+                              </span>
+                            </td>
+                          </tr>
+                        <?php endforeach; ?>
+                      <?php endif; ?>
                     </tbody>
                   </table>
                 </div>
@@ -694,9 +971,9 @@
                 <div class="panel-header">
                   <div>
                     <h3 class="panel-title">Recent Projects</h3>
-                    <div class="panel-subtitle">Newly created project records</div>
+                    <div class="panel-subtitle">Newest records assigned to this employee</div>
                   </div>
-                  <a class="muted-link" href="my-sites.php">View All</a>
+                  <a class="muted-link" href="projects.php">View All</a>
                 </div>
 
                 <div class="table-responsive compact-table-wrap">
@@ -710,65 +987,35 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="table-icon"><i class="bi bi-house-gear"></i></div>
-                            <div>
-                              <div class="table-primary-text">Green Villa Site</div>
-                              <div class="table-secondary-text">Residential</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>Green Homes</td>
-                        <td>14 May 2026</td>
-                        <td><span class="badge-pill progressing"><span class="mini-dot"></span> Planning</span></td>
-                      </tr>
-
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="table-icon"><i class="bi bi-building-check"></i></div>
-                            <div>
-                              <div class="table-primary-text">Metro Office Block</div>
-                              <div class="table-secondary-text">Commercial</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>Metro Corp</td>
-                        <td>11 May 2026</td>
-                        <td><span class="badge-pill ontrack"><span class="mini-dot"></span> Started</span></td>
-                      </tr>
-
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="table-icon"><i class="bi bi-bricks"></i></div>
-                            <div>
-                              <div class="table-primary-text">Warehouse Phase 2</div>
-                              <div class="table-secondary-text">Industrial</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>Prime Logistics</td>
-                        <td>07 May 2026</td>
-                        <td><span class="badge-pill delayed"><span class="mini-dot"></span> Pending</span></td>
-                      </tr>
-
-                      <tr>
-                        <td>
-                          <div class="table-title-cell">
-                            <div class="table-icon"><i class="bi bi-cone-striped"></i></div>
-                            <div>
-                              <div class="table-primary-text">Road Extension</div>
-                              <div class="table-secondary-text">Infrastructure</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>City Works</td>
-                        <td>02 May 2026</td>
-                        <td><span class="badge-pill atrisk"><span class="mini-dot"></span> Review</span></td>
-                      </tr>
+                      <?php if (empty($recent_projects)): ?>
+                        <tr>
+                          <td colspan="4">
+                            <div class="empty-state">No projects assigned.</div>
+                          </td>
+                        </tr>
+                      <?php else: ?>
+                        <?php foreach ($recent_projects as $p): ?>
+                          <?php [$stLabel, $stClass] = projectStatusBadge($p['start_date'] ?? '', $p['expected_completion_date'] ?? ''); ?>
+                          <tr>
+                            <td>
+                              <div class="table-title-cell">
+                                <div class="table-icon"><i class="bi bi-house-gear"></i></div>
+                                <div>
+                                  <div class="table-primary-text"><?php echo e($p['project_name'] ?? ''); ?></div>
+                                  <div class="table-secondary-text"><?php echo e($p['project_type'] ?? ''); ?></div>
+                                </div>
+                              </div>
+                            </td>
+                            <td><?php echo e($p['client_name'] ?? ''); ?></td>
+                            <td><?php echo e(safeDate($p['created_at'] ?? '')); ?></td>
+                            <td>
+                              <span class="badge-pill <?php echo e($stClass); ?>">
+                                <span class="mini-dot"></span> <?php echo e($stLabel); ?>
+                              </span>
+                            </td>
+                          </tr>
+                        <?php endforeach; ?>
+                      <?php endif; ?>
                     </tbody>
                   </table>
                 </div>
@@ -787,40 +1034,37 @@
                 <div class="panel-header">
                   <div>
                     <h3 class="panel-title">Recent Activity</h3>
-                    <div class="panel-subtitle">Latest updates from the workspace</div>
+                    <div class="panel-subtitle">Latest updates from assigned projects</div>
                   </div>
-                  <a class="muted-link" href="#">View All</a>
+                  <a class="muted-link" href="activity-logs.php?module=PROJECT">View All</a>
                 </div>
 
-                <div class="activity-item">
-                  <div class="activity-avatar">👷</div>
-                  <div class="flex-grow-1">
-                    <p class="activity-title">
-                      John Doe <span class="text-muted" style="font-weight:700;">commented on</span> Tower A Construction
-                    </p>
-                    <p class="activity-sub">Updated site inspection note and completion remarks.</p>
-                  </div>
-                </div>
-
-                <div class="activity-item">
-                  <div class="activity-avatar">📄</div>
-                  <div class="flex-grow-1">
-                    <p class="activity-title">
-                      Michael Smith <span class="text-muted" style="font-weight:700;">uploaded new</span> blueprints
-                    </p>
-                    <p class="activity-sub">Blueprint file added for Mall Renovation.</p>
-                  </div>
-                </div>
-
-                <div class="activity-item">
-                  <div class="activity-avatar">✅</div>
-                  <div class="flex-grow-1">
-                    <p class="activity-title">
-                      Sneha Priya <span class="text-muted" style="font-weight:700;">completed</span> onboarding verification
-                    </p>
-                    <p class="activity-sub">Employee documents verified successfully.</p>
-                  </div>
-                </div>
+                <?php if (empty($recent_activity)): ?>
+                  <div class="empty-state">No recent project activity found.</div>
+                <?php else: ?>
+                  <?php foreach ($recent_activity as $act): ?>
+                    <div class="activity-item">
+                      <div class="activity-avatar">
+                        <?php echo e(substr((string)($act['activity_type'] ?? 'A'), 0, 1)); ?>
+                      </div>
+                      <div class="flex-grow-1">
+                        <p class="activity-title">
+                          <?php echo e($act['employee_name'] ?: 'System'); ?>
+                          <span class="text-muted" style="font-weight:700;">
+                            <?php echo e(strtolower($act['activity_type'] ?? 'updated')); ?>
+                          </span>
+                          <?php echo e($act['module'] ?? 'Project'); ?>
+                        </p>
+                        <p class="activity-sub">
+                          <?php echo e($act['description'] ?? ''); ?>
+                          <?php if (!empty($act['created_at'])): ?>
+                            • <?php echo e(safeDate($act['created_at'], 'd M Y h:i A')); ?>
+                          <?php endif; ?>
+                        </p>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                <?php endif; ?>
               </div>
             </div>
 
@@ -829,8 +1073,8 @@
               <div class="panel">
                 <div class="panel-header">
                   <div>
-                    <h3 class="panel-title">Team Performance</h3>
-                    <div class="panel-subtitle">Department-wise work split</div>
+                    <h3 class="panel-title">Team Split</h3>
+                    <div class="panel-subtitle">Department-wise employees</div>
                   </div>
                   <button class="panel-menu" type="button" aria-label="More">
                     <i class="bi bi-three-dots"></i>
@@ -841,20 +1085,7 @@
                   <canvas id="donutChart"></canvas>
                 </div>
 
-                <div class="legend">
-                  <div class="legend-item">
-                    <span class="legend-dot" style="background: var(--yellow, #f2c94c);"></span> Planning
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-dot" style="background: var(--orange, #f2994a);"></span> Execution
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-dot" style="background: #9ca3af;"></span> Monitoring
-                  </div>
-                  <div class="legend-item">
-                    <span class="legend-dot" style="background: #6b7280;"></span> Reporting
-                  </div>
-                </div>
+                <div class="legend" id="deptLegend"></div>
               </div>
             </div>
 
@@ -868,90 +1099,21 @@
     </main>
   </div>
 
-  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-  <!-- TEK-C Custom JavaScript -->
   <script src="assets/js/sidebar-toggle.js"></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      const sidebar = document.getElementById("sidebar");
-      const overlay = document.getElementById("overlay");
-      const menuBtn = document.getElementById("menuBtn");
-
-      const isMobile = () => window.matchMedia("(max-width: 991.98px)").matches;
-
-      function openMobileSidebar() {
-        if (!sidebar || !overlay) return;
-        sidebar.classList.add("open");
-        overlay.classList.add("show");
-        overlay.setAttribute("aria-hidden", "false");
-      }
-
-      function closeMobileSidebar() {
-        if (!sidebar || !overlay) return;
-        sidebar.classList.remove("open");
-        overlay.classList.remove("show");
-        overlay.setAttribute("aria-hidden", "true");
-      }
-
-      function setWideMode() {
-        if (!sidebar) return;
-        document.body.classList.toggle("wide", sidebar.classList.contains("collapsed") && !isMobile());
-      }
-
-      function toggleDesktopCollapse() {
-        if (!sidebar) return;
-        sidebar.classList.toggle("collapsed");
-        setWideMode();
-      }
-
-      function handleToggle() {
-        if (!sidebar) return;
-
-        if (isMobile()) {
-          sidebar.classList.remove("collapsed");
-          document.body.classList.remove("wide");
-
-          if (sidebar.classList.contains("open")) {
-            closeMobileSidebar();
-          } else {
-            openMobileSidebar();
-          }
-        } else {
-          closeMobileSidebar();
-          toggleDesktopCollapse();
-        }
-      }
-
-      if (menuBtn) {
-        menuBtn.addEventListener("click", handleToggle);
-      }
-
-      if (overlay) {
-        overlay.addEventListener("click", closeMobileSidebar);
-      }
-
-      window.addEventListener("resize", function () {
-        if (!sidebar) return;
-
-        if (!isMobile()) {
-          closeMobileSidebar();
-          setWideMode();
-        } else {
-          sidebar.classList.remove("collapsed");
-          document.body.classList.remove("wide");
-          closeMobileSidebar();
-        }
-      });
-
-      setWideMode();
-
       const yearElement = document.getElementById("year");
       if (yearElement) {
         yearElement.textContent = new Date().getFullYear();
       }
+
+      const overviewLabels = ["Completed", "Ongoing", "Upcoming"];
+      const overviewValues = <?php echo json_encode([$completed, $ongoing, $upcoming]); ?>;
+
+      const deptLabels = <?php echo json_encode($deptLabels); ?>;
+      const deptValues = <?php echo json_encode($deptData); ?>;
 
       if (typeof Chart !== 'undefined') {
         Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
@@ -963,21 +1125,14 @@
           new Chart(barCtx, {
             type: "bar",
             data: {
-              labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+              labels: overviewLabels,
               datasets: [
                 {
-                  label: "Completed",
-                  data: [8, 6, 12, 18, 14, 10, 24],
+                  label: "Projects",
+                  data: overviewValues,
                   backgroundColor: "rgba(100,116,139,.82)",
                   borderRadius: 8,
-                  barThickness: 16
-                },
-                {
-                  label: "Pending",
-                  data: [10, 5, 14, 10, 16, 8, 26],
-                  backgroundColor: "rgba(242,201,76,.95)",
-                  borderRadius: 8,
-                  barThickness: 16
+                  barThickness: 24
                 }
               ]
             },
@@ -985,9 +1140,7 @@
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
-                legend: {
-                  display: false
-                },
+                legend: { display: false },
                 tooltip: {
                   titleFont: { size: 12, weight: 'bold' },
                   bodyFont: { size: 11 }
@@ -996,26 +1149,15 @@
               scales: {
                 x: {
                   grid: { display: false },
-                  ticks: {
-                    font: {
-                      size: 10,
-                      weight: 800
-                    }
-                  }
+                  ticks: { font: { size: 10, weight: 800 } }
                 },
                 y: {
-                  grid: {
-                    color: "rgba(226,232,240,1)"
-                  },
-                  border: {
-                    display: false
-                  },
+                  beginAtZero: true,
+                  grid: { color: "rgba(226,232,240,1)" },
+                  border: { display: false },
                   ticks: {
-                    stepSize: 5,
-                    font: {
-                      size: 10,
-                      weight: 700
-                    }
+                    precision: 0,
+                    font: { size: 10, weight: 700 }
                   }
                 }
               }
@@ -1024,20 +1166,25 @@
         }
 
         const donutCtx = document.getElementById("donutChart");
+        const donutColors = [
+          "rgba(242,201,76,.95)",
+          "rgba(242,153,74,.95)",
+          "rgba(156,163,175,.95)",
+          "rgba(107,114,128,.95)",
+          "rgba(47,128,237,.85)",
+          "rgba(39,174,96,.85)"
+        ];
 
         if (donutCtx) {
           new Chart(donutCtx, {
             type: "doughnut",
             data: {
-              labels: ["Planning", "Execution", "Monitoring", "Reporting"],
+              labels: deptLabels,
               datasets: [{
-                data: [25, 35, 20, 20],
-                backgroundColor: [
-                  "rgba(242,201,76,.95)",
-                  "rgba(242,153,74,.95)",
-                  "rgba(156,163,175,.95)",
-                  "rgba(107,114,128,.95)"
-                ],
+                data: deptValues,
+                backgroundColor: deptLabels.map(function(_, i) {
+                  return donutColors[i % donutColors.length];
+                }),
                 borderWidth: 0,
                 hoverOffset: 8
               }]
@@ -1047,9 +1194,7 @@
               maintainAspectRatio: false,
               cutout: "68%",
               plugins: {
-                legend: {
-                  display: false
-                },
+                legend: { display: false },
                 tooltip: {
                   titleFont: { size: 12, weight: 'bold' },
                   bodyFont: { size: 11 }
@@ -1061,7 +1206,6 @@
               afterDraw(chart) {
                 const ctx = chart.ctx;
                 const meta = chart.getDatasetMeta(0);
-
                 if (!meta || !meta.data || !meta.data.length) return;
 
                 const x = meta.data[0].x;
@@ -1071,17 +1215,26 @@
                 ctx.fillStyle = "#334155";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
-
                 ctx.font = "800 12px " + Chart.defaults.font.family;
                 ctx.fillText("Team", x, y - 7);
-
                 ctx.font = "900 12px " + Chart.defaults.font.family;
-                ctx.fillText("Performance", x, y + 11);
-
+                ctx.fillText("Split", x, y + 11);
                 ctx.restore();
               }
             }]
           });
+        }
+
+        const legend = document.getElementById('deptLegend');
+        if (legend) {
+          legend.innerHTML = deptLabels.map(function(label, i) {
+            return `
+              <div class="legend-item">
+                <span class="legend-dot" style="background:${donutColors[i % donutColors.length]};"></span>
+                ${label}
+              </div>
+            `;
+          }).join('');
         }
       }
     });
@@ -1089,3 +1242,8 @@
 
 </body>
 </html>
+<?php
+if (isset($conn) && $conn instanceof mysqli) {
+  mysqli_close($conn);
+}
+?>
