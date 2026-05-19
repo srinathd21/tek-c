@@ -1,13 +1,4 @@
 <?php
-// projects.php (TEK-C style)
-// ✅ Shows assigned Manager + Team Lead + Project Engineers (name + designation)
-// IMPORTANT:
-// - Your current DB has only: sites.manager_employee_id and site_project_engineers
-// - There is NO team_lead_employee_id in your dump.
-// ✅ This code supports Team Lead in 2 ways (no DB change needed):
-//   1) If you store team lead in sites.team_lead_employee_id (future) -> it will work automatically if column exists
-//   2) If you don't have that column, it will show Team Lead(s) from assigned engineers where designation = 'Team Lead'
-
 session_start();
 require_once 'includes/db-config.php';
 
@@ -16,701 +7,1336 @@ $error = '';
 $projects = [];
 
 $conn = get_db_connection();
-if (!$conn) { die("Database connection failed."); }
 
-// ---------- Helpers ----------
-function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-
-function showMoney($v, $dash='—'){
-  if ($v === null) return $dash;
-  $v = trim((string)$v);
-  if ($v === '') return $dash;
-  if (!is_numeric($v)) return e($v);
-  return number_format((float)$v, 2);
+if (!$conn) {
+  die("Database connection failed.");
 }
 
-function projectStatusBadge($start, $end){
+/* ---------------- CURRENT EMPLOYEE ----------------
+   This page shows only projects assigned to the logged-in employee.
+   Match happens against:
+   1) sites.manager_employee_id
+   2) sites.team_lead_employee_id, if the column exists
+   3) site_project_engineers.employee_id
+*/
+$current_employee_id = (int) (
+  $_SESSION['employee_id']
+  ?? $_SESSION['user_id']
+  ?? 0
+);
+
+if ($current_employee_id <= 0) {
+  $error = "Employee session not found. Please login again.";
+}
+
+/* ---------------- HELPERS ---------------- */
+
+function e($v)
+{
+  return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+}
+
+function showMoney($v, $dash = '—')
+{
+
+  if ($v === null)
+    return $dash;
+
+  $v = trim((string) $v);
+
+  if ($v === '')
+    return $dash;
+
+  if (!is_numeric($v))
+    return e($v);
+
+  $num = (float) $v;
+
+  if ($num >= 10000000) {
+    return number_format($num / 10000000, 2) . 'Cr';
+  }
+
+  if ($num >= 100000) {
+    return number_format($num / 100000, 2) . 'L';
+  }
+
+  return number_format($num, 2);
+}
+
+function projectStatusBadge($start, $end)
+{
+
   $today = date('Y-m-d');
-  $start = trim((string)$start);
-  $end   = trim((string)$end);
+
+  $start = trim((string) $start);
+  $end = trim((string) $end);
 
   if ($end !== '' && $end !== '0000-00-00' && $end < $today) {
-    return ['Completed', 'status-active', 'bi-check-circle-fill'];
+    return ['Completed', 'ontrack'];
   }
+
   if ($start !== '' && $start !== '0000-00-00' && $start > $today) {
-    return ['Upcoming', 'status-inactive', 'bi-clock-fill'];
+    return ['Upcoming', 'pending'];
   }
-  return ['Ongoing', 'status-active', 'bi-lightning-fill'];
+
+  return ['Ongoing', 'progressing'];
 }
 
-function parseMembersConcat($str){
-  $str = trim((string)$str);
-  if ($str === '') return [];
+function parseMembersConcat($str)
+{
+
+  $str = trim((string) $str);
+
+  if ($str === '')
+    return [];
+
   $items = explode('||', $str);
+
   $out = [];
-  foreach ($items as $it){
+
+  foreach ($items as $it) {
+
     $it = trim($it);
-    if ($it === '') continue;
-    // full_name|designation
+
+    if ($it === '')
+      continue;
+
     $parts = explode('|', $it);
+
     $out[] = [
       'name' => trim($parts[0] ?? ''),
       'designation' => trim($parts[1] ?? '')
     ];
   }
+
   return $out;
 }
 
-// ---------- Detect optional team_lead_employee_id column (avoid fatal error) ----------
+/* ---------------- TEAM LEAD CHECK ---------------- */
+
 $hasTeamLeadCol = false;
-$chk = mysqli_query($conn, "SHOW COLUMNS FROM sites LIKE 'team_lead_employee_id'");
+
+$chk = mysqli_query(
+  $conn,
+  "SHOW COLUMNS FROM sites LIKE 'team_lead_employee_id'"
+);
+
 if ($chk) {
-  $hasTeamLeadCol = (mysqli_num_rows($chk) > 0);
+
+  $hasTeamLeadCol =
+    mysqli_num_rows($chk) > 0;
+
   mysqli_free_result($chk);
 }
 
-// ---------- Fetch all projects (sites + clients + assignments) ----------
-$teamLeadSelect = $hasTeamLeadCol ? "s.team_lead_employee_id," : "NULL AS team_lead_employee_id,";
+/* ---------------- QUERY ---------------- */
 
-$teamLeadJoin   = $hasTeamLeadCol
+$teamLeadSelect = $hasTeamLeadCol
+  ? "s.team_lead_employee_id,"
+  : "NULL AS team_lead_employee_id,";
+
+$teamLeadJoin = $hasTeamLeadCol
   ? "LEFT JOIN employees tl ON tl.id = s.team_lead_employee_id"
-  : "LEFT JOIN employees tl ON 1=0"; // no-op join
+  : "LEFT JOIN employees tl ON 1=0";
+
+$employeeFilterSql = $hasTeamLeadCol
+  ? "(
+        s.manager_employee_id = ?
+        OR s.team_lead_employee_id = ?
+        OR EXISTS (
+            SELECT 1
+            FROM site_project_engineers spe_filter
+            WHERE spe_filter.site_id = s.id
+              AND spe_filter.employee_id = ?
+        )
+    )"
+  : "(
+        s.manager_employee_id = ?
+        OR EXISTS (
+            SELECT 1
+            FROM site_project_engineers spe_filter
+            WHERE spe_filter.site_id = s.id
+              AND spe_filter.employee_id = ?
+        )
+    )";
 
 $sql = "
-  SELECT
+
+SELECT
+
     s.*,
+
     c.client_name,
     c.company_name,
     c.mobile_number AS client_mobile,
     c.email AS client_email,
     c.state AS client_state,
-    c.client_type,
 
     $teamLeadSelect
 
-    m.full_name   AS manager_name,
+    m.full_name AS manager_name,
     m.designation AS manager_designation,
 
-    tl.full_name   AS team_lead_name,
+    tl.full_name AS team_lead_name,
     tl.designation AS team_lead_designation,
 
     GROUP_CONCAT(
-      DISTINCT CONCAT(
-        COALESCE(pe.full_name,''),'|',
-        COALESCE(pe.designation,'')
-      )
-      ORDER BY pe.full_name
-      SEPARATOR '||'
+
+        DISTINCT CONCAT(
+
+            COALESCE(pe.full_name,''),'|',
+            COALESCE(pe.designation,'')
+
+        )
+
+        ORDER BY pe.full_name
+
+        SEPARATOR '||'
+
     ) AS engineers_concat
 
-  FROM sites s
-  INNER JOIN clients c ON c.id = s.client_id
+FROM sites s
 
-  LEFT JOIN employees m ON m.id = s.manager_employee_id
-  $teamLeadJoin
+INNER JOIN clients c
+ON c.id = s.client_id
 
-  LEFT JOIN site_project_engineers spe ON spe.site_id = s.id
-  LEFT JOIN employees pe ON pe.id = spe.employee_id
+LEFT JOIN employees m
+ON m.id = s.manager_employee_id
 
-  GROUP BY s.id
-  ORDER BY s.created_at DESC
+$teamLeadJoin
+
+LEFT JOIN site_project_engineers spe
+ON spe.site_id = s.id
+
+LEFT JOIN employees pe
+ON pe.id = spe.employee_id
+
+WHERE $employeeFilterSql
+
+GROUP BY s.id
+
+ORDER BY s.created_at DESC
+
 ";
 
-$result = mysqli_query($conn, $sql);
-if ($result) {
-  $projects = mysqli_fetch_all($result, MYSQLI_ASSOC);
-  mysqli_free_result($result);
-} else {
-  $error = "Error fetching projects: " . mysqli_error($conn);
+if ($current_employee_id > 0) {
+
+  $stmt = mysqli_prepare($conn, $sql);
+
+  if ($stmt) {
+
+    if ($hasTeamLeadCol) {
+      mysqli_stmt_bind_param(
+        $stmt,
+        "iii",
+        $current_employee_id,
+        $current_employee_id,
+        $current_employee_id
+      );
+    } else {
+      mysqli_stmt_bind_param(
+        $stmt,
+        "ii",
+        $current_employee_id,
+        $current_employee_id
+      );
+    }
+
+    mysqli_stmt_execute($stmt);
+
+    $result = mysqli_stmt_get_result($stmt);
+
+    if ($result) {
+      $projects = mysqli_fetch_all($result, MYSQLI_ASSOC);
+      mysqli_free_result($result);
+    }
+
+    mysqli_stmt_close($stmt);
+
+  } else {
+
+    $error =
+      "Error preparing project query: " .
+      mysqli_error($conn);
+  }
 }
 
-// ---------- Stats ----------
+/* ---------------- STATS ---------------- */
+
 $total_projects = count($projects);
-$ongoing = 0; $upcoming = 0; $completed = 0;
+
+$ongoing = 0;
+$upcoming = 0;
+$completed = 0;
+
 $today = date('Y-m-d');
 
 foreach ($projects as $p) {
-  $start = $p['start_date'] ?? '';
-  $end   = $p['expected_completion_date'] ?? '';
 
-  if (!empty($end) && $end !== '0000-00-00' && $end < $today) $completed++;
-  elseif (!empty($start) && $start !== '0000-00-00' && $start > $today) $upcoming++;
-  else $ongoing++;
+  $start =
+    $p['start_date'] ?? '';
+
+  $end =
+    $p['expected_completion_date'] ?? '';
+
+  if (
+    !empty($end) &&
+    $end !== '0000-00-00' &&
+    $end < $today
+  ) {
+
+    $completed++;
+
+  } elseif (
+    !empty($start) &&
+    $start !== '0000-00-00' &&
+    $start > $today
+  ) {
+
+    $upcoming++;
+
+  } else {
+
+    $ongoing++;
+  }
 }
+
 ?>
+
 <!doctype html>
 <html lang="en">
+
 <head>
+
   <meta charset="utf-8" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <title>Projects - TEK-C</title>
 
   <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
-  <link rel="manifest" href="assets/fav/site.webmanifest">
 
-  <!-- Bootstrap 5 -->
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
+
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- Bootstrap Icons -->
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
 
-  <!-- DataTables (Bootstrap 5 + Responsive) -->
-  <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-  <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
-
-  <!-- TEK-C Custom Styles -->
   <link href="assets/css/layout-styles.css" rel="stylesheet" />
   <link href="assets/css/topbar.css" rel="stylesheet" />
   <link href="assets/css/footer.css" rel="stylesheet" />
 
   <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
+    :root {
 
-    .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px 16px 12px; height:100%; }
-    .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-    .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
-    .panel-menu{ width:36px; height:36px; border-radius:12px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:#6b7280; }
-
-    .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-      padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; }
-    .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
-    .stat-ic.blue{ background: var(--blue); }
-    .stat-ic.green{ background: #10b981; }
-    .stat-ic.yellow{ background: #f59e0b; }
-    .stat-ic.red{ background: #ef4444; }
-    .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-    .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
-
-    .table-responsive { overflow-x: hidden !important; }
-    table.dataTable { width:100% !important; }
-    .table thead th{
-      font-size: 11px;
-      letter-spacing: .15px;
-      color:#6b7280;
-      font-weight: 800;
-      border-bottom:1px solid var(--border)!important;
-      padding: 10px 10px !important;
-      white-space: normal !important;
-    }
-    .table td{
-      vertical-align: top;
-      border-color: var(--border);
-      font-weight: 650;
-      color:#374151;
-      padding: 10px 10px !important;
-      white-space: normal !important;
-      word-break: break-word;
+      --page-bg: #f5f7fb;
+      --card-bg: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --soft: #f8fafc;
+      --shadow: 0 10px 26px rgba(15, 23, 42, .055);
+      --radius: 15px;
     }
 
-    .btn-add {
-      background: var(--blue);
-      color: white;
-      border: none;
-      padding: 10px 16px;
-      border-radius: 12px;
-      font-weight: 800;
-      font-size: 13px;
+    body {
+      background: var(--page-bg);
+    }
+
+    .content-scroll {
+      flex: 1 1 auto;
+      overflow: auto;
+      padding: 16px;
+    }
+
+    .projects-wrapper {
+      width: 100%;
+    }
+
+    .page-heading {
       display: flex;
       align-items: center;
-      gap: 8px;
-      box-shadow: 0 8px 18px rgba(45, 156, 219, 0.18);
-      text-decoration:none;
-      white-space: nowrap;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
     }
-    .btn-add:hover { background: #2a8bc9; color: white; box-shadow: 0 12px 24px rgba(45, 156, 219, 0.25); }
 
-    .btn-export {
-      background: #10b981;
-      color: white;
-      border: none;
-      padding: 10px 16px;
-      border-radius: 12px;
-      font-weight: 800;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      box-shadow: 0 8px 18px rgba(16, 185, 129, 0.18);
-      white-space: nowrap;
+    .page-heading h1 {
+      font-size: 19px;
+      font-weight: 900;
+      color: var(--text);
+      margin: 0;
     }
-    .btn-export:hover { background: #0da271; color: white; box-shadow: 0 12px 24px rgba(16, 185, 129, 0.25); }
 
-    .btn-action {
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 5px 8px;
+    .page-heading p {
+      margin: 3px 0 0;
       color: var(--muted);
       font-size: 12px;
-      margin-left: 4px;
-      text-decoration:none;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
+      font-weight: 600;
     }
-    .btn-action:hover { background: var(--bg); color: var(--blue); }
 
-    .status-badge {
-      padding: 3px 8px;
-      border-radius: 20px;
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
+    .primary-btn {
+      border: 0;
+      background: #111827;
+      color: #fff;
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 11px;
+      font-size: 12px;
+      font-weight: 900;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      text-decoration: none;
       white-space: nowrap;
     }
-    .status-active {
-      background: rgba(16, 185, 129, 0.1);
-      color: #10b981;
-      border: 1px solid rgba(16, 185, 129, 0.2);
-    }
-    .status-inactive {
-      background: rgba(245, 158, 11, 0.1);
-      color: #f59e0b;
-      border: 1px solid rgba(245, 158, 11, 0.2);
+
+    .primary-btn:hover {
+      background: #020617;
+      color: #fff;
     }
 
-    .project-title{ font-weight:800; font-size:13px; color:#1f2937; margin-bottom:2px; line-height:1.2; }
-    .project-sub{ font-size:11px; color:#6b7280; font-weight:600; line-height:1.2; }
+    .export-btn {
+      background: #10b981;
+    }
 
-    .contact-info {
-      font-size: 11px;
-      color: #6b7280;
+    .export-btn:hover {
+      background: #059669;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px 13px;
+      min-height: 78px;
       display: flex;
       align-items: center;
-      gap: 6px;
-      margin-top: 2px;
-      line-height: 1.2;
+      gap: 11px;
     }
-    .contact-info i{ font-size: 11px; }
 
-    .alert { border-radius: var(--radius); border:none; box-shadow: var(--shadow); margin-bottom: 20px; }
+    .stat-ic {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 17px;
+    }
 
-    div.dataTables_wrapper .dataTables_length select,
-    div.dataTables_wrapper .dataTables_filter input{
+    .blue {
+      background: #2f80ed;
+    }
+
+    .orange {
+      background: #f2994a;
+    }
+
+    .green {
+      background: #27ae60;
+    }
+
+    .red {
+      background: #eb5757;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 10.5px;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 950;
+    }
+
+    .panel {
+      background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 7px 10px;
-      font-weight: 650;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 13px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .panel-title {
+      font-weight: 900;
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .panel-subtitle {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1 1 260px;
+      max-width: 430px;
+    }
+
+    .search-box i {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 13px;
+    }
+
+    .search-box input {
+      width: 100%;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: #fff;
+      padding: 0 12px 0 34px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
       outline: none;
     }
-    div.dataTables_wrapper .dataTables_filter input:focus{
-      border-color: var(--blue);
-      box-shadow: 0 0 0 3px rgba(45, 156, 219, 0.1);
-    }
-    .dataTables_paginate .pagination .page-link{
-      border-radius: 10px;
-      margin: 0 3px;
-      font-weight: 750;
+
+    .search-box input:focus {
+      border-color: #bfdbfe;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
     }
 
-    th.actions-col, td.actions-col { width: 120px !important; }
-
-    /* ✅ Names-only team display */
-    .team-cell{ display:flex; flex-direction:column; gap:6px; }
-    .team-line{
-      display:flex; flex-wrap:wrap; gap:6px; align-items:center;
-      font-size: 11px; line-height:1.2;
-    }
-    .team-tag{
-      font-size: 10px;
-      font-weight: 900;
-      color:#6b7280;
-      text-transform: uppercase;
-      letter-spacing: .25px;
-      white-space:nowrap;
-    }
-    .name-pill{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding: 4px 8px;
-      border-radius: 999px;
-      border:1px solid #e5e7eb;
-      background:#f9fafb;
+    .filter-select {
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: #fff;
+      padding: 0 42px 0 12px;
+      font-size: 12px;
       font-weight: 800;
-      color:#111827;
-      white-space:nowrap;
+      min-width: 145px;
     }
-    .name-pill .desg{ color:#6b7280; font-weight:800; }
 
-    @media (max-width: 991.98px){
-      .content-scroll{ padding:18px; }
+    .compact-table-wrap {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .compact-table {
+      width: 100%;
+      margin: 0;
+      table-layout: auto;
+    }
+
+    .compact-table thead th {
+      background: var(--soft);
+      color: #64748b;
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 900;
+      border-bottom: 1px solid var(--border) !important;
+      padding: 8px 9px;
+    }
+
+    .compact-table tbody td {
+      padding: 8px 9px;
+      vertical-align: middle;
+      border-color: #eef2f7;
+      color: #334155;
+      font-weight: 700;
+      font-size: 11.5px;
+    }
+
+    .compact-table tbody tr:hover {
+      background: #fbfdff;
+    }
+
+    .table-title-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .table-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #eff6ff;
+      color: #2563eb;
+      font-size: 13px;
+    }
+
+    .table-primary-text {
+      color: #111827;
+      font-size: 11.5px;
+      font-weight: 900;
+    }
+
+    .table-secondary-text {
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 700;
+      margin-top: 1px;
+    }
+
+    .badge-pill {
+      border-radius: 999px;
+      padding: 5px 8px;
+      font-weight: 900;
+      font-size: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mini-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .ontrack {
+      color: #15803d;
+      background: #dcfce7;
+    }
+
+    .progressing {
+      color: #2563eb;
+      background: #dbeafe;
+    }
+
+    .pending {
+      color: #6d28d9;
+      background: #ede9fe;
+    }
+
+    .action-group {
+      display: flex;
+      justify-content: flex-end;
+      gap: 5px;
+    }
+
+    .action-btn {
+      width: 27px;
+      height: 27px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: #fff;
+      display: grid;
+      place-items: center;
+      text-decoration: none;
+    }
+
+    .view-btn {
+      color: #475569;
+      background: #f8fafc;
+    }
+
+    .edit-btn {
+      color: #2563eb;
+      background: #eff6ff;
+    }
+
+    .file-btn {
+      color: #dc2626;
+      background: #fef2f2;
+    }
+
+    .pagination-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 12px;
+    }
+
+    .pagination-info {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .team-text {
+      font-size: 10px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    @media(max-width:1199px) {
+
+      .compact-table thead {
+        display: none;
+      }
+
+      .compact-table,
+      .compact-table tbody,
+      .compact-table tr,
+      .compact-table td {
+        display: block;
+        width: 100%;
+      }
+
+      .compact-table tbody tr {
+        border-bottom: 1px solid var(--border);
+        padding: 10px;
+      }
+
+      .compact-table tbody td {
+        border: 0;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .compact-table tbody td::before {
+        content: attr(data-label);
+        font-size: 10px;
+        font-weight: 900;
+        color: #64748b;
+        text-transform: uppercase;
+        flex: 0 0 95px;
+      }
+
+      .compact-table tbody td:first-child {
+        display: block;
+      }
+
+      .compact-table tbody td:first-child::before {
+        display: none;
+      }
+
+      .action-group {
+        justify-content: flex-start;
+      }
     }
   </style>
+
 </head>
+
 <body>
-<div class="app">
 
-  <?php include 'includes/sidebar.php'; ?>
+  <div class="app">
 
-  <main class="main" aria-label="Main">
+    <?php include 'includes/sidebar.php'; ?>
 
-    <?php include 'includes/topbar.php'; ?>
+    <main class="main">
 
-    <div id="contentScroll" class="content-scroll">
-      <div class="container-fluid maxw">
+      <?php include 'includes/topbar.php'; ?>
 
-        <!-- Page Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
-          <div>
-            <h1 class="h3 fw-bold text-dark mb-1">Projects</h1>
-            <p class="text-muted mb-0">View and manage all project records (sites table)</p>
-          </div>
-          <div class="d-flex gap-2">
-            <a href="add-site.php" class="btn-add">
-              <i class="bi bi-plus-circle"></i> Add Project
-            </a>
-            <button class="btn-export" data-bs-toggle="modal" data-bs-target="#exportModal">
-              <i class="bi bi-download"></i> Export
-            </button>
-          </div>
-        </div>
+      <div class="content-scroll">
 
-        <?php if ($success): ?>
-          <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="bi bi-check-circle-fill me-2"></i>
-            <?php echo e($success); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-        <?php endif; ?>
+        <div class="container-fluid projects-wrapper px-0">
 
-        <?php if ($error): ?>
-          <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <?php echo e($error); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-        <?php endif; ?>
+          <!-- PAGE HEADING -->
 
-        <!-- Stats -->
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic blue"><i class="bi bi-kanban-fill"></i></div>
-              <div>
-                <div class="stat-label">Total Projects</div>
-                <div class="stat-value"><?php echo (int)$total_projects; ?></div>
-              </div>
+          <div class="page-heading">
+
+            <div>
+              <h1>Projects</h1>
+
+              <p>
+                Manage only projects assigned to your employee account
+              </p>
             </div>
-          </div>
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic green"><i class="bi bi-lightning-fill"></i></div>
-              <div>
-                <div class="stat-label">Ongoing</div>
-                <div class="stat-value"><?php echo (int)$ongoing; ?></div>
-              </div>
+
+            <div class="d-flex gap-2">
+
+            
+
+              <button class="primary-btn export-btn" data-bs-toggle="modal" data-bs-target="#exportModal">
+                <i class="bi bi-download"></i>
+                Export
+              </button>
+
             </div>
+
           </div>
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic yellow"><i class="bi bi-clock-fill"></i></div>
-              <div>
-                <div class="stat-label">Upcoming</div>
-                <div class="stat-value"><?php echo (int)$upcoming; ?></div>
-              </div>
+
+          <!-- ALERTS -->
+
+          <?php if ($success): ?>
+
+            <div class="alert alert-success">
+              <?php echo e($success); ?>
             </div>
-          </div>
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic red"><i class="bi bi-check2-circle"></i></div>
-              <div>
-                <div class="stat-label">Completed</div>
-                <div class="stat-value"><?php echo (int)$completed; ?></div>
-              </div>
+
+          <?php endif; ?>
+
+          <?php if ($error): ?>
+
+            <div class="alert alert-danger">
+              <?php echo e($error); ?>
             </div>
+
+          <?php endif; ?>
+
+          <!-- STATS -->
+
+          <div class="row g-3 mb-3">
+
+            <div class="col-12 col-sm-6 col-xl-3">
+
+              <div class="stat-card">
+
+                <div class="stat-ic blue">
+                  <i class="bi bi-folder2-open"></i>
+                </div>
+
+                <div>
+                  <div class="stat-label">Total Projects</div>
+                  <div class="stat-value">
+                    <?php echo (int) $total_projects; ?>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            <div class="col-12 col-sm-6 col-xl-3">
+
+              <div class="stat-card">
+
+                <div class="stat-ic green">
+                  <i class="bi bi-lightning-fill"></i>
+                </div>
+
+                <div>
+                  <div class="stat-label">Ongoing</div>
+                  <div class="stat-value">
+                    <?php echo (int) $ongoing; ?>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            <div class="col-12 col-sm-6 col-xl-3">
+
+              <div class="stat-card">
+
+                <div class="stat-ic orange">
+                  <i class="bi bi-clock-fill"></i>
+                </div>
+
+                <div>
+                  <div class="stat-label">Upcoming</div>
+                  <div class="stat-value">
+                    <?php echo (int) $upcoming; ?>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            <div class="col-12 col-sm-6 col-xl-3">
+
+              <div class="stat-card">
+
+                <div class="stat-ic red">
+                  <i class="bi bi-check-circle-fill"></i>
+                </div>
+
+                <div>
+                  <div class="stat-label">Completed</div>
+                  <div class="stat-value">
+                    <?php echo (int) $completed; ?>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
           </div>
-        </div>
 
-        <!-- Table -->
-        <div class="panel mb-4">
-          <div class="panel-header">
-            <h3 class="panel-title">Project Directory</h3>
-            <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-          </div>
+          <!-- PANEL -->
 
-          <div class="table-responsive">
-            <table id="projectsTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
-              <thead>
-                <tr>
-                  <th>Project</th>
-                  <th>Client</th>
-                  <th>Type / Location</th>
-                  <th>Value</th>
-                  <th>Status</th>
-                  <th>Team (Name • Designation)</th>
-                  <th class="text-end actions-col">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($projects as $p): ?>
-                  <?php
-                    [$stLabel, $stClass, $stIcon] = projectStatusBadge($p['start_date'] ?? '', $p['expected_completion_date'] ?? '');
+          <div class="panel">
 
-                    $clientDisplay = trim((string)($p['client_name'] ?? ''));
-                    $company = trim((string)($p['company_name'] ?? ''));
-                    $clientLine = $company !== '' ? ($clientDisplay . ' • ' . $company) : $clientDisplay;
+            <div class="panel-header">
 
-                    $managerName = trim((string)($p['manager_name'] ?? ''));
-                    $managerDesg = trim((string)($p['manager_designation'] ?? ''));
+              <div>
 
-                    // Team Lead:
-                    // - If team_lead_employee_id exists + assigned -> show that
-                    // - Else, show engineers whose designation is "Team Lead"
-                    $teamLeadName = trim((string)($p['team_lead_name'] ?? ''));
-                    $teamLeadDesg = trim((string)($p['team_lead_designation'] ?? ''));
+                <h3 class="panel-title">
+                  My Projects
+                </h3>
 
-                    $engineers = parseMembersConcat($p['engineers_concat'] ?? '');
+                <div class="panel-subtitle">
+                  Projects where you are Manager, Team Lead, or Project Engineer
+                </div>
 
-                    // If no team lead column or empty, find from engineers by designation = 'Team Lead'
-                    $fallbackTeamLeads = [];
-                    if ($teamLeadName === '') {
-                      foreach ($engineers as $eng) {
-                        if (strcasecmp($eng['designation'] ?? '', 'Team Lead') === 0) {
-                          $fallbackTeamLeads[] = $eng;
-                        }
-                      }
-                    }
+              </div>
 
-                    // Engineers list should NOT include team lead(s) when fallback used
-                    $engineerOnly = [];
-                    foreach ($engineers as $eng) {
-                      if ($teamLeadName === '') {
-                        if (strcasecmp($eng['designation'] ?? '', 'Team Lead') === 0) continue;
-                      }
-                      $engineerOnly[] = $eng;
-                    }
-                  ?>
+            </div>
+
+            <!-- FILTER BAR -->
+
+            <div class="filter-bar">
+
+              <div class="search-box">
+
+                <i class="bi bi-search"></i>
+
+                <input type="text" id="projectSearch" placeholder="Search project, client, manager or location...">
+
+              </div>
+
+              <div>
+
+                <select class="filter-select" id="statusFilter">
+
+                  <option value="">All Status</option>
+
+                  <option value="ongoing">
+                    Ongoing
+                  </option>
+
+                  <option value="completed">
+                    Completed
+                  </option>
+
+                  <option value="upcoming">
+                    Upcoming
+                  </option>
+
+                </select>
+
+              </div>
+
+            </div>
+
+            <!-- TABLE -->
+
+            <div class="compact-table-wrap">
+
+              <table class="table compact-table align-middle" id="projectsTable">
+
+                <thead>
+
                   <tr>
-                    <td>
-                      <div class="project-title"><?php echo e($p['project_name'] ?? ''); ?></div>
-                      <div class="project-sub">
-                        <i class="bi bi-file-earmark-text"></i>
-                        Agreement: <?php echo e($p['agreement_number'] ?? '—'); ?>
-                      </div>
-                    </td>
 
-                    <td>
-                      <div class="project-title"><?php echo e($clientLine); ?></div>
-                      <?php if (!empty($p['client_state'])): ?>
-                        <div class="contact-info"><i class="bi bi-geo-alt"></i> <?php echo e($p['client_state']); ?></div>
-                      <?php endif; ?>
-                      <?php if (!empty($p['client_mobile'])): ?>
-                        <div class="contact-info"><i class="bi bi-telephone"></i> <?php echo e($p['client_mobile']); ?></div>
-                      <?php endif; ?>
-                      <?php if (!empty($p['client_email'])): ?>
-                        <div class="contact-info"><i class="bi bi-envelope"></i> <?php echo e($p['client_email']); ?></div>
-                      <?php endif; ?>
-                    </td>
+                    <th>Project</th>
+                    <th>Client</th>
+                    <th>Status</th>
+                    <th>Timeline</th>
+                    <th>Value</th>
+                    <th>Team</th>
+                    <th class="text-end">Actions</th>
 
-                    <td>
-                      <div class="project-title"><?php echo e($p['project_type'] ?? ''); ?></div>
-                      <div class="project-sub">
-                        <i class="bi bi-pin-map"></i> <?php echo e($p['project_location'] ?? ''); ?>
-                      </div>
-                    </td>
-
-                    <td>
-                      <div class="project-title">₹ <?php echo e(showMoney($p['contract_value'] ?? '')); ?></div>
-                      <div class="project-sub">PMC: ₹ <?php echo e(showMoney($p['pmc_charges'] ?? '')); ?></div>
-                    </td>
-
-                    <td>
-                      <span class="status-badge <?php echo e($stClass); ?>">
-                        <i class="bi <?php echo e($stIcon); ?>" style="font-size: 11px;"></i>
-                        <?php echo e($stLabel); ?>
-                      </span>
-                    </td>
-
-                    <!-- ✅ TEAM: names + designation only -->
-                    <td>
-                      <div class="team-cell">
-
-                        <!-- Manager -->
-                        <div class="team-line">
-                          <span class="team-tag">Manager:</span>
-                          <?php if ($managerName !== ''): ?>
-                            <span class="name-pill">
-                              <?php echo e($managerName); ?>
-                              <?php if ($managerDesg !== ''): ?><span class="desg">• <?php echo e($managerDesg); ?></span><?php endif; ?>
-                            </span>
-                          <?php else: ?>
-                            <span class="name-pill"><span class="desg">Not assigned</span></span>
-                          <?php endif; ?>
-                        </div>
-
-                        <!-- Team Lead -->
-                        <div class="team-line">
-                          <span class="team-tag">Team Lead:</span>
-                          <?php if ($teamLeadName !== ''): ?>
-                            <span class="name-pill">
-                              <?php echo e($teamLeadName); ?>
-                              <?php if ($teamLeadDesg !== ''): ?><span class="desg">• <?php echo e($teamLeadDesg); ?></span><?php endif; ?>
-                            </span>
-                          <?php elseif (!empty($fallbackTeamLeads)): ?>
-                            <?php foreach ($fallbackTeamLeads as $tl): ?>
-                              <span class="name-pill">
-                                <?php echo e($tl['name']); ?>
-                                <?php if (!empty($tl['designation'])): ?><span class="desg">• <?php echo e($tl['designation']); ?></span><?php endif; ?>
-                              </span>
-                            <?php endforeach; ?>
-                          <?php else: ?>
-                            <span class="name-pill"><span class="desg">Not assigned</span></span>
-                          <?php endif; ?>
-                        </div>
-
-                        <!-- Engineers -->
-                        <div class="team-line">
-                          <span class="team-tag">Engineers:</span>
-                          <?php if (!empty($engineerOnly)): ?>
-                            <?php
-                              $maxShow = 3;
-                              $count = 0;
-                              foreach ($engineerOnly as $eng):
-                                $count++;
-                                if ($count > $maxShow) break;
-                            ?>
-                              <span class="name-pill">
-                                <?php echo e($eng['name']); ?>
-                                <?php if (!empty($eng['designation'])): ?><span class="desg">• <?php echo e($eng['designation']); ?></span><?php endif; ?>
-                              </span>
-                            <?php endforeach; ?>
-
-                            <?php if (count($engineerOnly) > $maxShow): ?>
-                              <span class="name-pill"><span class="desg">+<?php echo (int)(count($engineerOnly) - $maxShow); ?> more</span></span>
-                            <?php endif; ?>
-                          <?php else: ?>
-                            <span class="name-pill"><span class="desg">None</span></span>
-                          <?php endif; ?>
-                        </div>
-
-                      </div>
-                    </td>
-
-                    <td class="text-end actions-col">
-                      <a href="view-site.php?id=<?php echo (int)$p['id']; ?>" class="btn-action" title="View Project">
-                        <i class="bi bi-eye"></i>
-                      </a>
-                      <a href="view-client.php?id=<?php echo (int)$p['client_id']; ?>" class="btn-action" title="View Client">
-                        <i class="bi bi-person"></i>
-                      </a>
-                      <?php if (!empty($p['contract_document'])): ?>
-                        <a href="<?php echo e($p['contract_document']); ?>" class="btn-action" target="_blank" rel="noopener" title="Contract">
-                          <i class="bi bi-file-earmark-arrow-down"></i>
-                        </a>
-                      <?php endif; ?>
-                    </td>
                   </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
+
+                </thead>
+
+                <tbody>
+
+                  <?php foreach ($projects as $p): ?>
+
+                    <?php
+
+                    [$stLabel, $stClass] =
+                      projectStatusBadge(
+                        $p['start_date'] ?? '',
+                        $p['expected_completion_date'] ?? ''
+                      );
+
+                    $engineers =
+                      parseMembersConcat(
+                        $p['engineers_concat'] ?? ''
+                      );
+
+                    ?>
+
+                    <tr data-status="<?php echo strtolower($stLabel); ?>">
+
+                      <!-- PROJECT -->
+
+                      <td data-label="Project">
+
+                        <div class="table-title-cell">
+
+                          <div class="table-icon">
+                            <i class="bi bi-building"></i>
+                          </div>
+
+                          <div>
+
+                            <div class="table-primary-text">
+                              <?php echo e($p['project_name']); ?>
+                            </div>
+
+                            <div class="table-secondary-text">
+
+                              <?php echo e($p['agreement_number'] ?? '—'); ?>
+
+                              •
+
+                              <?php echo e($p['project_type'] ?? ''); ?>
+
+                              •
+
+                              <?php echo e($p['project_location'] ?? ''); ?>
+
+                            </div>
+
+                          </div>
+
+                        </div>
+
+                      </td>
+
+                      <!-- CLIENT -->
+
+                      <td data-label="Client">
+
+                        <div class="table-primary-text">
+
+                          <?php echo e($p['client_name']); ?>
+
+                        </div>
+
+                        <div class="table-secondary-text">
+
+                          <?php echo e($p['company_name']); ?>
+
+                        </div>
+
+                      </td>
+
+                      <!-- STATUS -->
+
+                      <td data-label="Status">
+
+                        <span class="badge-pill <?php echo e($stClass); ?>">
+
+                          <span class="mini-dot"></span>
+
+                          <?php echo e($stLabel); ?>
+
+                        </span>
+
+                      </td>
+
+                      <!-- TIMELINE -->
+
+                      <td data-label="Timeline">
+
+                        <div class="table-primary-text">
+
+                          <?php
+
+                          echo !empty($p['start_date'])
+                            ? date('d M Y', strtotime($p['start_date']))
+                            : '—';
+
+                          ?>
+
+                        </div>
+
+                        <div class="table-secondary-text">
+
+                          to
+
+                          <?php
+
+                          echo !empty($p['expected_completion_date'])
+                            ? date('d M Y', strtotime($p['expected_completion_date']))
+                            : '—';
+
+                          ?>
+
+                        </div>
+
+                      </td>
+
+                      <!-- VALUE -->
+
+                      <td data-label="Value">
+
+                        <div class="table-primary-text">
+
+                          ₹
+                          <?php echo e(showMoney($p['contract_value'])); ?>
+
+                        </div>
+
+                        <div class="table-secondary-text">
+
+                          PMC:
+                          ₹
+                          <?php echo e(showMoney($p['pmc_charges'])); ?>
+
+                        </div>
+
+                      </td>
+
+                      <!-- TEAM -->
+
+                      <td data-label="Team">
+
+                        <div class="team-text">
+
+                          <div>
+
+                            <b>Manager:</b>
+
+                            <?php
+
+                            echo !empty($p['manager_name'])
+                              ? e($p['manager_name'])
+                              : 'Not Assigned';
+
+                            ?>
+
+                          </div>
+
+                          <div>
+
+                            <b>Engineers:</b>
+
+                            <?php
+
+                            $engNames = [];
+
+                            foreach (array_slice($engineers, 0, 2) as $eng) {
+
+                              $engNames[] = $eng['name'];
+
+                            }
+
+                            echo !empty($engNames)
+                              ? e(implode(', ', $engNames))
+                              : 'None';
+
+                            ?>
+
+                          </div>
+
+                        </div>
+
+                      </td>
+
+                      <!-- ACTIONS -->
+
+                      <td data-label="Actions">
+
+                        <div class="action-group">
+
+                          <a href="view-site.php?id=<?php echo (int) $p['id']; ?>" class="action-btn view-btn"
+                            title="View">
+                            <i class="bi bi-eye"></i>
+                          </a>
+
+                          <a href="edit-site.php?id=<?php echo (int) $p['id']; ?>" class="action-btn edit-btn"
+                            title="Edit">
+                            <i class="bi bi-pencil-square"></i>
+                          </a>
+
+                          <?php if (!empty($p['contract_document'])): ?>
+
+                            <a href="<?php echo e($p['contract_document']); ?>" target="_blank" class="action-btn file-btn"
+                              title="Contract">
+                              <i class="bi bi-file-earmark-arrow-down"></i>
+                            </a>
+
+                          <?php endif; ?>
+
+                        </div>
+
+                      </td>
+
+                    </tr>
+
+                  <?php endforeach; ?>
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+            <!-- PAGINATION INFO -->
+
+            <div class="pagination-wrap">
+
+              <div class="pagination-info">
+
+                Showing
+                <?php echo count($projects); ?>
+                assigned project records
+
+              </div>
+
+            </div>
+
           </div>
+
         </div>
 
       </div>
-    </div>
 
-    <?php include 'includes/footer.php'; ?>
+      <?php include 'includes/footer.php'; ?>
 
-  </main>
-</div>
+    </main>
 
-<!-- Export Modal (optional) -->
-<div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold" id="exportModalLabel">Export Projects</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <form method="POST" action="export-sites.php">
-        <div class="modal-body">
-          <div class="row g-3">
-            <div class="col-12">
-              <label class="form-label">Export Format *</label>
-              <select class="form-control" name="export_format" required>
-                <option value="csv">CSV (Excel)</option>
-                <option value="pdf">PDF Document</option>
-                <option value="excel">Excel File</option>
-              </select>
-            </div>
-            <div class="col-12">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="apply_filters" name="apply_filters" value="1" checked>
-                <label class="form-check-label" for="apply_filters">Apply Current Filters</label>
-                <div class="form-text">Include current search/filter criteria in export</div>
-              </div>
-            </div>
-            <div class="col-12">
-              <div class="alert alert-warning mb-0" role="alert" style="box-shadow:none;">
-                <i class="bi bi-info-circle me-2"></i>
-                Create <b>export-sites.php</b> if you want export to work.
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn-export">
-            <i class="bi bi-download me-2"></i> Export
-          </button>
-        </div>
-      </form>
-    </div>
   </div>
-</div>
 
-<!-- Bootstrap JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- EXPORT MODAL -->
 
-<!-- jQuery -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <div class="modal fade" id="exportModal" tabindex="-1">
 
-<!-- DataTables -->
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
+    <div class="modal-dialog">
 
-<!-- TEK-C Custom JS -->
-<script src="assets/js/sidebar-toggle.js"></script>
+      <div class="modal-content">
 
-<script>
-(function () {
-  $(function () {
-    $('#projectsTable').DataTable({
-      responsive: true,
-      autoWidth: false,
-      scrollX: false,
-      pageLength: 10,
-      lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-      order: [[0, 'asc']],
-      columnDefs: [
-        { targets: [6], orderable: false, searchable: false }
-      ],
-      language: {
-        zeroRecords: "No matching projects found",
-        info: "Showing _START_ to _END_ of _TOTAL_ projects",
-        infoEmpty: "No projects to show",
-        lengthMenu: "Show _MENU_",
-        search: "Search:"
+        <div class="modal-header">
+
+          <h5 class="modal-title fw-bold">
+            Export Projects
+          </h5>
+
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+
+        </div>
+
+        <form method="POST" action="export-sites.php">
+
+          <div class="modal-body">
+
+            <div class="mb-3">
+
+              <label class="form-label">
+                Export Format
+              </label>
+
+              <select class="form-select" name="export_format">
+
+                <option value="csv">CSV</option>
+                <option value="excel">Excel</option>
+                <option value="pdf">PDF</option>
+
+              </select>
+
+            </div>
+
+          </div>
+
+          <div class="modal-footer">
+
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              Cancel
+            </button>
+
+            <button type="submit" class="btn btn-success">
+              Export
+            </button>
+
+          </div>
+
+        </form>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script src="assets/js/sidebar-toggle.js"></script>
+
+  <script>
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+      const searchInput =
+        document.getElementById('projectSearch');
+
+      const statusFilter =
+        document.getElementById('statusFilter');
+
+      const tableRows =
+        document.querySelectorAll('#projectsTable tbody tr');
+
+      function filterProjects() {
+
+        const searchValue =
+          searchInput.value.toLowerCase().trim();
+
+        const statusValue =
+          statusFilter.value.toLowerCase().trim();
+
+        tableRows.forEach(function (row) {
+
+          const rowText =
+            row.innerText.toLowerCase();
+
+          const rowStatus =
+            row.getAttribute('data-status') || '';
+
+          const matchesSearch =
+            rowText.includes(searchValue);
+
+          const matchesStatus =
+            !statusValue ||
+            rowStatus === statusValue;
+
+          row.style.display =
+            matchesSearch && matchesStatus
+              ? ''
+              : 'none';
+
+        });
+
       }
+
+      searchInput.addEventListener(
+        'input',
+        filterProjects
+      );
+
+      statusFilter.addEventListener(
+        'change',
+        filterProjects
+      );
+
     });
 
-    setTimeout(function() {
-      $('.dataTables_filter input').focus();
-    }, 400);
-  });
-})();
-</script>
+  </script>
 
 </body>
+
 </html>
+
 <?php
-if (isset($conn)) { mysqli_close($conn); }
+if (isset($conn)) {
+  mysqli_close($conn);
+}
 ?>

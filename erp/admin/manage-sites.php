@@ -1,13 +1,4 @@
 <?php
-/**
- * manage-sites.php (TEK-C style like manage-employees.php) — UPDATED + COMPLETE
- * ✅ Added MOBILE cards view (like manage-employees.php) + Desktop DataTable
- * ✅ PRG (Post/Redirect/Get) + Flash messages
- * ✅ Soft delete / restore / permanent delete
- * ✅ Activity logging for all actions
- * ✅ Avoid fatal error if sites.team_lead_employee_id doesn't exist
- * ✅ Team Lead fallback from engineers with designation = 'Team Lead'
- */
 
 session_start();
 require_once 'includes/db-config.php';
@@ -281,7 +272,7 @@ if ($trashRes) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Manage Sites - TEK-C</title>
+  <title><?php echo $show_trash ? 'Trash - Sites' : 'Manage Sites'; ?> - TEK-C</title>
 
   <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
@@ -291,84 +282,120 @@ if ($trashRes) {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
 
-  <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-  <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
-
   <link href="assets/css/layout-styles.css" rel="stylesheet" />
   <link href="assets/css/topbar.css" rel="stylesheet" />
   <link href="assets/css/footer.css" rel="stylesheet" />
 
   <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
+    :root{
+      --page-bg:#f5f7fb;
+      --card-bg:#ffffff;
+      --border:#e5e7eb;
+      --text:#111827;
+      --muted:#6b7280;
+      --soft:#f8fafc;
+      --shadow:0 10px 26px rgba(15,23,42,.055);
+      --radius:15px;
+    }
 
-    .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px 16px 12px; height:100%; }
-    .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-    .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
-    .panel-menu{ width:36px; height:36px; border-radius:12px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:#6b7280; }
+    body{ background:var(--page-bg); }
+    .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px; }
+    .projects-wrapper{ width:100%; }
 
-    .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-      padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; }
-    .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
-    .stat-ic.blue{ background: var(--blue); }
-    .stat-ic.green{ background: #10b981; }
-    .stat-ic.yellow{ background: #f59e0b; }
-    .stat-ic.red{ background: #ef4444; }
-    .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-    .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
+    .page-heading{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .page-heading h1{ font-size:19px; font-weight:900; color:var(--text); margin:0; }
+    .page-heading p{ margin:3px 0 0; color:var(--muted); font-size:12px; font-weight:600; }
 
-    .btn-add{ background: var(--blue); color:#fff; border:none; padding:10px 16px; border-radius:12px; font-weight:800; font-size:13px; display:inline-flex; align-items:center; gap:8px; text-decoration:none; white-space:nowrap; box-shadow:0 8px 18px rgba(45,156,219,.18); }
-    .btn-add:hover{ background:#2a8bc9; color:#fff; }
-    .btn-trash{ background:#ef4444; color:#fff; border:none; padding:10px 16px; border-radius:12px; font-weight:800; font-size:13px; display:inline-flex; align-items:center; gap:8px; text-decoration:none; white-space:nowrap; box-shadow:0 8px 18px rgba(239,68,68,.18); }
-    .btn-trash:hover{ background:#dc2626; color:#fff; }
-    .btn-export{ background:#10b981; color:#fff; border:none; padding:10px 16px; border-radius:12px; font-weight:800; font-size:13px; display:inline-flex; align-items:center; gap:8px; white-space:nowrap; box-shadow:0 8px 18px rgba(16,185,129,.18); }
-    .btn-export:hover{ background:#0da271; color:#fff; }
+    .primary-btn{ border:0; background:#111827; color:#fff; height:36px; padding:0 14px; border-radius:11px; font-size:12px; font-weight:900; display:inline-flex; align-items:center; gap:7px; text-decoration:none; white-space:nowrap; }
+    .primary-btn:hover{ background:#020617; color:#fff; }
+    .trash-btn{ background:#ef4444; }
+    .trash-btn:hover{ background:#dc2626; }
+    .restore-view-btn{ background:#6b7280; }
+    .restore-view-btn:hover{ background:#4b5563; }
+    .export-btn{ background:#10b981; }
+    .export-btn:hover{ background:#059669; }
 
-    .status-badge{ padding:3px 8px; border-radius:20px; font-size:10px; font-weight:900; letter-spacing:.3px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; text-transform:uppercase; }
-    .status-green{ background: rgba(16,185,129,.12); color:#10b981; border:1px solid rgba(16,185,129,.22); }
-    .status-yellow{ background: rgba(245,158,11,.12); color:#f59e0b; border:1px solid rgba(245,158,11,.22); }
-    .status-red{ background: rgba(239,68,68,.12); color:#ef4444; border:1px solid rgba(239,68,68,.22); }
-    .status-gray{ background: rgba(107,114,128,.12); color:#6b7280; border:1px solid rgba(107,114,128,.22); }
+    .alert{ border:0; border-radius:var(--radius); box-shadow:var(--shadow); font-size:13px; font-weight:700; }
 
-    /* ✅ MOBILE CARDS (updated) */
-    .site-card{ border:1px solid var(--border); border-radius:16px; background:var(--surface); box-shadow:var(--shadow); padding:12px; }
-    .site-top{ display:flex; gap:10px; align-items:flex-start; justify-content:space-between; }
-    .site-main{ flex:1 1 auto; }
-    .site-title{ font-weight:1000; font-size:14px; color:#111827; line-height:1.25; }
-    .site-sub{ font-size:12px; color:#6b7280; font-weight:800; margin-top:2px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-    .site-kv{ margin-top:10px; display:grid; gap:8px; }
-    .site-row{ display:flex; gap:10px; }
-    .site-key{ flex:0 0 92px; color:#6b7280; font-weight:1000; font-size:12px; }
-    .site-val{ flex:1 1 auto; font-weight:900; color:#111827; font-size:13px; line-height:1.25; word-break:break-word; }
-    .site-actions{ margin-top:10px; display:flex; gap:8px; }
-    .site-actions a, .site-actions button{ flex:1 1 auto; border-radius:12px; justify-content:center; font-weight:900; }
-    .pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; border:1px solid #e5e7eb; background:#f9fafb; font-weight:900; font-size:12px; }
-    .pill .muted{ color:#6b7280; font-weight:900; }
+    .stat-card{ background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:12px 13px; min-height:78px; display:flex; align-items:center; gap:11px; }
+    .stat-ic{ width:38px; height:38px; border-radius:12px; display:grid; place-items:center; color:#fff; font-size:17px; }
+    .blue{ background:#2f80ed; }
+    .orange{ background:#f2994a; }
+    .green{ background:#27ae60; }
+    .red{ background:#eb5757; }
+    .gray{ background:#6b7280; }
+    .stat-label{ color:var(--muted); font-weight:800; font-size:10.5px; text-transform:uppercase; }
+    .stat-value{ font-size:24px; font-weight:950; line-height:1.05; }
 
-    @media (max-width: 991.98px){ .content-scroll{ padding:18px; } }
-    @media (max-width: 768px){
+    .panel{ background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:13px; }
+    .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:12px; }
+    .panel-title{ font-weight:900; font-size:14px; margin:0; color:var(--text); }
+    .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
+
+    .filter-bar{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+    .search-box{ position:relative; flex:1 1 260px; max-width:430px; }
+    .search-box i{ position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:13px; }
+    .search-box input{ width:100%; height:36px; border:1px solid var(--border); border-radius:11px; background:#fff; padding:0 12px 0 34px; font-size:12px; font-weight:700; color:var(--text); outline:none; }
+    .search-box input:focus{ border-color:#bfdbfe; box-shadow:0 0 0 3px rgba(59,130,246,.10); }
+    .filter-select{ height:36px; border:1px solid var(--border); border-radius:11px; background:#fff; padding:0 42px 0 12px; font-size:12px; font-weight:800; min-width:145px; }
+
+    .compact-table-wrap{ width:100%; border:1px solid var(--border); border-radius:13px; overflow:hidden; background:#fff; }
+    .compact-table{ width:100%; margin:0; table-layout:auto; }
+    .compact-table thead th{ background:var(--soft); color:#64748b; font-size:10px; text-transform:uppercase; font-weight:900; border-bottom:1px solid var(--border)!important; padding:8px 9px; white-space:nowrap; }
+    .compact-table tbody td{ padding:8px 9px; vertical-align:middle; border-color:#eef2f7; color:#334155; font-weight:700; font-size:11.5px; }
+    .compact-table tbody tr:hover{ background:#fbfdff; }
+
+    .table-title-cell{ display:flex; align-items:center; gap:8px; min-width:220px; }
+    .table-icon{ width:26px; height:26px; border-radius:8px; display:grid; place-items:center; background:#eff6ff; color:#2563eb; font-size:13px; flex:0 0 auto; }
+    .table-primary-text{ color:#111827; font-size:11.5px; font-weight:900; }
+    .table-secondary-text{ color:#64748b; font-size:10px; font-weight:700; margin-top:1px; line-height:1.4; }
+
+    .badge-pill{ border-radius:999px; padding:5px 8px; font-weight:900; font-size:10px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+    .mini-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .ontrack{ color:#15803d; background:#dcfce7; }
+    .progressing{ color:#2563eb; background:#dbeafe; }
+    .pending{ color:#6d28d9; background:#ede9fe; }
+    .deleted{ color:#6b7280; background:#f3f4f6; }
+    .completed{ color:#b91c1c; background:#fee2e2; }
+
+    .team-text{ font-size:10px; color:#64748b; line-height:1.5; min-width:170px; }
+    .action-group{ display:flex; justify-content:flex-end; gap:5px; flex-wrap:nowrap; }
+    .action-btn{ width:27px; height:27px; border-radius:9px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; text-decoration:none; padding:0; }
+    .view-btn{ color:#475569; background:#f8fafc; }
+    .edit-btn{ color:#2563eb; background:#eff6ff; }
+    .client-btn{ color:#7c3aed; background:#f5f3ff; }
+    .file-btn{ color:#059669; background:#ecfdf5; }
+    .delete-btn{ color:#dc2626; background:#fef2f2; }
+    .restore-btn{ color:#2563eb; background:#eff6ff; }
+
+    .pagination-wrap{ display:flex; align-items:center; justify-content:space-between; padding-top:12px; gap:10px; flex-wrap:wrap; }
+    .pagination-info{ color:var(--muted); font-size:11px; font-weight:700; }
+    .logs-link{ color:#475569; font-size:12px; font-weight:900; text-decoration:none; }
+    .logs-link:hover{ color:#111827; }
+
+    .empty-state{ border:1px dashed var(--border); background:#fbfdff; border-radius:13px; padding:24px; text-align:center; color:#64748b; font-weight:800; }
+
+    @media(max-width:1199px){
+      .compact-table thead{ display:none; }
+      .compact-table, .compact-table tbody, .compact-table tr, .compact-table td{ display:block; width:100%; }
+      .compact-table tbody tr{ border-bottom:1px solid var(--border); padding:10px; }
+      .compact-table tbody td{ border:0; display:flex; justify-content:space-between; gap:12px; padding:7px 0!important; }
+      .compact-table tbody td::before{ content:attr(data-label); font-size:10px; font-weight:900; color:#64748b; text-transform:uppercase; flex:0 0 95px; }
+      .compact-table tbody td:first-child{ display:block; }
+      .compact-table tbody td:first-child::before{ display:none; }
+      .action-group{ justify-content:flex-start; }
+      .table-title-cell{ min-width:0; }
+    }
+
+    @media(max-width:768px){
       .content-scroll{ padding:12px 10px 12px!important; }
-      .container-fluid.maxw{ padding-left:6px!important; padding-right:6px!important; }
+      .container-fluid.projects-wrapper{ padding-left:6px!important; padding-right:6px!important; }
+      .page-heading{ align-items:flex-start; flex-direction:column; }
       .panel{ padding:12px!important; border-radius:14px; }
+      .stat-card{ min-height:70px; }
     }
-
-    /* Desktop table */
-    .table-responsive{ overflow-x:hidden!important; }
-    table.dataTable{ width:100%!important; }
-    .table thead th{ font-size:11px; color:#6b7280; font-weight:800; border-bottom:1px solid var(--border)!important; padding:10px 10px!important; white-space:normal!important; }
-    .table td{ vertical-align:top; border-color:var(--border); font-weight:650; color:#374151; padding:10px 10px!important; white-space:normal!important; word-break:break-word; }
-
-    div.dataTables_wrapper .dataTables_length select,
-    div.dataTables_wrapper .dataTables_filter input{
-      border:1px solid var(--border); border-radius:10px; padding:7px 10px; font-weight:650; outline:none;
-    }
-    div.dataTables_wrapper .dataTables_filter input:focus{
-      border-color: var(--blue);
-      box-shadow: 0 0 0 3px rgba(45,156,219,.1);
-    }
-    th.actions-col, td.actions-col{ width:160px!important; white-space:nowrap!important; }
   </style>
 </head>
-
 <body>
 <div class="app">
   <?php include 'includes/sidebar.php'; ?>
@@ -377,451 +404,251 @@ if ($trashRes) {
     <?php include 'includes/topbar.php'; ?>
 
     <div id="contentScroll" class="content-scroll">
-      <div class="container-fluid maxw">
+      <div class="container-fluid projects-wrapper px-0">
 
-        <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div class="page-heading">
           <div>
-            <h1 class="h3 fw-bold text-dark mb-1"><?php echo $show_trash ? 'Trash - Sites' : 'Manage Sites'; ?></h1>
-            <p class="text-muted mb-0">View and manage all site/project records</p>
+            <h1><?php echo $show_trash ? 'Trash - Sites' : 'Manage Sites'; ?></h1>
+            <p><?php echo $show_trash ? 'Restore or permanently delete removed site records' : 'Manage all ongoing, completed and upcoming site/project records'; ?></p>
           </div>
+
           <div class="d-flex gap-2 flex-wrap">
-            <a href="add-site.php" class="btn-add">
-              <i class="bi bi-plus-circle"></i> Add Site
-            </a>
+            <a href="add-site.php" class="primary-btn"><i class="bi bi-plus-circle"></i> Add Site</a>
 
             <?php if ($show_trash): ?>
-              <a href="manage-sites.php" class="btn-add" style="background:#6b7280;">
-                <i class="bi bi-archive"></i> Active Sites
-              </a>
+              <a href="manage-sites.php" class="primary-btn restore-view-btn"><i class="bi bi-archive"></i> Active Sites</a>
             <?php else: ?>
-              <a href="manage-sites.php?show_trash=1" class="btn-trash">
-                <i class="bi bi-trash"></i> Trash (<?php echo (int)$trashCount; ?>)
-              </a>
+              <a href="manage-sites.php?show_trash=1" class="primary-btn trash-btn"><i class="bi bi-trash"></i> Trash (<?php echo (int)$trashCount; ?>)</a>
             <?php endif; ?>
 
-            <button class="btn-export" data-bs-toggle="modal" data-bs-target="#exportModal">
-              <i class="bi bi-download"></i> Export
-            </button>
+            <button class="primary-btn export-btn" data-bs-toggle="modal" data-bs-target="#exportModal"><i class="bi bi-download"></i> Export</button>
           </div>
         </div>
 
-        <!-- Alerts -->
         <?php if ($success): ?>
           <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="bi bi-check-circle-fill me-2"></i>
-            <?php echo e($success); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            <i class="bi bi-check-circle-fill me-2"></i><?php echo e($success); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
           </div>
         <?php endif; ?>
 
         <?php if ($error): ?>
           <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <?php echo e($error); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            <i class="bi bi-exclamation-triangle-fill me-2"></i><?php echo e($error); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
           </div>
         <?php endif; ?>
 
-        <!-- Stats (Active view only) -->
         <?php if (!$show_trash): ?>
           <div class="row g-3 mb-3">
-            <div class="col-12 col-md-6 col-xl-3">
-              <div class="stat-card">
-                <div class="stat-ic blue"><i class="bi bi-geo-alt-fill"></i></div>
-                <div>
-                  <div class="stat-label">Total Sites</div>
-                  <div class="stat-value"><?php echo (int)$total_sites; ?></div>
-                </div>
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-xl-3">
-              <div class="stat-card">
-                <div class="stat-ic green"><i class="bi bi-lightning-fill"></i></div>
-                <div>
-                  <div class="stat-label">Ongoing</div>
-                  <div class="stat-value"><?php echo (int)$ongoing; ?></div>
-                </div>
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-xl-3">
-              <div class="stat-card">
-                <div class="stat-ic yellow"><i class="bi bi-clock-fill"></i></div>
-                <div>
-                  <div class="stat-label">Upcoming</div>
-                  <div class="stat-value"><?php echo (int)$upcoming; ?></div>
-                </div>
-              </div>
-            </div>
-            <div class="col-12 col-md-6 col-xl-3">
-              <div class="stat-card">
-                <div class="stat-ic red"><i class="bi bi-check2-circle"></i></div>
-                <div>
-                  <div class="stat-label">Completed</div>
-                  <div class="stat-value"><?php echo (int)$completed; ?></div>
-                </div>
-              </div>
-            </div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="stat-card"><div class="stat-ic blue"><i class="bi bi-folder2-open"></i></div><div><div class="stat-label">Total Sites</div><div class="stat-value"><?php echo (int)$total_sites; ?></div></div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="stat-card"><div class="stat-ic green"><i class="bi bi-lightning-fill"></i></div><div><div class="stat-label">Ongoing</div><div class="stat-value"><?php echo (int)$ongoing; ?></div></div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="stat-card"><div class="stat-ic orange"><i class="bi bi-clock-fill"></i></div><div><div class="stat-label">Upcoming</div><div class="stat-value"><?php echo (int)$upcoming; ?></div></div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="stat-card"><div class="stat-ic red"><i class="bi bi-check-circle-fill"></i></div><div><div class="stat-label">Completed</div><div class="stat-value"><?php echo (int)$completed; ?></div></div></div></div>
           </div>
         <?php else: ?>
-          <div class="alert alert-warning mb-3" role="alert" style="box-shadow:none;">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            You are viewing deleted sites. Use restore or permanent delete.
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-sm-6 col-xl-3"><div class="stat-card"><div class="stat-ic gray"><i class="bi bi-trash3-fill"></i></div><div><div class="stat-label">Deleted Sites</div><div class="stat-value"><?php echo count($sites); ?></div></div></div></div>
+            <div class="col-12 col-xl-9"><div class="alert alert-warning mb-0" style="box-shadow:none;"><i class="bi bi-exclamation-triangle me-2"></i>You are viewing deleted sites. Use restore or permanent delete.</div></div>
           </div>
         <?php endif; ?>
 
-        <!-- ✅ MOBILE VIEW: Site Cards -->
-        <div class="d-block d-md-none mb-4">
+        <div class="panel mb-4">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title"><?php echo $show_trash ? 'Deleted Sites' : 'Sites Directory'; ?></h3>
+              <div class="panel-subtitle"><?php echo $show_trash ? 'Trash records with restore and delete actions' : 'Compact responsive site/project directory'; ?></div>
+            </div>
+          </div>
+
+          <div class="filter-bar">
+            <div class="search-box">
+              <i class="bi bi-search"></i>
+              <input type="text" id="siteSearch" placeholder="Search project, client, manager, engineer or location...">
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+              <select class="filter-select" id="statusFilter">
+                <option value="">All Status</option>
+                <?php if ($show_trash): ?>
+                  <option value="deleted">Deleted</option>
+                <?php else: ?>
+                  <option value="ongoing">Ongoing</option>
+                  <option value="completed">Completed</option>
+                  <option value="upcoming">Upcoming</option>
+                <?php endif; ?>
+              </select>
+
+              <select class="filter-select" id="typeFilter">
+                <option value="">All Types</option>
+                <option value="residential">Residential</option>
+                <option value="commercial">Commercial</option>
+                <option value="industrial">Industrial</option>
+                <option value="infrastructure">Infrastructure</option>
+              </select>
+            </div>
+          </div>
+
           <?php if (empty($sites)): ?>
-            <div class="panel text-muted" style="font-weight:900;">No sites found.</div>
+            <div class="empty-state">
+              <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+              No sites found.
+            </div>
           <?php else: ?>
-            <div class="d-grid gap-3">
-              <?php foreach ($sites as $s): ?>
-                <?php
-                  $is_deleted = !empty($s['deleted_at']);
-                  [$stLabel, $stClass, $stIcon] = projectStatusBadge(
-                    $s['start_date'] ?? '',
-                    $s['expected_completion_date'] ?? '',
-                    $s['deleted_at'] ?? null
-                  );
+            <div class="compact-table-wrap">
+              <table class="table compact-table align-middle" id="sitesTable">
+                <thead>
+                  <tr>
+                    <th>Site / Project</th>
+                    <th>Client</th>
+                    <th>Status</th>
+                    <th>Timeline</th>
+                    <th>Value</th>
+                    <th>Team</th>
+                    <?php if ($show_trash): ?><th>Deleted</th><?php endif; ?>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($sites as $s): ?>
+                  <?php
+                    $is_deleted = !empty($s['deleted_at']);
+                    [$stLabel, $oldStClass, $stIcon] = projectStatusBadge($s['start_date'] ?? '', $s['expected_completion_date'] ?? '', $s['deleted_at'] ?? null);
+                    $statusKey = strtolower($stLabel);
+                    $badgeClass = $statusKey === 'ongoing' ? 'progressing' : ($statusKey === 'upcoming' ? 'pending' : ($statusKey === 'completed' ? 'completed' : 'deleted'));
 
-                  $clientName = trim((string)($s['client_name'] ?? ''));
-                  $company    = trim((string)($s['company_name'] ?? ''));
-                  $clientLine = $company !== '' ? ($clientName . ' • ' . $company) : $clientName;
+                    $clientName = trim((string)($s['client_name'] ?? ''));
+                    $company = trim((string)($s['company_name'] ?? ''));
+                    $clientLine = $company !== '' ? ($clientName . ' — ' . $company) : $clientName;
 
-                  $managerName = trim((string)($s['manager_name'] ?? ''));
-                  $managerDesg = trim((string)($s['manager_designation'] ?? ''));
+                    $managerName = trim((string)($s['manager_name'] ?? ''));
+                    $managerDesg = trim((string)($s['manager_designation'] ?? ''));
+                    $teamLeadName = trim((string)($s['team_lead_name'] ?? ''));
+                    $teamLeadDesg = trim((string)($s['team_lead_designation'] ?? ''));
 
-                  $teamLeadName = trim((string)($s['team_lead_name'] ?? ''));
-                  $teamLeadDesg = trim((string)($s['team_lead_designation'] ?? ''));
+                    $engineers = parseMembersConcat($s['engineers_concat'] ?? '');
+                    $fallbackTeamLeads = [];
+                    if ($teamLeadName === '') {
+                      foreach ($engineers as $eng) {
+                        if (strcasecmp($eng['designation'] ?? '', 'Team Lead') === 0) $fallbackTeamLeads[] = $eng;
+                      }
+                    }
 
-                  $engineers = parseMembersConcat($s['engineers_concat'] ?? '');
-
-                  $fallbackTeamLeads = [];
-                  if ($teamLeadName === '') {
+                    $engineerOnly = [];
                     foreach ($engineers as $eng) {
-                      if (strcasecmp($eng['designation'] ?? '', 'Team Lead') === 0) $fallbackTeamLeads[] = $eng;
+                      if ($teamLeadName === '' && strcasecmp($eng['designation'] ?? '', 'Team Lead') === 0) continue;
+                      $engineerOnly[] = $eng;
                     }
-                  }
 
-                  $engineerOnly = [];
-                  foreach ($engineers as $eng) {
-                    if ($teamLeadName === '' && strcasecmp($eng['designation'] ?? '', 'Team Lead') === 0) continue;
-                    $engineerOnly[] = $eng;
-                  }
-
-                  $mgrTxt = $managerName !== '' ? ($managerName . ($managerDesg ? " • $managerDesg" : '')) : 'Not assigned';
-                  $tlTxt  = 'Not assigned';
-                  if ($teamLeadName !== '') $tlTxt = $teamLeadName . ($teamLeadDesg ? " • $teamLeadDesg" : '');
-                  elseif (!empty($fallbackTeamLeads)) {
-                    $tmp = [];
-                    foreach ($fallbackTeamLeads as $tl) $tmp[] = $tl['name'] . (!empty($tl['designation']) ? " • {$tl['designation']}" : '');
-                    $tlTxt = implode(', ', $tmp);
-                  }
-
-                  $engTxt = 'None';
-                  if (!empty($engineerOnly)) {
-                    $tmp = [];
-                    $max = 3;
-                    for ($i=0; $i<min($max, count($engineerOnly)); $i++){
-                      $tmp[] = $engineerOnly[$i]['name'] . (!empty($engineerOnly[$i]['designation']) ? " • {$engineerOnly[$i]['designation']}" : '');
+                    $mgrTxt = $managerName !== '' ? ($managerName . ($managerDesg ? " • $managerDesg" : '')) : 'Not Assigned';
+                    $tlTxt = 'Not Assigned';
+                    if ($teamLeadName !== '') $tlTxt = $teamLeadName . ($teamLeadDesg ? " • $teamLeadDesg" : '');
+                    elseif (!empty($fallbackTeamLeads)) {
+                      $tmp = [];
+                      foreach ($fallbackTeamLeads as $tl) $tmp[] = $tl['name'] . (!empty($tl['designation']) ? " • {$tl['designation']}" : '');
+                      $tlTxt = implode(', ', $tmp);
                     }
-                    $more = count($engineerOnly) - $max;
-                    if ($more > 0) $tmp[] = "+$more more";
-                    $engTxt = implode(', ', $tmp);
-                  }
-                ?>
-                <div class="site-card">
-                  <div class="site-top">
-                    <div class="site-main">
-                      <div class="site-title"><?php echo e($s['project_name'] ?? ''); ?></div>
-                      <div class="site-sub">
-                        <span><i class="bi bi-pin-map"></i> <?php echo e($s['project_location'] ?? ''); ?></span>
-                        <span>•</span>
-                        <span><i class="bi bi-kanban"></i> <?php echo e($s['project_type'] ?? ''); ?></span>
-                      </div>
-                      <div class="site-sub mt-1">
-                        <span><i class="bi bi-file-earmark-text"></i> Agreement: <?php echo e($s['agreement_number'] ?? '—'); ?></span>
-                      </div>
-                    </div>
 
-                    <span class="status-badge <?php echo e($stClass); ?>">
-                      <i class="bi <?php echo e($stIcon); ?>"></i> <?php echo e($stLabel); ?>
-                    </span>
-                  </div>
-
-                  <div class="site-kv">
-                    <div class="site-row">
-                      <div class="site-key">Client</div>
-                      <div class="site-val"><?php echo e($clientLine); ?></div>
-                    </div>
-
-                    <div class="site-row">
-                      <div class="site-key">Value</div>
-                      <div class="site-val">
-                        ₹ <?php echo e(showMoney($s['contract_value'] ?? '')); ?>
-                        <span class="muted" style="font-weight:900;color:#6b7280;"> (PMC: ₹ <?php echo e(showMoney($s['pmc_charges'] ?? '')); ?>)</span>
-                      </div>
-                    </div>
-
-                    <div class="site-row">
-                      <div class="site-key">Dates</div>
-                      <div class="site-val">
-                        <span class="pill"><i class="bi bi-calendar-event"></i> <span class="muted">Start:</span> <?php echo e(safeDate($s['start_date'] ?? '')); ?></span>
-                        <span class="pill"><i class="bi bi-calendar-check"></i> <span class="muted">End:</span> <?php echo e(safeDate($s['expected_completion_date'] ?? '')); ?></span>
-                      </div>
-                    </div>
-
-                    <div class="site-row">
-                      <div class="site-key">Manager</div>
-                      <div class="site-val"><?php echo e($mgrTxt); ?></div>
-                    </div>
-
-                    <div class="site-row">
-                      <div class="site-key">Team Lead</div>
-                      <div class="site-val"><?php echo e($tlTxt); ?></div>
-                    </div>
-
-                    <div class="site-row">
-                      <div class="site-key">Engineers</div>
-                      <div class="site-val"><?php echo e($engTxt); ?></div>
-                    </div>
-
-                    <?php if ($show_trash): ?>
-                      <div class="site-row">
-                        <div class="site-key">Deleted</div>
-                        <div class="site-val">
-                          <?php echo e($s['deleted_by_name'] ?? 'Unknown'); ?> • <?php echo e(safeDate($s['deleted_at'] ?? '')); ?>
+                    $engTxt = 'None';
+                    if (!empty($engineerOnly)) {
+                      $tmp = [];
+                      $max = 2;
+                      for ($i=0; $i<min($max, count($engineerOnly)); $i++) {
+                        $tmp[] = $engineerOnly[$i]['name'];
+                      }
+                      $more = count($engineerOnly) - $max;
+                      if ($more > 0) $tmp[] = "+$more more";
+                      $engTxt = implode(', ', $tmp);
+                    }
+                  ?>
+                  <tr data-status="<?php echo e($statusKey); ?>" data-type="<?php echo e(strtolower((string)($s['project_type'] ?? ''))); ?>">
+                    <td data-label="Project">
+                      <div class="table-title-cell">
+                        <div class="table-icon"><i class="bi bi-building"></i></div>
+                        <div>
+                          <div class="table-primary-text"><?php echo e($s['project_name'] ?? ''); ?></div>
+                          <div class="table-secondary-text">
+                            <?php echo e($s['agreement_number'] ?? '—'); ?> • <?php echo e($s['project_type'] ?? ''); ?> • <?php echo e($s['project_location'] ?? ''); ?>
+                          </div>
                         </div>
                       </div>
-                    <?php endif; ?>
-                  </div>
+                    </td>
 
-                  <div class="site-actions">
-                    <?php if ($is_deleted): ?>
-                      <form method="POST" style="margin:0;flex:1 1 auto;" onsubmit="return confirm('Restore this site?');">
-                        <input type="hidden" name="action" value="restore">
-                        <input type="hidden" name="site_id" value="<?php echo (int)$s['id']; ?>">
-                        <button type="submit" class="btn btn-outline-primary btn-sm w-100">
-                          <i class="bi bi-arrow-counterclockwise"></i> Restore
-                        </button>
-                      </form>
+                    <td data-label="Client">
+                      <div class="table-primary-text"><?php echo e($clientName); ?></div>
+                      <div class="table-secondary-text"><?php echo e($company !== '' ? $company : ($s['client_state'] ?? '')); ?></div>
+                      <?php if (!empty($s['client_mobile'])): ?><div class="table-secondary-text"><i class="bi bi-telephone"></i> <?php echo e($s['client_mobile']); ?></div><?php endif; ?>
+                    </td>
 
-                      <form method="POST" style="margin:0;flex:1 1 auto;" onsubmit="return confirm('Permanently delete this site? This cannot be undone.');">
-                        <input type="hidden" name="action" value="permanent_delete">
-                        <input type="hidden" name="site_id" value="<?php echo (int)$s['id']; ?>">
-                        <button type="submit" class="btn btn-outline-danger btn-sm w-100">
-                          <i class="bi bi-trash"></i> Delete
-                        </button>
-                      </form>
-                    <?php else: ?>
-                      <a href="view-site.php?id=<?php echo (int)$s['id']; ?>" class="btn btn-outline-primary btn-sm">
-                        <i class="bi bi-eye"></i> View
-                      </a>
-                      <a href="view-client.php?id=<?php echo (int)$s['client_id']; ?>" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-person"></i> Client
-                      </a>
-                      <?php if (!empty($s['contract_document'])): ?>
-                        <a href="<?php echo e($s['contract_document']); ?>" class="btn btn-outline-success btn-sm" target="_blank" rel="noopener">
-                          <i class="bi bi-file-earmark-arrow-down"></i> Contract
-                        </a>
-                      <?php endif; ?>
-                      <form method="POST" style="margin:0;flex:1 1 auto;" onsubmit="return confirm('Move this site to trash?');">
-                        <input type="hidden" name="action" value="soft_delete">
-                        <input type="hidden" name="site_id" value="<?php echo (int)$s['id']; ?>">
-                        <button type="submit" class="btn btn-outline-danger btn-sm w-100">
-                          <i class="bi bi-trash"></i> Trash
-                        </button>
-                      </form>
+                    <td data-label="Status">
+                      <span class="badge-pill <?php echo e($badgeClass); ?>"><span class="mini-dot"></span><?php echo e($stLabel); ?></span>
+                    </td>
+
+                    <td data-label="Timeline">
+                      <div class="table-primary-text"><?php echo e(safeDate($s['start_date'] ?? '')); ?></div>
+                      <div class="table-secondary-text">to <?php echo e(safeDate($s['expected_completion_date'] ?? '')); ?></div>
+                    </td>
+
+                    <td data-label="Value">
+                      <div class="table-primary-text">₹ <?php echo e(showMoney($s['contract_value'] ?? '')); ?></div>
+                      <div class="table-secondary-text">PMC: ₹ <?php echo e(showMoney($s['pmc_charges'] ?? '')); ?></div>
+                    </td>
+
+                    <td data-label="Team">
+                      <div class="team-text">
+                        <div><b>Manager:</b> <?php echo e($mgrTxt); ?></div>
+                        <div><b>Team Lead:</b> <?php echo e($tlTxt); ?></div>
+                        <div><b>Engineers:</b> <?php echo e($engTxt); ?></div>
+                      </div>
+                    </td>
+
+                    <?php if ($show_trash): ?>
+                      <td data-label="Deleted">
+                        <div class="table-primary-text"><?php echo e($s['deleted_by_name'] ?? 'Unknown'); ?></div>
+                        <div class="table-secondary-text"><?php echo e(safeDate($s['deleted_at'] ?? '')); ?></div>
+                      </td>
                     <?php endif; ?>
-                  </div>
-                </div>
-              <?php endforeach; ?>
+
+                    <td data-label="Actions">
+                      <div class="action-group">
+                        <?php if ($is_deleted): ?>
+                          <form method="POST" style="margin:0;" onsubmit="return confirm('Restore this site?');">
+                            <input type="hidden" name="action" value="restore">
+                            <input type="hidden" name="site_id" value="<?php echo (int)$s['id']; ?>">
+                            <button type="submit" class="action-btn restore-btn" title="Restore"><i class="bi bi-arrow-counterclockwise"></i></button>
+                          </form>
+
+                          <form method="POST" style="margin:0;" onsubmit="return confirm('Permanently delete this site? This cannot be undone.');">
+                            <input type="hidden" name="action" value="permanent_delete">
+                            <input type="hidden" name="site_id" value="<?php echo (int)$s['id']; ?>">
+                            <button type="submit" class="action-btn delete-btn" title="Permanent Delete"><i class="bi bi-trash"></i></button>
+                          </form>
+                        <?php else: ?>
+                          <a href="view-site.php?id=<?php echo (int)$s['id']; ?>" class="action-btn view-btn" title="View"><i class="bi bi-eye"></i></a>
+                          <a href="edit-site.php?id=<?php echo (int)$s['id']; ?>" class="action-btn edit-btn" title="Edit"><i class="bi bi-pencil-square"></i></a>
+                          <a href="view-client.php?id=<?php echo (int)$s['client_id']; ?>" class="action-btn client-btn" title="Client"><i class="bi bi-person"></i></a>
+                          <?php if (!empty($s['contract_document'])): ?>
+                            <a href="<?php echo e($s['contract_document']); ?>" target="_blank" rel="noopener" class="action-btn file-btn" title="Contract"><i class="bi bi-file-earmark-arrow-down"></i></a>
+                          <?php endif; ?>
+                          <form method="POST" style="margin:0;" onsubmit="return confirm('Move this site to trash?');">
+                            <input type="hidden" name="action" value="soft_delete">
+                            <input type="hidden" name="site_id" value="<?php echo (int)$s['id']; ?>">
+                            <button type="submit" class="action-btn delete-btn" title="Move to Trash"><i class="bi bi-trash"></i></button>
+                          </form>
+                        <?php endif; ?>
+                      </div>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="pagination-wrap">
+              <div class="pagination-info" id="recordInfo">Showing <?php echo count($sites); ?> site records</div>
+              <a href="activity-logs.php?module=sites" class="logs-link"><i class="bi bi-clock-history"></i> View Site Activity Logs</a>
             </div>
           <?php endif; ?>
-        </div>
-
-        <!-- ✅ DESKTOP VIEW: Table -->
-        <div class="panel mb-4 d-none d-md-block">
-          <div class="panel-header">
-            <h3 class="panel-title"><?php echo $show_trash ? 'Deleted Sites' : 'Sites Directory'; ?></h3>
-            <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-          </div>
-
-          <div class="table-responsive">
-            <table id="sitesTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
-              <thead>
-                <tr>
-                  <th>Site / Project</th>
-                  <th>Client</th>
-                  <th>Location / Type</th>
-                  <th>Value</th>
-                  <th>Start / End</th>
-                  <th>Status</th>
-                  <th>Team</th>
-                  <?php if ($show_trash): ?><th>Deleted By / Date</th><?php endif; ?>
-                  <th class="text-end actions-col">Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
-              <?php foreach ($sites as $s): ?>
-                <?php
-                  $is_deleted = !empty($s['deleted_at']);
-
-                  [$stLabel, $stClass, $stIcon] = projectStatusBadge(
-                    $s['start_date'] ?? '',
-                    $s['expected_completion_date'] ?? '',
-                    $s['deleted_at'] ?? null
-                  );
-
-                  $clientName = trim((string)($s['client_name'] ?? ''));
-                  $company    = trim((string)($s['company_name'] ?? ''));
-                  $clientLine = $company !== '' ? ($clientName . ' • ' . $company) : $clientName;
-
-                  $managerName = trim((string)($s['manager_name'] ?? ''));
-                  $managerDesg = trim((string)($s['manager_designation'] ?? ''));
-
-                  $teamLeadName = trim((string)($s['team_lead_name'] ?? ''));
-                  $teamLeadDesg = trim((string)($s['team_lead_designation'] ?? ''));
-
-                  $engineers = parseMembersConcat($s['engineers_concat'] ?? '');
-
-                  $fallbackTeamLeads = [];
-                  if ($teamLeadName === '') {
-                    foreach ($engineers as $eng) {
-                      if (strcasecmp($eng['designation'] ?? '', 'Team Lead') === 0) $fallbackTeamLeads[] = $eng;
-                    }
-                  }
-
-                  $engineerOnly = [];
-                  foreach ($engineers as $eng) {
-                    if ($teamLeadName === '' && strcasecmp($eng['designation'] ?? '', 'Team Lead') === 0) continue;
-                    $engineerOnly[] = $eng;
-                  }
-                ?>
-                <tr>
-                  <td>
-                    <div style="font-weight:900;"><?php echo e($s['project_name'] ?? ''); ?></div>
-                    <div class="site-sub"><i class="bi bi-file-earmark-text"></i> Agreement: <?php echo e($s['agreement_number'] ?? '—'); ?></div>
-                  </td>
-
-                  <td>
-                    <div style="font-weight:900;"><?php echo e($clientLine); ?></div>
-                    <?php if (!empty($s['client_state'])): ?><div class="contact-info"><i class="bi bi-geo-alt"></i> <?php echo e($s['client_state']); ?></div><?php endif; ?>
-                    <?php if (!empty($s['client_mobile'])): ?><div class="contact-info"><i class="bi bi-telephone"></i> <?php echo e($s['client_mobile']); ?></div><?php endif; ?>
-                    <?php if (!empty($s['client_email'])): ?><div class="contact-info"><i class="bi bi-envelope"></i> <?php echo e($s['client_email']); ?></div><?php endif; ?>
-                  </td>
-
-                  <td>
-                    <div style="font-weight:900;"><?php echo e($s['project_type'] ?? ''); ?></div>
-                    <div class="site-sub"><i class="bi bi-pin-map"></i> <?php echo e($s['project_location'] ?? ''); ?></div>
-                  </td>
-
-                  <td>
-                    <div style="font-weight:900;">₹ <?php echo e(showMoney($s['contract_value'] ?? '')); ?></div>
-                    <div class="site-sub">PMC: ₹ <?php echo e(showMoney($s['pmc_charges'] ?? '')); ?></div>
-                  </td>
-
-                  <td>
-                    <div class="site-sub" style="font-weight:900;">Start: <?php echo e(safeDate($s['start_date'] ?? '')); ?></div>
-                    <div class="site-sub">End: <?php echo e(safeDate($s['expected_completion_date'] ?? '')); ?></div>
-                  </td>
-
-                  <td>
-                    <span class="status-badge <?php echo e($stClass); ?>">
-                      <i class="bi <?php echo e($stIcon); ?>"></i> <?php echo e($stLabel); ?>
-                    </span>
-                  </td>
-
-                  <td>
-                    <?php
-                      $mgrTxt = $managerName !== '' ? ($managerName . ($managerDesg ? " • $managerDesg" : '')) : 'Not assigned';
-
-                      $tlTxt = 'Not assigned';
-                      if ($teamLeadName !== '') $tlTxt = $teamLeadName . ($teamLeadDesg ? " • $teamLeadDesg" : '');
-                      elseif (!empty($fallbackTeamLeads)) {
-                        $tmp = [];
-                        foreach ($fallbackTeamLeads as $tl) $tmp[] = $tl['name'] . (!empty($tl['designation']) ? " • {$tl['designation']}" : '');
-                        $tlTxt = implode(', ', $tmp);
-                      }
-
-                      $engTxt = 'None';
-                      if (!empty($engineerOnly)) {
-                        $tmp = [];
-                        $max = 3;
-                        for ($i=0; $i<min($max, count($engineerOnly)); $i++){
-                          $tmp[] = $engineerOnly[$i]['name'] . (!empty($engineerOnly[$i]['designation']) ? " • {$engineerOnly[$i]['designation']}" : '');
-                        }
-                        $more = count($engineerOnly) - $max;
-                        if ($more > 0) $tmp[] = "+$more more";
-                        $engTxt = implode(', ', $tmp);
-                      }
-                    ?>
-                    <div class="site-sub"><b>Manager:</b> <?php echo e($mgrTxt); ?></div>
-                    <div class="site-sub"><b>Team Lead:</b> <?php echo e($tlTxt); ?></div>
-                    <div class="site-sub"><b>Engineers:</b> <?php echo e($engTxt); ?></div>
-                  </td>
-
-                  <?php if ($show_trash): ?>
-                    <td>
-                      <div class="site-sub"><i class="bi bi-person"></i> <?php echo e($s['deleted_by_name'] ?? 'Unknown'); ?></div>
-                      <div class="site-sub"><i class="bi bi-clock"></i> <?php echo e(safeDate($s['deleted_at'] ?? '')); ?></div>
-                    </td>
-                  <?php endif; ?>
-
-                  <td class="text-end actions-col">
-                    <?php if ($is_deleted): ?>
-                      <form method="POST" style="display:inline;" onsubmit="return confirm('Restore this site?');">
-                        <input type="hidden" name="action" value="restore">
-                        <input type="hidden" name="site_id" value="<?php echo (int)$s['id']; ?>">
-                        <button type="submit" class="btn btn-outline-primary btn-sm" style="font-weight:900;">
-                          <i class="bi bi-arrow-counterclockwise"></i>
-                        </button>
-                      </form>
-
-                      <form method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete this site? This cannot be undone.');">
-                        <input type="hidden" name="action" value="permanent_delete">
-                        <input type="hidden" name="site_id" value="<?php echo (int)$s['id']; ?>">
-                        <button type="submit" class="btn btn-outline-danger btn-sm" style="font-weight:900;">
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </form>
-                    <?php else: ?>
-                      <a href="view-site.php?id=<?php echo (int)$s['id']; ?>" class="btn btn-outline-primary btn-sm" style="font-weight:900;">
-                        <i class="bi bi-eye"></i>
-                      </a>
-                      <a href="edit-site.php?id=<?php echo (int)$s['id']; ?>" class="btn btn-outline-secondary btn-sm" style="font-weight:900;">
-                        <i class="bi bi-pencil"></i>
-                      </a>
-                      <a href="view-client.php?id=<?php echo (int)$s['client_id']; ?>" class="btn btn-outline-secondary btn-sm" style="font-weight:900;">
-                        <i class="bi bi-person"></i>
-                      </a>
-                      <?php if (!empty($s['contract_document'])): ?>
-                        <a href="<?php echo e($s['contract_document']); ?>" class="btn btn-outline-success btn-sm" target="_blank" rel="noopener" style="font-weight:900;">
-                          <i class="bi bi-file-earmark-arrow-down"></i>
-                        </a>
-                      <?php endif; ?>
-                      <form method="POST" style="display:inline;" onsubmit="return confirm('Move this site to trash?');">
-                        <input type="hidden" name="action" value="soft_delete">
-                        <input type="hidden" name="site_id" value="<?php echo (int)$s['id']; ?>">
-                        <button type="submit" class="btn btn-outline-danger btn-sm" style="font-weight:900;">
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </form>
-                    <?php endif; ?>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="text-end mb-3">
-          <a href="activity-logs.php?module=sites" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-clock-history"></i> View Site Activity Logs
-          </a>
         </div>
 
       </div>
@@ -831,7 +658,6 @@ if ($trashRes) {
   </main>
 </div>
 
-<!-- Export Modal -->
 <div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -844,81 +670,71 @@ if ($trashRes) {
           <div class="row g-3">
             <div class="col-12">
               <label class="form-label">Export Format *</label>
-              <select class="form-control" name="export_format" required>
-                <option value="csv">CSV (Excel)</option>
-                <option value="pdf">PDF Document</option>
-                <option value="excel">Excel File</option>
+              <select class="form-select" name="export_format" required>
+                <option value="csv">CSV</option>
+                <option value="excel">Excel</option>
+                <option value="pdf">PDF</option>
               </select>
             </div>
             <div class="col-12">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="apply_filters" name="apply_filters" value="1" checked>
                 <label class="form-check-label" for="apply_filters">Apply Current Filters</label>
-                <div class="form-text">Include current search/filter criteria in export</div>
-              </div>
-            </div>
-            <div class="col-12">
-              <div class="alert alert-warning mb-0" role="alert" style="box-shadow:none;">
-                <i class="bi bi-info-circle me-2"></i>
-                Create <b>export-sites.php</b> if you want export to work.
+                <div class="form-text">Include current search/filter criteria in export when export-sites.php supports it.</div>
               </div>
             </div>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn-export">
-            <i class="bi bi-download me-2"></i> Export
-          </button>
+          <button type="submit" class="btn btn-success"><i class="bi bi-download me-2"></i> Export</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
-<!-- JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
-
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-(function () {
-  $(function () {
-    const isTrash = <?php echo $show_trash ? 'true' : 'false'; ?>;
-    const actionsIndex = isTrash ? 8 : 7;
+document.addEventListener('DOMContentLoaded', function () {
+  const searchInput = document.getElementById('siteSearch');
+  const statusFilter = document.getElementById('statusFilter');
+  const typeFilter = document.getElementById('typeFilter');
+  const tableRows = document.querySelectorAll('#sitesTable tbody tr');
+  const recordInfo = document.getElementById('recordInfo');
 
-    $('#sitesTable').DataTable({
-      responsive: true,
-      autoWidth: false,
-      scrollX: false,
-      pageLength: 10,
-      lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-      order: [[0, 'asc']],
-      columnDefs: [
-        { targets: [actionsIndex], orderable: false, searchable: false }
-      ],
-      language: {
-        zeroRecords: "No matching sites found",
-        info: "Showing _START_ to _END_ of _TOTAL_ sites",
-        infoEmpty: "No sites to show",
-        lengthMenu: "Show _MENU_",
-        search: "Search:"
-      }
+  function filterSites() {
+    const searchValue = (searchInput ? searchInput.value : '').toLowerCase().trim();
+    const statusValue = (statusFilter ? statusFilter.value : '').toLowerCase().trim();
+    const typeValue = (typeFilter ? typeFilter.value : '').toLowerCase().trim();
+    let visible = 0;
+
+    tableRows.forEach(function (row) {
+      const rowText = row.innerText.toLowerCase();
+      const rowStatus = (row.getAttribute('data-status') || '').toLowerCase();
+      const rowType = (row.getAttribute('data-type') || '').toLowerCase();
+
+      const matchesSearch = !searchValue || rowText.includes(searchValue);
+      const matchesStatus = !statusValue || rowStatus === statusValue;
+      const matchesType = !typeValue || rowType === typeValue;
+
+      const show = matchesSearch && matchesStatus && matchesType;
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
     });
 
-    setTimeout(function() {
-      $('.dataTables_filter input').trigger('focus');
-    }, 400);
-  });
-})();
-</script>
+    if (recordInfo) {
+      recordInfo.textContent = 'Showing ' + visible + ' of ' + tableRows.length + ' site records';
+    }
+  }
 
+  if (searchInput) searchInput.addEventListener('input', filterSites);
+  if (statusFilter) statusFilter.addEventListener('change', filterSites);
+  if (typeFilter) typeFilter.addEventListener('change', filterSites);
+});
+</script>
 </body>
 </html>
 <?php

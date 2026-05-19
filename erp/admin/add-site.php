@@ -16,6 +16,83 @@ if (!$conn) {
 // ---------- Helpers ----------
 function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
+function logActivity(
+    $conn,
+    $activity_type,
+    $module,
+    $description,
+    $reference_id = null
+){
+
+    $employee_id =
+        $_SESSION['employee_id'] ?? null;
+
+    $employee_name =
+        $_SESSION['employee_name'] ?? '';
+
+    $username =
+        $_SESSION['username'] ?? '';
+
+    $designation =
+        $_SESSION['designation'] ?? '';
+
+    $department =
+        $_SESSION['department'] ?? '';
+
+    $ip =
+        $_SERVER['REMOTE_ADDR'] ?? '';
+
+    $stmt = mysqli_prepare(
+
+        $conn,
+
+        "INSERT INTO activity_logs
+        (
+            employee_id,
+            employee_name,
+            username,
+            designation,
+            department,
+            activity_type,
+            module,
+            description,
+            reference_id,
+            ip_address
+        )
+
+        VALUES
+
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+
+    );
+
+    if($stmt){
+
+        mysqli_stmt_bind_param(
+
+            $stmt,
+
+            "isssssssis",
+
+            $employee_id,
+            $employee_name,
+            $username,
+            $designation,
+            $department,
+            $activity_type,
+            $module,
+            $description,
+            $reference_id,
+            $ip
+
+        );
+
+        mysqli_stmt_execute($stmt);
+
+        mysqli_stmt_close($stmt);
+    }
+}
+
 // OPTIONS
 $project_types = ['Residential', 'Commercial', 'Industrial', 'Infrastructure'];
 $scope_of_work_options = ['Civil', 'Interior', 'MEP', 'Turnkey', 'BOQ', 'PMC'];
@@ -227,6 +304,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
 
         if (mysqli_stmt_execute($stmt)) {
+
+            $new_project_id =
+                mysqli_insert_id($conn);
+
+            logActivity(
+
+                $conn,
+
+                'CREATE',
+
+                'PROJECT',
+
+                'Created new project: ' .
+                $project_name,
+
+                $new_project_id
+
+            );
+
             $success = "Site / Project added successfully!";
             $_POST = [];
         } else {
@@ -283,27 +379,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <style>
     .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-    .form-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 25px; margin-bottom: 30px; }
+    .form-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:18px; margin-bottom:18px; }
     .section-header { display:flex; align-items:center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #f0f4f8; }
-    .section-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--blue); display:flex; align-items:center; justify-content:center; margin-right: 15px; font-size: 20px; color: #fff; }
-    .section-title { font-size: 18px; font-weight: 800; color: #2d3748; margin: 0; }
-    .section-subtitle { font-size: 14px; color: #718096; margin-top: 4px; }
+    .section-icon { width:38px; height:38px; border-radius: 12px; background: var(--blue); display:flex; align-items:center; justify-content:center; margin-right: 15px; font-size: 20px; color: #fff; }
+    .section-title { font-size:14px; font-weight:900; color: #2d3748; margin: 0; }
+    .section-subtitle { font-size:11px; color:#64748b; font-weight:700; margin-top: 4px; }
     .form-label { font-weight: 700; color:#4a5568; margin-bottom:8px; font-size: 14px; }
     .required-label::after { content:" *"; color:#e53e3e; font-weight:900; }
     .optional-badge { font-size: 11px; color:#718096; font-weight: 600; margin-left: 5px; }
-    .form-control, .form-select { border:2px solid #e2e8f0; border-radius:10px; padding: 12px 15px; font-size: 14px; transition: all .3s; }
+    .form-control, .form-select { height:40px; border:1px solid #e5e7eb; border-radius:10px; padding:0 12px; font-size:12px; font-weight:700; transition:all .3s; }
     .form-control:focus, .form-select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(45,156,219,.1); }
     .form-control.is-invalid, .form-select.is-invalid { border-color:#fc8181; background:#fff5f5; }
     .form-helper { font-size:12px; color:#718096; margin-top:5px; display:flex; align-items:center; gap:6px; }
     .btn-back { background: transparent; border: 1px solid var(--border); border-radius: 10px; padding: 8px 16px; color: #4a5568; font-weight: 700; display:flex; align-items:center; gap:6px; text-decoration: none; }
     .btn-back:hover { background: var(--bg); color: var(--blue); border-color: var(--blue); }
-    .btn-submit { background: var(--blue); color:#fff; border:none; padding: 14px 35px; border-radius: 12px; font-weight: 800; font-size: 15px; display:flex; align-items:center; gap:10px; box-shadow: 0 8px 20px rgba(45,156,219,.2); transition: all .3s; margin: 40px auto; }
+    .btn-submit { background:#111827; color:#fff; border:none; height:42px; padding:0 18px; border-radius: 12px; font-weight: 800; font-size: 15px; display:flex; align-items:center; gap:10px; box-shadow: 0 8px 20px rgba(45,156,219,.2); transition: all .3s; margin: 40px auto; }
     .btn-submit:hover { background:#2a8bc9; transform: translateY(-2px); box-shadow: 0 12px 25px rgba(45,156,219,.3); color:#fff; }
     .alert { border-radius: var(--radius); border:none; box-shadow: var(--shadow); margin-bottom: 20px; }
-    .file-upload-container { border: 2px dashed #cbd5e0; border-radius: 12px; padding: 20px; text-align: center; background: #f8fafc; cursor: pointer; transition: all 0.3s; margin-top: 5px; }
+    .file-upload-container { border: 2px dashed #cbd5e0; border-radius: 12px; padding:14px; text-align:center; background:#fafcff; cursor: pointer; transition: all 0.3s; margin-top: 5px; }
     .file-upload-container:hover { border-color: var(--blue); background: #f0f4ff; }
     .file-upload-icon { font-size: 40px; color: #a0aec0; margin-bottom: 10px; }
-    .file-upload-text { font-size: 14px; color: #718096; margin-bottom: 5px; }
+    .file-upload-text { font-size:11px; color:#64748b; font-weight:700; margin-bottom: 5px; }
     .file-upload-subtext { font-size: 12px; color: #a0aec0; }
     .checkbox-grid { display:flex; flex-wrap:wrap; gap:12px; }
     .checkbox-pill { border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 12px; background:#fff; display:flex; align-items:center; gap:10px; }
@@ -322,6 +418,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .suggestion-item:hover { background: #f0f4ff; }
     .suggestions-container { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 2px solid #e2e8f0; border-radius: 10px; max-height: 250px; overflow-y: auto; z-index: 1000; display: none; }
     
+
+
     @media (max-width: 768px) {
       .content-scroll { padding: 18px; }
       .form-panel { padding: 20px; }
@@ -709,7 +807,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
 
           <!-- Submit -->
-          <div class="text-center mt-5">
+          <div>
+
+            <a href="manage-sites.php" class="btn btn-light border">
+              Cancel
+            </a>
+
             <button type="submit" class="btn-submit">
               <i class="bi bi-plus-circle"></i> Add Site / Project
             </button>
