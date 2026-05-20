@@ -137,7 +137,9 @@ $logoutUrl = '../logout.php';
       <button id="notificationBtn" class="icon-btn notification-btn" aria-label="Notifications" title="Notifications" type="button">
         <i class="bi bi-bell"></i>
         <?php if ($topbarUnreadCount > 0): ?>
-          <span class="notify-dot"></span>
+          <span class="notify-count-badge">
+            <?php echo $topbarUnreadCount > 99 ? '99+' : (int)$topbarUnreadCount; ?>
+          </span>
         <?php endif; ?>
       </button>
 
@@ -277,17 +279,28 @@ $logoutUrl = '../logout.php';
 
   .notification-btn {
     position: relative;
+    overflow: visible;
   }
 
-  .notify-dot {
+  .notify-count-badge {
     position: absolute;
-    top: 9px;
-    right: 9px;
-    width: 8px;
-    height: 8px;
+    top: -6px;
+    right: -6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
     background: #ef4444;
+    color: #fff;
     border: 2px solid #fff;
-    border-radius: 50%;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 950;
+    line-height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(239, 68, 68, .28);
+    z-index: 2;
   }
 
   .profile-btn {
@@ -591,6 +604,11 @@ $logoutUrl = '../logout.php';
   }
 
   @media (max-width: 575.98px) {
+    .notify-count-badge {
+      top: -5px;
+      right: -5px;
+    }
+
     .topbar-dropdown {
       position: fixed;
       top: 70px;

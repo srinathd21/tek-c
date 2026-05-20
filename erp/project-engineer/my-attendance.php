@@ -1,7 +1,6 @@
 <?php
 session_start();
 require_once 'includes/db-config.php';
-require_once 'includes/activity-logger.php';
 
 date_default_timezone_set('Asia/Kolkata');
 
@@ -37,14 +36,24 @@ $selected_year = isset($_GET['year']) && $_GET['year'] !== '' ? (int)$_GET['year
 $status_filter = isset($_GET['status']) && $_GET['status'] !== '' ? $_GET['status'] : 'all';
 $search_term = isset($_GET['search']) ? trim($_GET['search']) : '';
 
+$records_per_page = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 10;
+$allowed_per_page = [10, 25, 50, 100];
+if (!in_array($records_per_page, $allowed_per_page, true)) {
+    $records_per_page = 10;
+}
+
+$current_page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+
 // Fetch attendance data for the selected month/year
 $attendance_query = "
-    SELECT a.*, 
-           s.project_name as site_name,
-           o.location_name as office_name
+    SELECT a.*,
+           COALESCE(si.project_name, so.project_name) AS site_name,
+           COALESCE(oi.location_name, oo.location_name) AS office_name
     FROM attendance a
-    LEFT JOIN sites s ON a.punch_in_site_id = s.id OR a.punch_out_site_id = s.id
-    LEFT JOIN office_locations o ON a.punch_in_office_id = o.id OR a.punch_out_office_id = o.id
+    LEFT JOIN sites si ON a.punch_in_site_id = si.id
+    LEFT JOIN sites so ON a.punch_out_site_id = so.id
+    LEFT JOIN office_locations oi ON a.punch_in_office_id = oi.id
+    LEFT JOIN office_locations oo ON a.punch_out_office_id = oo.id
     WHERE a.employee_id = ?
       AND YEAR(a.attendance_date) = ?
       AND MONTH(a.attendance_date) = ?
@@ -84,21 +93,20 @@ foreach ($holidays as $holiday) {
 }
 
 // Fetch leave requests for the employee in this month
+$month_start = sprintf('%04d-%02d-01', $selected_year, $selected_month);
+$month_end = date('Y-m-t', strtotime($month_start));
+
 $leave_query = "
-    SELECT * FROM leave_requests 
-    WHERE employee_id = ? 
+    SELECT * FROM leave_requests
+    WHERE employee_id = ?
       AND status = 'Approved'
-      AND (
-        (YEAR(from_date) = ? AND MONTH(from_date) = ?)
-        OR (YEAR(to_date) = ? AND MONTH(to_date) = ?)
-        OR (YEAR(from_date) < ? AND YEAR(to_date) > ?)
-      )
+      AND from_date <= ?
+      AND to_date >= ?
     ORDER BY from_date DESC
 ";
 $leave_stmt = mysqli_prepare($conn, $leave_query);
-mysqli_stmt_bind_param($leave_stmt, "iiiiiii", 
-    $current_employee_id, $selected_year, $selected_month, 
-    $selected_year, $selected_month, $selected_year, $selected_year);
+mysqli_stmt_bind_param($leave_stmt, "iss",
+    $current_employee_id, $month_end, $month_start);
 mysqli_stmt_execute($leave_stmt);
 $leave_res = mysqli_stmt_get_result($leave_stmt);
 $leave_requests = mysqli_fetch_all($leave_res, MYSQLI_ASSOC);
@@ -247,6 +255,24 @@ $filtered_records = array_filter($complete_attendance, function($record) use ($s
     return true;
 });
 
+$filtered_records = array_values($filtered_records);
+
+$total_filtered_records = count($filtered_records);
+$total_pages = (int)ceil($total_filtered_records / $records_per_page);
+
+if ($total_pages < 1) {
+    $total_pages = 1;
+}
+
+if ($current_page > $total_pages) {
+    $current_page = $total_pages;
+}
+
+$pagination_offset = ($current_page - 1) * $records_per_page;
+$paginated_records = array_slice($filtered_records, $pagination_offset, $records_per_page);
+$pagination_start = $total_filtered_records > 0 ? $pagination_offset + 1 : 0;
+$pagination_end = min($pagination_offset + $records_per_page, $total_filtered_records);
+
 // Calculate monthly summary
 $monthly_summary = [
     'total_days' => 0,
@@ -305,20 +331,27 @@ $all_leave_res = mysqli_stmt_get_result($all_leave_stmt);
 $all_leave_requests = mysqli_fetch_all($all_leave_res, MYSQLI_ASSOC);
 mysqli_stmt_close($all_leave_stmt);
 
-// Fetch employee regulations
-$reg_query = "
-    SELECT * FROM employee_regulations 
-    WHERE employee_id = ? 
-      AND status = 'Active'
-      AND (expiry_date IS NULL OR expiry_date >= CURDATE())
-    ORDER BY effective_date DESC
-";
-$reg_stmt = mysqli_prepare($conn, $reg_query);
-mysqli_stmt_bind_param($reg_stmt, "i", $current_employee_id);
-mysqli_stmt_execute($reg_stmt);
-$reg_res = mysqli_stmt_get_result($reg_stmt);
-$employee_regulations = mysqli_fetch_all($reg_res, MYSQLI_ASSOC);
-mysqli_stmt_close($reg_stmt);
+// Fetch employee regulations if table exists
+$employee_regulations = [];
+$reg_table_res = mysqli_query($conn, "SHOW TABLES LIKE 'employee_regulations'");
+$has_employee_regulations = $reg_table_res && mysqli_num_rows($reg_table_res) > 0;
+if ($reg_table_res) mysqli_free_result($reg_table_res);
+
+if ($has_employee_regulations) {
+    $reg_query = "
+        SELECT * FROM employee_regulations
+        WHERE employee_id = ?
+          AND status = 'Active'
+          AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+        ORDER BY effective_date DESC
+    ";
+    $reg_stmt = mysqli_prepare($conn, $reg_query);
+    mysqli_stmt_bind_param($reg_stmt, "i", $current_employee_id);
+    mysqli_stmt_execute($reg_stmt);
+    $reg_res = mysqli_stmt_get_result($reg_stmt);
+    $employee_regulations = mysqli_fetch_all($reg_res, MYSQLI_ASSOC);
+    mysqli_stmt_close($reg_stmt);
+}
 
 // Helper functions
 function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
@@ -326,6 +359,21 @@ function safeTimeOnly($v, $dash = '—') {
     if (empty($v)) return $dash;
     $ts = strtotime($v);
     return $ts ? date('h:i A', $ts) : $dash;
+}
+
+function buildPageUrl($page, $overrides = []) {
+    $params = $_GET;
+    $params['page'] = max(1, (int)$page);
+
+    foreach ($overrides as $key => $value) {
+        if ($value === null || $value === '') {
+            unset($params[$key]);
+        } else {
+            $params[$key] = $value;
+        }
+    }
+
+    return 'my-attendance.php?' . http_build_query($params);
 }
 function getStatusBadge($status, $punch_in_time = null, $is_holiday = false, $is_weekly_off = false, $holiday_name = null) {
     if ($is_holiday) {
@@ -374,79 +422,372 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
     
     <link href="assets/css/layout-styles.css" rel="stylesheet" />
     <link href="assets/css/topbar.css" rel="stylesheet" />
     <link href="assets/css/footer.css" rel="stylesheet" />
     
     <style>
-        .content-scroll { flex: 1 1 auto; overflow: auto; padding: 22px 22px 14px; }
-        .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; height: 100%; }
-        .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-        .panel-title { font-weight: 1000; font-size: 18px; color: #1f2937; margin: 0; }
-        
-        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; transition: transform 0.2s; }
-        .stat-card:hover { transform: translateY(-2px); }
-        .stat-ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; color: #fff; font-size: 22px; flex: 0 0 auto; }
-        .stat-ic.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-        .stat-ic.green { background: linear-gradient(135deg, #10b981, #059669); }
-        .stat-ic.yellow { background: linear-gradient(135deg, #f59e0b, #d97706); }
-        .stat-ic.purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-        .stat-ic.red { background: linear-gradient(135deg, #ef4444, #dc2626); }
-        .stat-ic.info { background: linear-gradient(135deg, #06b6d4, #0891b2); }
-        .stat-label { color: #6b7280; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .stat-value { font-size: 28px; font-weight: 1000; line-height: 1; margin-top: 4px; color: #111827; }
-        
-        .filter-bar { background: #f9fafb; border-radius: 16px; padding: 12px 16px; margin-bottom: 20px; border: 1px solid var(--border); }
-        .filter-select, .filter-input { border-radius: 12px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px; font-weight: 500; background: white; }
-        
-        .table-responsive { overflow-x: hidden !important; }
-        table.dataTable { width: 100% !important; }
-        .table thead th { font-size: 12px; color: #6b7280; font-weight: 900; border-bottom: 1px solid var(--border) !important; padding: 12px 10px !important; }
-        .table td { vertical-align: middle; border-color: var(--border); font-weight: 600; color: #374151; padding: 12px 10px !important; }
-        
-        .status-badge { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 1000; letter-spacing: 0.3px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border: 1px solid transparent; }
-        .status-green { background: rgba(16, 185, 129, 0.12); color: #10b981; border-color: rgba(16, 185, 129, 0.22); }
-        .status-yellow { background: rgba(245, 158, 11, 0.12); color: #f59e0b; border-color: rgba(245, 158, 11, 0.22); }
-        .status-red { background: rgba(239, 68, 68, 0.12); color: #ef4444; border-color: rgba(239, 68, 68, 0.22); }
-        .status-orange { background: rgba(249, 115, 22, 0.12); color: #f97316; border-color: rgba(249, 115, 22, 0.22); }
-        .status-purple { background: rgba(139, 92, 246, 0.12); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.22); }
-        .status-info { background: rgba(6, 182, 212, 0.12); color: #06b6d4; border-color: rgba(6, 182, 212, 0.22); }
-        
-        .leave-badge { padding: 4px 10px; border-radius: 999px; font-size: 10px; font-weight: 900; display: inline-flex; align-items: center; gap: 4px; }
-        .leave-pending { background: #fef3c7; color: #d97706; }
-        .leave-approved { background: #d1fae5; color: #059669; }
-        .leave-rejected { background: #fee2e2; color: #dc2626; }
-        
-        .reg-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; background: #fefce8; }
-        .reg-card h6 { font-size: 13px; font-weight: 900; margin-bottom: 6px; }
-        .reg-card p { font-size: 11px; margin-bottom: 0; color: #6b7280; }
-        
-        .btn-action { background: transparent; border: 1px solid var(--border); border-radius: 12px; padding: 8px 16px; color: #374151; font-size: 13px; font-weight: 1000; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
-        .btn-action:hover { background: #f9fafb; color: var(--blue); border-color: var(--blue); }
-        
-        .r-card { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); padding: 12px; margin-bottom: 12px; }
-        .r-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-        .r-kv { margin-top: 12px; display: grid; gap: 8px; }
-        .r-row { display: flex; gap: 10px; align-items: flex-start; }
-        .r-key { flex: 0 0 85px; color: #6b7280; font-weight: 800; font-size: 11px; text-transform: uppercase; }
-        .r-val { flex: 1 1 auto; font-weight: 700; color: #111827; font-size: 13px; }
-        .r-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-        
-        .attendance-date-past { opacity: 0.8; }
-        .attendance-date-today { background: rgba(59, 130, 246, 0.05); border-left: 3px solid var(--blue); }
-        
-        @media (max-width: 768px) {
-            .content-scroll { padding: 12px 10px !important; }
-            .stat-value { font-size: 22px; }
-            .stat-ic { width: 40px; height: 40px; font-size: 18px; }
+        :root{
+            --page-bg:#f5f7fb;
+            --card-bg:#ffffff;
+            --border:#e5e7eb;
+            --text:#111827;
+            --muted:#6b7280;
+            --soft:#f8fafc;
+            --shadow:0 10px 26px rgba(15,23,42,.055);
+            --radius:15px;
+            --blue:#2f80ed;
+            --orange:#f2994a;
+            --green:#27ae60;
+            --red:#eb5757;
+            --purple:#8b5cf6;
+            --cyan:#06b6d4;
         }
-        @media (max-width: 991.98px) {
-            .main { margin-left: 0 !important; width: 100% !important; }
-            .sidebar { position: fixed !important; transform: translateX(-100%); z-index: 1040 !important; }
-            .sidebar.open { transform: translateX(0) !important; }
+
+        body{ background:var(--page-bg); }
+
+        .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px; }
+        .projects-wrapper{ width:100%; }
+
+        .page-heading{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:14px;
+        }
+
+        .page-heading h1{ font-size:19px; font-weight:900; color:var(--text); margin:0; }
+        .page-heading p{ margin:3px 0 0; color:var(--muted); font-size:12px; font-weight:600; }
+
+        .primary-btn,.secondary-btn,.btn-action{
+            min-height:36px;
+            padding:0 14px;
+            border-radius:11px;
+            font-size:12px;
+            font-weight:900;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:7px;
+            text-decoration:none;
+            white-space:nowrap;
+        }
+
+        .primary-btn{ border:0; background:#111827; color:#fff; }
+        .primary-btn:hover{ background:#020617; color:#fff; }
+
+        .secondary-btn,.btn-action{
+            border:1px solid var(--border);
+            background:#fff;
+            color:#334155;
+        }
+
+        .secondary-btn:hover,.btn-action:hover{
+            border-color:#cbd5e1;
+            background:#f8fafc;
+            color:#111827;
+        }
+
+        .panel{
+            background:var(--card-bg);
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:13px;
+            margin-bottom:14px;
+            height:100%;
+        }
+
+        .panel-header{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:12px;
+        }
+
+        .panel-title{ font-weight:900; font-size:14px; color:var(--text); margin:0; }
+        .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
+
+        .filter-bar{
+            background:#fff;
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:13px;
+            margin-bottom:14px;
+        }
+
+        .form-label{
+            font-size:11px;
+            font-weight:900;
+            color:#475569;
+            text-transform:uppercase;
+            margin-bottom:6px;
+        }
+
+        .filter-select,.filter-input,.form-select,.form-control{
+            min-height:38px;
+            border:1px solid var(--border);
+            border-radius:11px;
+            font-size:12px;
+            font-weight:800;
+            color:#111827;
+            padding:8px 11px;
+            background:#fff;
+        }
+
+        .filter-select:focus,.filter-input:focus,.form-select:focus,.form-control:focus{
+            border-color:#bfdbfe;
+            box-shadow:0 0 0 3px rgba(59,130,246,.10);
+        }
+
+        .stat-card{
+            background:#fff;
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:12px 13px;
+            min-height:78px;
+            display:flex;
+            align-items:center;
+            gap:11px;
+            transition:.15s ease;
+        }
+
+        .stat-card:hover{ transform:translateY(-1px); box-shadow:0 14px 32px rgba(15,23,42,.09); }
+
+        .stat-ic{
+            width:38px;
+            height:38px;
+            border-radius:12px;
+            display:grid;
+            place-items:center;
+            color:#fff;
+            font-size:17px;
+            flex:0 0 auto;
+        }
+
+        .stat-ic.blue{ background:var(--blue); }
+        .stat-ic.green{ background:var(--green); }
+        .stat-ic.yellow{ background:var(--orange); }
+        .stat-ic.purple{ background:var(--purple); }
+        .stat-ic.red{ background:var(--red); }
+        .stat-ic.info{ background:var(--cyan); }
+
+        .stat-label{ color:var(--muted); font-weight:800; font-size:10.5px; text-transform:uppercase; }
+        .stat-value{ font-size:24px; font-weight:950; color:var(--text); line-height:1; }
+
+        .summary-box{
+            background:#f8fafc;
+            border:1px solid #eef2f7;
+            border-radius:13px;
+            padding:12px;
+            text-align:center;
+            min-height:86px;
+        }
+
+        .summary-label{ color:#64748b; font-size:10.5px; font-weight:900; text-transform:uppercase; }
+        .summary-value{ color:#111827; font-size:25px; font-weight:950; line-height:1; margin-top:4px; }
+        .summary-unit{ color:#64748b; font-size:10.5px; font-weight:800; margin-top:3px; }
+
+        .status-badge,.leave-badge,.badge-pill{
+            padding:5px 8px;
+            border-radius:999px;
+            font-size:10px;
+            font-weight:900;
+            display:inline-flex;
+            align-items:center;
+            gap:5px;
+            white-space:nowrap;
+            border:1px solid transparent;
+        }
+
+        .status-green,.leave-approved{ background:#dcfce7; color:#15803d; border-color:#bbf7d0; }
+        .status-yellow,.leave-pending{ background:#fef3c7; color:#b45309; border-color:#fde68a; }
+        .status-red,.leave-rejected{ background:#fee2e2; color:#b91c1c; border-color:#fecaca; }
+        .status-orange{ background:#ffedd5; color:#c2410c; border-color:#fed7aa; }
+        .status-purple{ background:#ede9fe; color:#6d28d9; border-color:#ddd6fe; }
+        .status-info{ background:#cffafe; color:#0e7490; border-color:#a5f3fc; }
+        .status-secondary{ background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
+
+        .reg-card{
+            border:1px solid #fde68a;
+            border-radius:13px;
+            padding:11px;
+            margin-bottom:10px;
+            background:#fffbeb;
+        }
+
+        .reg-card h6{ font-size:12px; font-weight:950; margin-bottom:5px; color:#111827; }
+        .reg-card p{ font-size:10.5px; margin-bottom:0; color:#64748b; font-weight:750; }
+
+        .compact-table-wrap{
+            width:100%;
+            border:1px solid var(--border);
+            border-radius:13px;
+            overflow:hidden;
+            background:#fff;
+        }
+
+        .compact-table{
+            width:100%;
+            margin:0;
+            table-layout:auto;
+        }
+
+        .compact-table thead th{
+            background:var(--soft);
+            color:#64748b;
+            font-size:10px;
+            text-transform:uppercase;
+            font-weight:900;
+            border-bottom:1px solid var(--border)!important;
+            padding:8px 9px;
+        }
+
+        .compact-table tbody td{
+            padding:8px 9px;
+            vertical-align:middle;
+            border-color:#eef2f7;
+            color:#334155;
+            font-weight:700;
+            font-size:11.5px;
+        }
+
+        .compact-table tbody tr:hover{ background:#fbfdff; }
+        .table-primary-text{ color:#111827; font-size:11.5px; font-weight:950; }
+        .table-secondary-text{ color:#64748b; font-size:10px; font-weight:700; margin-top:2px; }
+
+        .attendance-date-today{
+            background:#eff6ff!important;
+            box-shadow:inset 3px 0 0 #2f80ed;
+        }
+
+        .r-card{
+            border:1px solid var(--border);
+            border-radius:14px;
+            background:#fff;
+            box-shadow:var(--shadow);
+            padding:12px;
+            margin-bottom:12px;
+        }
+
+        .r-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+        .r-kv{ margin-top:12px; display:grid; gap:8px; }
+        .r-row{ display:flex; gap:10px; align-items:flex-start; }
+        .r-key{ flex:0 0 85px; color:#64748b; font-weight:900; font-size:10px; text-transform:uppercase; }
+        .r-val{ flex:1 1 auto; font-weight:800; color:#111827; font-size:12px; }
+        .r-badges{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+
+        .empty-state{
+            text-align:center;
+            padding:30px 12px;
+            color:#64748b;
+            font-size:12px;
+            font-weight:900;
+        }
+
+        .empty-state i{ display:block; font-size:34px; opacity:.45; margin-bottom:8px; }
+
+
+        .pagination-wrap{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            flex-wrap:wrap;
+            margin-top:12px;
+        }
+
+        .pagination-info{
+            color:#64748b;
+            font-size:11px;
+            font-weight:800;
+        }
+
+        .pagination-controls{
+            display:flex;
+            align-items:center;
+            gap:6px;
+            flex-wrap:wrap;
+        }
+
+        .page-btn{
+            min-width:34px;
+            height:34px;
+            padding:0 10px;
+            border-radius:10px;
+            border:1px solid var(--border);
+            background:#fff;
+            color:#334155;
+            text-decoration:none;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            font-size:11px;
+            font-weight:900;
+        }
+
+        .page-btn:hover{
+            background:#f8fafc;
+            color:#111827;
+            border-color:#cbd5e1;
+        }
+
+        .page-btn.active{
+            background:#111827;
+            border-color:#111827;
+            color:#fff;
+        }
+
+        .page-btn.disabled{
+            opacity:.45;
+            pointer-events:none;
+        }
+
+        @media(max-width:991.98px){
+            .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
+            .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
+            .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
+        }
+
+        @media(max-width:1199px){
+            .compact-table thead{ display:none; }
+            .compact-table,.compact-table tbody,.compact-table tr,.compact-table td{
+                display:block;
+                width:100%;
+            }
+            .compact-table tbody tr{
+                border-bottom:1px solid var(--border);
+                padding:10px;
+            }
+            .compact-table tbody td{
+                border:0;
+                display:flex;
+                justify-content:space-between;
+                gap:12px;
+            }
+            .compact-table tbody td::before{
+                content:attr(data-label);
+                font-size:10px;
+                font-weight:900;
+                color:#64748b;
+                text-transform:uppercase;
+                flex:0 0 100px;
+            }
+            .compact-table tbody td:first-child{ display:block; }
+            .compact-table tbody td:first-child::before{ display:none; }
+        }
+
+        @media(max-width:768px){
+            .content-scroll{ padding:12px 10px!important; }
+            .page-heading{ align-items:flex-start; flex-direction:column; }
+            .panel,.filter-bar{ padding:12px; }
+            .primary-btn,.secondary-btn,.btn-action{ width:100%; }
+            .stat-value{ font-size:22px; }
         }
     </style>
 </head>
@@ -458,22 +799,22 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
         <?php include 'includes/topbar.php'; ?>
         
         <div id="contentScroll" class="content-scroll">
-            <div class="container-fluid maxw">
+            <div class="container-fluid projects-wrapper px-0">
                 
                 <!-- Header -->
-                <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                <div class="page-heading">
                     <div>
-                        <h1 class="h3 fw-bold text-dark mb-1">My Attendance</h1>
-                        <p class="text-muted mb-0">Complete attendance record for <?php echo date('F Y', strtotime("$selected_year-$selected_month-01")); ?></p>
+                        <h1>My Attendance</h1>
+                        <p>Complete attendance record for <?php echo date('F Y', strtotime("$selected_year-$selected_month-01")); ?></p>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
-                        <a href="punchin.php" class="btn-action">
+                        <a href="punchin.php" class="primary-btn">
                             <i class="bi bi-box-arrow-in-right"></i> Punch In/Out
                         </a>
-                        <a href="apply-leave.php" class="btn-action">
+                        <a href="apply-leave.php" class="secondary-btn">
                             <i class="bi bi-calendar-plus"></i> Apply Leave
                         </a>
-                        <a href="my-leaves.php" class="btn-action">
+                        <a href="my-leave-history.php" class="secondary-btn">
                             <i class="bi bi-list-check"></i> My Leaves
                         </a>
                     </div>
@@ -497,8 +838,8 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                 <div class="filter-bar">
                     <form method="GET" class="row g-3 align-items-end" id="filterForm">
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small text-muted">Month</label>
-                            <select name="month" class="form-select filter-select" onchange="this.form.submit()">
+                            <label class="form-label">Month</label>
+                            <select name="month" class="form-select filter-select" onchange="this.form.page.value=1; this.form.submit()">
                                 <?php for ($m = 1; $m <= 12; $m++): ?>
                                     <option value="<?php echo $m; ?>" <?php echo $selected_month == $m ? 'selected' : ''; ?>>
                                         <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
@@ -507,8 +848,8 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small text-muted">Year</label>
-                            <select name="year" class="form-select filter-select" onchange="this.form.submit()">
+                            <label class="form-label">Year</label>
+                            <select name="year" class="form-select filter-select" onchange="this.form.page.value=1; this.form.submit()">
                                 <?php for ($y = date('Y') - 2; $y <= date('Y') + 1; $y++): ?>
                                     <option value="<?php echo $y; ?>" <?php echo $selected_year == $y ? 'selected' : ''; ?>>
                                         <?php echo $y; ?>
@@ -517,8 +858,8 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small text-muted">Status</label>
-                            <select name="status" class="form-select filter-select" onchange="this.form.submit()">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select filter-select" onchange="this.form.page.value=1; this.form.submit()">
                                 <option value="all" <?php echo $status_filter == 'all' ? 'selected' : ''; ?>>All Status</option>
                                 <option value="present" <?php echo $status_filter == 'present' ? 'selected' : ''; ?>>Present</option>
                                 <option value="late" <?php echo $status_filter == 'late' ? 'selected' : ''; ?>>Late</option>
@@ -530,11 +871,22 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small text-muted">Search</label>
-                            <input type="text" name="search" class="form-control filter-input" placeholder="Date, site, type..." value="<?php echo e($search_term); ?>" onkeyup="if(event.key === 'Enter') this.form.submit()">
+                            <label class="form-label">Search</label>
+                            <input type="text" name="search" class="form-control filter-input" placeholder="Date, site, type..." value="<?php echo e($search_term); ?>" onkeyup="if(event.key === 'Enter') { this.form.page.value=1; this.form.submit(); }">
                         </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Per Page</label>
+                            <select name="per_page" class="form-select filter-select" onchange="this.form.page.value=1; this.form.submit()">
+                                <?php foreach ([10, 25, 50, 100] as $size): ?>
+                                    <option value="<?php echo $size; ?>" <?php echo $records_per_page == $size ? 'selected' : ''; ?>>
+                                        <?php echo $size; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <input type="hidden" name="page" value="<?php echo (int)$current_page; ?>">
                         <div class="col-md-auto">
-                            <a href="my-attendance.php?month=<?php echo date('m'); ?>&year=<?php echo date('Y'); ?>" class="btn-action">Reset</a>
+                            <a href="my-attendance.php?month=<?php echo date('m'); ?>&year=<?php echo date('Y'); ?>&per_page=<?php echo (int)$records_per_page; ?>" class="secondary-btn"><i class="bi bi-arrow-counterclockwise"></i> Reset</a>
                         </div>
                     </form>
                 </div>
@@ -606,17 +958,17 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                             </div>
                             <div class="row g-3">
                                 <div class="col-6">
-                                    <div class="text-center p-2 bg-light rounded-3">
-                                        <div class="text-muted small fw-bold">Total Hours</div>
-                                        <div class="h3 fw-bold mb-0"><?php echo number_format($monthly_summary['total_hours'], 1); ?></div>
-                                        <div class="text-muted small">hours</div>
+                                    <div class="summary-box">
+                                        <div class="summary-label">Total Hours</div>
+                                        <div class="summary-value"><?php echo number_format($monthly_summary['total_hours'], 1); ?></div>
+                                        <div class="summary-unit">hours</div>
                                     </div>
                                 </div>
                                 <div class="col-6">
-                                    <div class="text-center p-2 bg-light rounded-3">
-                                        <div class="text-muted small fw-bold">Overtime</div>
-                                        <div class="h3 fw-bold mb-0"><?php echo number_format($monthly_summary['overtime_hours'], 1); ?></div>
-                                        <div class="text-muted small">hours</div>
+                                    <div class="summary-box">
+                                        <div class="summary-label">Overtime</div>
+                                        <div class="summary-value"><?php echo number_format($monthly_summary['overtime_hours'], 1); ?></div>
+                                        <div class="summary-unit">hours</div>
                                     </div>
                                 </div>
                                 <div class="col-12">
@@ -668,8 +1020,8 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                         <h3 class="panel-title">Recent Leave Requests</h3>
                         <a href="my-leaves.php" class="btn-action btn-sm">View All <i class="bi bi-arrow-right"></i></a>
                     </div>
-                    <div class="table-responsive d-none d-md-block">
-                        <table class="table table-sm">
+                    <div class="compact-table-wrap d-none d-md-block">
+                        <table class="table compact-table mb-0">
                             <thead>
                                 <tr>
                                     <th>Leave Type</th>
@@ -682,21 +1034,21 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                             </thead>
                             <tbody>
                                 <?php if (empty($all_leave_requests)): ?>
-                                    <tr><td colspan="6" class="text-center text-muted">No leave requests found.</td></tr>
+                                    <tr><td colspan="6"><div class="empty-state"><i class="bi bi-inbox"></i>No leave requests found.</div></td></tr>
                                 <?php else: ?>
                                     <?php foreach (array_slice($all_leave_requests, 0, 5) as $leave): ?>
                                         <tr>
-                                            <td><?php echo e($leave['leave_type']); ?></td>
-                                            <td><?php echo e(date('d M Y', strtotime($leave['from_date']))); ?></td>
-                                            <td><?php echo e(date('d M Y', strtotime($leave['to_date']))); ?></td>
-                                            <td><?php echo e($leave['total_days']); ?></td>
-                                            <td>
+                                            <td data-label="Leave Type"><span class="table-primary-text"><?php echo e($leave['leave_type']); ?></span></td>
+                                            <td data-label="From"><?php echo e(date('d M Y', strtotime($leave['from_date']))); ?></td>
+                                            <td data-label="To"><?php echo e(date('d M Y', strtotime($leave['to_date']))); ?></td>
+                                            <td data-label="Days"><?php echo e($leave['total_days']); ?></td>
+                                            <td data-label="Status">
                                                 <span class="leave-badge leave-<?php echo strtolower($leave['status']); ?>">
                                                     <i class="bi bi-<?php echo $leave['status'] == 'Approved' ? 'check-circle' : ($leave['status'] == 'Rejected' ? 'x-circle' : 'hourglass-split'); ?>"></i>
                                                     <?php echo e($leave['status']); ?>
                                                 </span>
                                             </td>
-                                            <td><?php echo e(date('d M Y', strtotime($leave['applied_at'] ?? $leave['created_at']))); ?></td>
+                                            <td data-label="Applied"><?php echo e(date('d M Y', strtotime($leave['applied_at'] ?? $leave['created_at']))); ?></td>
                                         </tr>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
@@ -704,6 +1056,9 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                         </table>
                     </div>
                     <div class="d-block d-md-none">
+                        <?php if (empty($all_leave_requests)): ?>
+                            <div class="empty-state"><i class="bi bi-inbox"></i>No leave requests found.</div>
+                        <?php else: ?>
                         <?php foreach (array_slice($all_leave_requests, 0, 5) as $leave): ?>
                             <div class="r-card">
                                 <div class="r-top">
@@ -716,169 +1071,159 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
                                 </div>
                             </div>
                         <?php endforeach; ?>
+                        <?php endif; ?>
                     </div>
                 </div>
                 
                 <!-- Attendance Records Table -->
                 <div class="panel">
                     <div class="panel-header">
-                        <h3 class="panel-title">Daily Attendance Records</h3>
-                        <span class="badge bg-light text-dark"><?php echo count($filtered_records); ?> records</span>
-                    </div>
-                    
-                    <!-- Desktop Table -->
-                    <div class="d-none d-md-block">
-                        <div class="table-responsive">
-                            <table id="attendanceTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Day</th>
-                                        <th>Punch In</th>
-                                        <th>Punch Out</th>
-                                        <th>Hours</th>
-                                        <th>Location</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php 
-                                    $today = date('Y-m-d');
-                                    foreach ($filtered_records as $record): 
-                                        $is_today = $record['attendance_date'] == $today;
-                                        $row_class = $is_today ? 'attendance-date-today' : '';
-                                    ?>
-                                        <tr class="<?php echo $row_class; ?>">
-                                            <td><strong><?php echo e(date('d M Y', strtotime($record['attendance_date']))); ?></strong></td>
-                                            <td><?php echo e(date('D', strtotime($record['attendance_date']))); ?></td>
-                                            <td><?php echo safeTimeOnly($record['punch_in_time'] ?? '', '—'); ?></td>
-                                            <td><?php echo safeTimeOnly($record['punch_out_time'] ?? '', '—'); ?></td>
-                                            <td>
-                                                <?php if ($record['total_hours'] > 0): ?>
-                                                    <span class="badge bg-light text-dark"><?php echo e($record['total_hours']); ?>h</span>
-                                                <?php else: ?>
-                                                    —
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?php
-                                                if ($record['punch_in_type'] == 'site' && !empty($record['site_name'])) {
-                                                    echo '<i class="bi bi-building"></i> ' . e($record['site_name']);
-                                                } elseif ($record['punch_in_type'] == 'office' && !empty($record['office_name'])) {
-                                                    echo '<i class="bi bi-briefcase"></i> ' . e($record['office_name']);
-                                                } elseif ($record['punch_in_type'] == 'remote') {
-                                                    echo '<i class="bi bi-wifi"></i> Remote';
-                                                } else {
-                                                    echo '<i class="bi bi-geo-alt"></i> —';
-                                                }
-                                                ?>
-                                            </td>
-                                            <td>
-                                                <?php echo getStatusBadge($record['status'], $record['punch_in_time'], $record['is_holiday'], $record['is_weekly_off'], $record['holiday_name']); ?>
-                                                <?php if ($record['is_leave'] && $record['leave_type']): ?>
-                                                    <span class="small text-muted ms-1">(<?php echo e($record['leave_type']); ?>)</span>
-                                                <?php endif; ?>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                    <?php if (empty($filtered_records)): ?>
-                                        <tr><td colspan="7" class="text-center text-muted py-4">No attendance records found for the selected period.</td></tr>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
+                        <div>
+                            <h3 class="panel-title">Daily Attendance Records</h3>
+                            <div class="panel-subtitle">Filtered records for the selected month</div>
                         </div>
+                        <span class="badge-pill status-secondary"><?php echo (int)$total_filtered_records; ?> records</span>
                     </div>
-                    
-                    <!-- Mobile Cards -->
-                    <div class="d-block d-md-none">
-                        <?php if (empty($filtered_records)): ?>
-                            <div class="text-center text-muted py-4">No attendance records found for the selected period.</div>
-                        <?php else: ?>
-                            <?php foreach ($filtered_records as $record): 
-                                $is_today = $record['attendance_date'] == date('Y-m-d');
-                                $card_class = $is_today ? 'border-primary' : '';
-                            ?>
-                                <div class="r-card <?php echo $card_class; ?>">
-                                    <div class="r-top">
-                                        <div>
-                                            <div class="fw-bold"><?php echo e(date('d M Y', strtotime($record['attendance_date']))); ?></div>
-                                            <div class="small text-muted"><?php echo e(date('l', strtotime($record['attendance_date']))); ?></div>
-                                        </div>
-                                        <?php echo getStatusBadge($record['status'], $record['punch_in_time'], $record['is_holiday'], $record['is_weekly_off'], $record['holiday_name']); ?>
-                                    </div>
-                                    <div class="r-kv">
-                                        <div class="r-row"><div class="r-key">Punch In</div><div class="r-val"><?php echo safeTimeOnly($record['punch_in_time'] ?? '', '—'); ?></div></div>
-                                        <div class="r-row"><div class="r-key">Punch Out</div><div class="r-val"><?php echo safeTimeOnly($record['punch_out_time'] ?? '', '—'); ?></div></div>
-                                        <div class="r-row"><div class="r-key">Duration</div><div class="r-val"><?php echo $record['total_hours'] ? e($record['total_hours']) . ' hours' : '—'; ?></div></div>
-                                        <div class="r-row"><div class="r-key">Location</div><div class="r-val">
+
+                    <div class="compact-table-wrap">
+                        <table id="attendanceTable" class="table compact-table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Day</th>
+                                    <th>Punch In</th>
+                                    <th>Punch Out</th>
+                                    <th>Hours</th>
+                                    <th>Location</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $today = date('Y-m-d');
+                                foreach ($paginated_records as $record):
+                                    $is_today = $record['attendance_date'] == $today;
+                                    $row_class = $is_today ? 'attendance-date-today' : '';
+                                ?>
+                                    <tr class="<?php echo $row_class; ?>">
+                                        <td data-label="Date">
+                                            <span class="table-primary-text"><?php echo e(date('d M Y', strtotime($record['attendance_date']))); ?></span>
+                                        </td>
+                                        <td data-label="Day"><?php echo e(date('D', strtotime($record['attendance_date']))); ?></td>
+                                        <td data-label="Punch In"><?php echo safeTimeOnly($record['punch_in_time'] ?? '', '—'); ?></td>
+                                        <td data-label="Punch Out"><?php echo safeTimeOnly($record['punch_out_time'] ?? '', '—'); ?></td>
+                                        <td data-label="Hours">
+                                            <?php if ($record['total_hours'] > 0): ?>
+                                                <span class="badge-pill status-secondary"><?php echo e($record['total_hours']); ?>h</span>
+                                            <?php else: ?>
+                                                —
+                                            <?php endif; ?>
+                                        </td>
+                                        <td data-label="Location">
                                             <?php
                                             if ($record['punch_in_type'] == 'site' && !empty($record['site_name'])) {
-                                                echo e($record['site_name']);
+                                                echo '<i class="bi bi-building"></i> ' . e($record['site_name']);
                                             } elseif ($record['punch_in_type'] == 'office' && !empty($record['office_name'])) {
-                                                echo e($record['office_name']);
+                                                echo '<i class="bi bi-briefcase"></i> ' . e($record['office_name']);
                                             } elseif ($record['punch_in_type'] == 'remote') {
-                                                echo 'Remote';
+                                                echo '<i class="bi bi-wifi"></i> Remote';
                                             } else {
-                                                echo '—';
+                                                echo '<i class="bi bi-geo-alt"></i> —';
                                             }
                                             ?>
-                                        </div></div>
-                                        <?php if ($record['late_minutes'] > 0 && $record['status'] !== 'leave' && $record['status'] !== 'absent'): ?>
-                                            <div class="r-row"><div class="r-key">Late By</div><div class="r-val text-warning"><?php echo e($record['late_minutes']); ?> mins</div></div>
-                                        <?php endif; ?>
-                                        <?php if ($record['is_leave'] && $record['leave_type']): ?>
-                                            <div class="r-row"><div class="r-key">Leave Type</div><div class="r-val"><?php echo e($record['leave_type']); ?></div></div>
-                                        <?php endif; ?>
-                                        <?php if ($record['is_holiday'] && $record['holiday_name']): ?>
-                                            <div class="r-row"><div class="r-key">Holiday</div><div class="r-val"><?php echo e($record['holiday_name']); ?></div></div>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="r-badges">
-                                        <?php if ($record['punch_in_type']): ?>
-                                            <span class="badge bg-light"><i class="bi bi-<?php echo $record['punch_in_type'] == 'site' ? 'building' : ($record['punch_in_type'] == 'office' ? 'briefcase' : 'wifi'); ?>"></i> <?php echo ucfirst($record['punch_in_type']); ?></span>
-                                        <?php endif; ?>
-                                        <?php if ($record['overtime_minutes'] > 0): ?>
-                                            <span class="badge bg-success"><i class="bi bi-clock-history"></i> OT: <?php echo round($record['overtime_minutes'] / 60, 1); ?>h</span>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
+                                        </td>
+                                        <td data-label="Status">
+                                            <?php echo getStatusBadge($record['status'], $record['punch_in_time'], $record['is_holiday'], $record['is_weekly_off'], $record['holiday_name']); ?>
+                                            <?php if ($record['is_leave'] && $record['leave_type']): ?>
+                                                <span class="table-secondary-text d-inline-block ms-1">(<?php echo e($record['leave_type']); ?>)</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+
+                                <?php if (empty($paginated_records)): ?>
+                                    <tr>
+                                        <td colspan="7">
+                                            <div class="empty-state">
+                                                <i class="bi bi-inbox"></i>
+                                                No attendance records found for the selected period.
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination-wrap">
+                        <div class="pagination-info">
+                            Showing <?php echo (int)$pagination_start; ?> to <?php echo (int)$pagination_end; ?>
+                            of <?php echo (int)$total_filtered_records; ?> records
+                        </div>
+
+                        <div class="pagination-controls">
+                            <a class="page-btn <?php echo $current_page <= 1 ? 'disabled' : ''; ?>"
+                               href="<?php echo e(buildPageUrl(1)); ?>"
+                               title="First page">
+                                <i class="bi bi-chevron-double-left"></i>
+                            </a>
+
+                            <a class="page-btn <?php echo $current_page <= 1 ? 'disabled' : ''; ?>"
+                               href="<?php echo e(buildPageUrl($current_page - 1)); ?>"
+                               title="Previous page">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+
+                            <?php
+                                $page_window_start = max(1, $current_page - 2);
+                                $page_window_end = min($total_pages, $current_page + 2);
+
+                                if ($page_window_start > 1) {
+                                    echo '<span class="page-btn disabled">...</span>';
+                                }
+
+                                for ($p = $page_window_start; $p <= $page_window_end; $p++):
+                            ?>
+                                <a class="page-btn <?php echo $p === $current_page ? 'active' : ''; ?>"
+                                   href="<?php echo e(buildPageUrl($p)); ?>">
+                                    <?php echo (int)$p; ?>
+                                </a>
+                            <?php endfor; ?>
+
+                            <?php if ($page_window_end < $total_pages): ?>
+                                <span class="page-btn disabled">...</span>
+                            <?php endif; ?>
+
+                            <a class="page-btn <?php echo $current_page >= $total_pages ? 'disabled' : ''; ?>"
+                               href="<?php echo e(buildPageUrl($current_page + 1)); ?>"
+                               title="Next page">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+
+                            <a class="page-btn <?php echo $current_page >= $total_pages ? 'disabled' : ''; ?>"
+                               href="<?php echo e(buildPageUrl($total_pages)); ?>"
+                               title="Last page">
+                                <i class="bi bi-chevron-double-right"></i>
+                            </a>
+                        </div>
                     </div>
                 </div>
-                
+
             </div>
         </div>
-        
+
         <?php include 'includes/footer.php'; ?>
     </main>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-    $(document).ready(function() {
-        // Initialize DataTable only on desktop
-        if (window.matchMedia('(min-width: 768px)').matches && $('#attendanceTable tbody tr').length > 0) {
-            $('#attendanceTable').DataTable({
-                responsive: true,
-                autoWidth: false,
-                pageLength: 10,
-                lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'All']],
-                order: [[0, 'desc']],
-                language: {
-                    zeroRecords: "No attendance records found",
-                    info: "Showing _START_ to _END_ of _TOTAL_ entries",
-                    infoEmpty: "No entries to show",
-                    lengthMenu: "Show _MENU_",
-                    search: "Search:"
-                }
-            });
+    document.addEventListener('DOMContentLoaded', function() {
+        const yearElement = document.getElementById("year");
+        if (yearElement) {
+            yearElement.textContent = new Date().getFullYear();
         }
     });
 </script>

@@ -1,9 +1,13 @@
 <?php
 session_start();
 require_once 'includes/db-config.php';
-require_once 'includes/activity-logger.php';
 
-$current_employee_id = $_SESSION['employee_id'] ?? 6;
+$current_employee_id = (int)($_SESSION['employee_id'] ?? 0);
+if ($current_employee_id <= 0) {
+    header("Location: ../login.php");
+    exit;
+}
+
 $conn = get_db_connection();
 if (!$conn) { die("Database connection failed."); }
 
@@ -32,6 +36,89 @@ function calculateDistanceFallback($lat1, $lon1, $lat2, $lon2) {
     return $earthRadius * $c;
 }
 
+function tableExists($conn, string $table): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function columnExists($conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $columnEsc = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function roleKeyFromEmployee(array $employee): string {
+    $designation = strtolower(trim((string)($employee['designation'] ?? '')));
+    $department = strtolower(trim((string)($employee['department'] ?? '')));
+
+    if (str_contains($designation, 'director') || str_contains($designation, 'admin') || str_contains($designation, 'administrator') || str_contains($designation, 'vice president') || str_contains($designation, 'general manager')) return 'admin';
+    if (str_contains($designation, 'hr') || str_contains($department, 'hr') || str_contains($department, 'human resource')) return 'hr';
+    if (str_contains($designation, 'manager')) return 'manager';
+    if (str_contains($designation, 'team lead') || str_contains($designation, 'tl') || str_contains($designation, 'lead')) return 'tl';
+    if (str_contains($designation, 'project engineer') || str_contains($designation, 'engineer')) return 'project_engineer';
+
+    return 'employee';
+}
+
+function logPunchActivity($conn, int $employeeId, string $activityType, string $description, $referenceId = null, array $newData = []): bool {
+    if (!$conn || !tableExists($conn, 'activity_logs')) return false;
+
+    $newDataJson = $newData ? json_encode($newData, JSON_UNESCAPED_UNICODE) : null;
+
+    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['name'] ?? 'System';
+    $username = $_SESSION['username'] ?? '';
+    $designation = $_SESSION['designation'] ?? '';
+    $department = $_SESSION['department'] ?? '';
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+    $map = [
+        'employee_id'   => ['i', $employeeId],
+        'employee_name' => ['s', $employeeName],
+        'username'      => ['s', $username],
+        'designation'   => ['s', $designation],
+        'department'    => ['s', $department],
+        'activity_type' => ['s', $activityType],
+        'module'        => ['s', 'attendance'],
+        'description'   => ['s', $description],
+        'reference_id'  => ['i', $referenceId],
+        'new_data'      => ['s', $newDataJson],
+        'ip_address'    => ['s', $ipAddress],
+    ];
+
+    $columns = [];
+    $types = '';
+    $values = [];
+
+    foreach ($map as $column => $pair) {
+        if (columnExists($conn, 'activity_logs', $column)) {
+            $columns[] = "`$column`";
+            $types .= $pair[0];
+            $values[] = $pair[1];
+        }
+    }
+
+    if (!$columns) return false;
+
+    $sql = "INSERT INTO activity_logs (" . implode(',', $columns) . ") VALUES (" . implode(',', array_fill(0, count($columns), '?')) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$values);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return $ok;
+}
+
+
 $error = '';
 $success = '';
 $punch_location_data = null;
@@ -45,10 +132,10 @@ $employee = mysqli_fetch_assoc($emp_res);
 mysqli_stmt_close($emp_stmt);
 if (!$employee) die("Employee not found or inactive.");
 
-// Check if user is HR or Admin
+// Current role
+$currentRoleKey = roleKeyFromEmployee($employee ?: []);
 $designation = strtolower(trim($employee['designation'] ?? ''));
-$department = strtolower(trim($employee['department'] ?? ''));
-$isHrOrAdmin = ($designation === 'hr' || $department === 'hr' || $designation === 'administrator' || $designation === 'admin');
+$isHrOrAdmin = in_array($currentRoleKey, ['admin', 'hr'], true);
 
 // Today's attendance
 $att_stmt = mysqli_prepare($conn, "SELECT * FROM attendance WHERE employee_id = ? AND attendance_date = ? LIMIT 1");
@@ -63,14 +150,33 @@ mysqli_stmt_close($att_stmt);
 $can_punch_office = true; // All employees can punch from office
 
 // Assigned sites (for punch in page)
+// PE: site_project_engineers.employee_id
+// TL: sites.team_lead_employee_id OR fallback site_project_engineers
 $assigned_sites = [];
-$sites_stmt = mysqli_prepare($conn, "
-    SELECT s.*
-    FROM sites s
-    JOIN site_project_engineers spe ON s.id = spe.site_id
-    WHERE spe.employee_id = ? AND s.deleted_at IS NULL
-");
-mysqli_stmt_bind_param($sites_stmt, "i", $current_employee_id);
+$hasTeamLeadCol = columnExists($conn, 'sites', 'team_lead_employee_id');
+
+if ($currentRoleKey === 'tl' && $hasTeamLeadCol) {
+    $sites_stmt = mysqli_prepare($conn, "
+        SELECT DISTINCT s.*
+        FROM sites s
+        LEFT JOIN site_project_engineers spe ON s.id = spe.site_id
+        WHERE (s.team_lead_employee_id = ? OR spe.employee_id = ?)
+          AND s.deleted_at IS NULL
+        ORDER BY s.project_name ASC
+    ");
+    mysqli_stmt_bind_param($sites_stmt, "ii", $current_employee_id, $current_employee_id);
+} else {
+    $sites_stmt = mysqli_prepare($conn, "
+        SELECT DISTINCT s.*
+        FROM sites s
+        JOIN site_project_engineers spe ON s.id = spe.site_id
+        WHERE spe.employee_id = ?
+          AND s.deleted_at IS NULL
+        ORDER BY s.project_name ASC
+    ");
+    mysqli_stmt_bind_param($sites_stmt, "i", $current_employee_id);
+}
+
 mysqli_stmt_execute($sites_stmt);
 $sites_res = mysqli_stmt_get_result($sites_stmt);
 $assigned_sites = mysqli_fetch_all($sites_res, MYSQLI_ASSOC);
@@ -161,14 +267,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'in') {
             if (!$site_id) {
                 $error = "Please select a site.";
             } else {
-                $site_check_stmt = mysqli_prepare($conn, "
-                    SELECT s.*
-                    FROM sites s
-                    JOIN site_project_engineers spe ON s.id = spe.site_id
-                    WHERE spe.employee_id = ? AND s.id = ?
-                    LIMIT 1
-                ");
-                mysqli_stmt_bind_param($site_check_stmt, "ii", $current_employee_id, $site_id);
+                if ($hasTeamLeadCol) {
+                    $site_check_stmt = mysqli_prepare($conn, "
+                        SELECT DISTINCT s.*
+                        FROM sites s
+                        LEFT JOIN site_project_engineers spe ON s.id = spe.site_id
+                        WHERE s.id = ?
+                          AND (spe.employee_id = ? OR s.team_lead_employee_id = ?)
+                          AND s.deleted_at IS NULL
+                        LIMIT 1
+                    ");
+                    mysqli_stmt_bind_param($site_check_stmt, "iii", $site_id, $current_employee_id, $current_employee_id);
+                } else {
+                    $site_check_stmt = mysqli_prepare($conn, "
+                        SELECT DISTINCT s.*
+                        FROM sites s
+                        JOIN site_project_engineers spe ON s.id = spe.site_id
+                        WHERE spe.employee_id = ?
+                          AND s.id = ?
+                          AND s.deleted_at IS NULL
+                        LIMIT 1
+                    ");
+                    mysqli_stmt_bind_param($site_check_stmt, "ii", $current_employee_id, $site_id);
+                }
                 mysqli_stmt_execute($site_check_stmt);
                 $site_check_res = mysqli_stmt_get_result($site_check_stmt);
                 $site = mysqli_fetch_assoc($site_check_res);
@@ -253,15 +374,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'in') {
         );
 
         if (mysqli_stmt_execute($stmt)) {
-            logActivity(
+            logPunchActivity(
                 $conn,
+                $current_employee_id,
                 'CREATE',
-                'attendance',
                 "Punched in at {$punch_location}",
-                null,
-                null,
-                null,
-                json_encode(['type' => $punch_type])
+                mysqli_insert_id($conn),
+                ['type' => $punch_type, 'location' => $punch_location]
             );
             $_SESSION['flash_success'] = "Punch in successful at {$punch_location}.";
             header("Location: punchin.php");
@@ -316,15 +435,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'out' && $attendance) {
             );
 
             if (mysqli_stmt_execute($stmt)) {
-                logActivity(
+                logPunchActivity(
                     $conn,
+                    $current_employee_id,
                     'UPDATE',
-                    'attendance',
                     "Punched out after {$total_hours} hours",
-                    $attendance['id'],
-                    null,
-                    null,
-                    json_encode(['hours' => $total_hours])
+                    (int)$attendance['id'],
+                    ['hours' => $total_hours, 'location' => $punch_location]
                 );
                 $_SESSION['flash_success'] = "Punch out successful. Total hours: {$total_hours}h";
                 header("Location: punchin.php");
@@ -357,96 +474,228 @@ $current_date = date('d M Y');
   <script src="https://maps.googleapis.com/maps/api/js?key=<?= htmlspecialchars($google_maps_api_key) ?>&libraries=places,geometry"></script>
 
   <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px; }
-    .card-panel{ background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 8px 24px rgba(17,24,39,.06); }
-    .location-status{ background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:15px; }
-    .map-box{ height:260px; border-radius:12px; border:1px solid #e5e7eb; display:none; }
-    .pill{ display:inline-flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px; font-size:12px; font-weight:700; }
-    .pill-blue{ background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
-    .pill-green{ background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
-    .pill-purple{ background:#f3e8ff; color:#6b21a8; border:1px solid #d8b4fe; }
+    :root{
+      --page-bg:#f5f7fb;
+      --card-bg:#ffffff;
+      --border:#e5e7eb;
+      --text:#111827;
+      --muted:#6b7280;
+      --soft:#f8fafc;
+      --shadow:0 10px 26px rgba(15,23,42,.055);
+      --radius:15px;
+      --blue:#2f80ed;
+      --green:#27ae60;
+      --orange:#f2994a;
+      --red:#eb5757;
+      --purple:#7c3aed;
+    }
+
+    body{ background:var(--page-bg); }
+
+    .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px; }
+    .projects-wrapper{ width:100%; }
+
+    .page-heading{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:14px;
+    }
+
+    .page-heading h1{ font-size:19px; font-weight:900; color:var(--text); margin:0; }
+    .page-heading p{ margin:3px 0 0; color:var(--muted); font-size:12px; font-weight:600; }
+
+    .primary-btn,.secondary-btn{
+      min-height:36px;
+      padding:0 14px;
+      border-radius:11px;
+      font-size:12px;
+      font-weight:900;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:7px;
+      text-decoration:none;
+      white-space:nowrap;
+      border:0;
+    }
+
+    .primary-btn{ background:#111827; color:#fff; }
+    .primary-btn:hover{ background:#020617; color:#fff; }
+
+    .secondary-btn{
+      border:1px solid var(--border);
+      background:#fff;
+      color:#334155;
+    }
+
+    .secondary-btn:hover{ border-color:#cbd5e1; background:#f8fafc; color:#111827; }
+
+    .card-panel,.panel{
+      background:var(--card-bg);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:13px;
+      margin-bottom:14px;
+    }
+
+    .panel-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+    }
+
+    .panel-title{ font-weight:900; font-size:14px; color:var(--text); margin:0; }
+    .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
+
+    .form-label{
+      font-size:11px;
+      font-weight:900;
+      color:#475569;
+      text-transform:uppercase;
+      margin-bottom:6px;
+    }
+
+    .form-control,.form-select{
+      min-height:38px;
+      border:1px solid var(--border);
+      border-radius:11px;
+      font-size:12px;
+      font-weight:800;
+      color:#111827;
+      padding:8px 11px;
+      background:#fff;
+    }
+
+    .form-control:focus,.form-select:focus{
+      border-color:#bfdbfe;
+      box-shadow:0 0 0 3px rgba(59,130,246,.10);
+    }
+
+    .form-check{
+      border:1px solid #eef2f7;
+      border-radius:13px;
+      background:#f8fafc;
+      padding:10px 12px 10px 36px;
+      min-width:190px;
+    }
+
+    .form-check-label{ font-size:12px; font-weight:900; color:#334155; }
+
+    .location-status{
+      background:#f8fafc;
+      border:1px solid #e5e7eb;
+      border-radius:13px;
+      padding:12px;
+      font-size:12px;
+      font-weight:800;
+    }
+
+    .map-box{
+      height:260px;
+      border-radius:13px;
+      border:1px solid #e5e7eb;
+      display:none;
+      overflow:hidden;
+    }
 
     .info-grid{
       display:grid;
-      grid-template-columns: repeat(2, minmax(0,1fr));
-      gap:10px;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:9px;
     }
+
     .mini-info{
       background:#f8fafc;
-      border:1px solid #e5e7eb;
+      border:1px solid #eef2f7;
       border-radius:12px;
-      padding:10px 12px;
+      padding:9px 10px;
     }
-    .mini-info .lbl{
-      font-size:11px;
-      color:#6b7280;
-      font-weight:700;
-      margin-bottom:2px;
+
+    .mini-info .lbl,.address-box .lbl{
+      font-size:10px;
+      color:#64748b;
+      font-weight:900;
+      text-transform:uppercase;
+      margin-bottom:3px;
     }
-    .mini-info .val{
-      font-size:13px;
+
+    .mini-info .val,.address-box .val{
+      font-size:11.5px;
       color:#111827;
-      font-weight:700;
+      font-weight:850;
       word-break:break-word;
+      line-height:1.35;
     }
+
     .address-box{
       background:#f8fafc;
-      border:1px solid #e5e7eb;
+      border:1px solid #eef2f7;
       border-radius:12px;
-      padding:12px;
-    }
-    .address-box .lbl{
-      font-size:11px;
-      color:#6b7280;
-      font-weight:700;
-      margin-bottom:4px;
-    }
-    .address-box .val{
-      font-size:13px;
-      color:#111827;
-      font-weight:600;
-      line-height:1.35;
-      word-break:break-word;
+      padding:10px;
     }
 
-    .role-badge{
-      display:inline-block;
-      padding:4px 10px;
-      border-radius:20px;
-      font-size:11px;
-      font-weight:700;
-      margin-left:8px;
-    }
-    .role-hr{
-      background:#e3f2fd;
-      color:#0d47a1;
-    }
-    .role-admin{
-      background:#f3e5f5;
-      color:#4a148c;
+    .role-badge,.badge-pill{
+      border-radius:999px;
+      padding:5px 8px;
+      font-weight:900;
+      font-size:10px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      border:1px solid transparent;
+      white-space:nowrap;
     }
 
-    @media (max-width: 991.98px){
-      .main{
-        margin-left: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-      }
-      .sidebar{
-        position: fixed !important;
-        transform: translateX(-100%);
-        z-index: 1040 !important;
-      }
-      .sidebar.open, .sidebar.active, .sidebar.show{
-        transform: translateX(0) !important;
-      }
+    .role-hr{ background:#dbeafe; color:#2563eb; border-color:#bfdbfe; }
+    .role-admin{ background:#ede9fe; color:#6d28d9; border-color:#ddd6fe; }
+
+    .employee-info-list{ display:grid; gap:8px; }
+
+    .info-row{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      border-bottom:1px dashed #eef2f7;
+      padding-bottom:7px;
     }
-    @media (max-width: 768px) {
-      .content-scroll { padding: 12px 10px 12px !important; }
-      .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
-      .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
-      .sec-head { padding: 10px !important; border-radius: 12px; }
-      .info-grid{ grid-template-columns: 1fr; }
+
+    .info-row:last-child{ border-bottom:0; padding-bottom:0; }
+    .info-key{ color:#64748b; font-size:10.5px; font-weight:900; text-transform:uppercase; }
+    .info-val{ color:#111827; font-size:11.5px; font-weight:850; text-align:right; word-break:break-word; }
+
+    .alert{
+      border-radius:14px;
+      border:1px solid transparent;
+      box-shadow:var(--shadow);
+      font-size:12px;
+      font-weight:850;
+    }
+
+    .alert-info{ background:#eff6ff; border-color:#bfdbfe; color:#1e40af; }
+    .alert-warning{ background:#fffbeb; border-color:#fde68a; color:#92400e; }
+    .alert-danger{ background:#fee2e2; border-color:#fecaca; color:#991b1b; }
+
+    @media(max-width:991.98px){
+      .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
+      .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
+      .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
+    }
+
+    @media(max-width:768px){
+      .content-scroll{ padding:12px 10px!important; }
+      .container-fluid.projects-wrapper{ padding-left:0!important; padding-right:0!important; }
+      .page-heading{ align-items:flex-start; flex-direction:column; }
+      .card-panel,.panel{ padding:12px; }
+      .primary-btn,.secondary-btn{ width:100%; }
+      .info-grid{ grid-template-columns:1fr; }
+      .form-check{ width:100%; }
+      .info-row{ flex-direction:column; gap:3px; }
+      .info-val{ text-align:left; }
     }
   </style>
 </head>
@@ -457,21 +706,21 @@ $current_date = date('d M Y');
     <?php include 'includes/topbar.php'; ?>
 
     <div class="content-scroll">
-      <div class="container-fluid maxw">
-        <div class="d-flex justify-content-between align-items-center mb-3">
+      <div class="container-fluid projects-wrapper px-0">
+        <div class="page-heading">
           <div>
-            <h1 class="h3 fw-bold mb-1"><?= $action === 'in' ? 'Punch In' : 'Punch Out' ?></h1>
-            <p class="text-muted mb-0">
+            <h1><?= $action === 'in' ? 'Punch In' : 'Punch Out' ?></h1>
+            <p>
               <?= $action === 'in' ? 'Validate location and mark punch in' : 'Validate location and mark punch out' ?>
               <?php if ($isHrOrAdmin): ?>
-                <span class="role-badge <?= $designation === 'administrator' || $designation === 'admin' ? 'role-admin' : 'role-hr' ?>">
-                  <i class="bi bi-shield-check me-1"></i>
-                  <?= $designation === 'administrator' || $designation === 'admin' ? 'Admin Access' : 'HR Access' ?>
+                <span class="role-badge <?= $currentRoleKey === 'admin' ? 'role-admin' : 'role-hr' ?>">
+                  <i class="bi bi-shield-check"></i>
+                  <?= $currentRoleKey === 'admin' ? 'Admin Access' : 'HR Access' ?>
                 </span>
               <?php endif; ?>
             </p>
           </div>
-          <a href="punchin.php" class="btn btn-outline-secondary">
+          <a href="punchin.php" class="secondary-btn">
             <i class="bi bi-arrow-left"></i> Back
           </a>
         </div>
@@ -484,7 +733,7 @@ $current_date = date('d M Y');
 
         <div class="row g-3">
           <div class="col-lg-8">
-            <div class="card-panel p-4">
+            <div class="card-panel">
               <?php if ($action === 'in'): ?>
                 <form method="POST" id="punchForm">
                   <input type="hidden" name="latitude" id="punchLat">
@@ -493,7 +742,7 @@ $current_date = date('d M Y');
                   <input type="hidden" name="punch_type_radio" id="punchType" value="site">
 
                   <div class="mb-3">
-                    <label class="form-label fw-bold">Select Punch Location Type</label>
+                    <label class="form-label">Select Punch Location Type</label>
                     <div class="d-flex gap-4 flex-wrap">
                       <div class="form-check">
                         <input class="form-check-input" type="radio" name="punch_type_radio_display" id="punchTypeSite" value="site" checked>
@@ -511,7 +760,7 @@ $current_date = date('d M Y');
                   </div>
 
                   <div class="mb-3" id="siteSelectDiv">
-                    <label class="form-label fw-bold">Select Your Site</label>
+                    <label class="form-label">Select Your Site</label>
                     <select class="form-select" name="site_id" id="siteSelect" required>
                       <option value="">Choose assigned site</option>
                       <?php foreach ($assigned_sites as $site): ?>
@@ -527,7 +776,7 @@ $current_date = date('d M Y');
                   </div>
 
                   <div class="mb-3" id="officeSelectDiv" style="display:none;">
-                    <label class="form-label fw-bold">Select Office Location</label>
+                    <label class="form-label">Select Office Location</label>
                     <select class="form-select" name="office_id" id="officeSelect">
                       <option value="">Choose office</option>
                       <?php foreach ($offices as $office): ?>
@@ -552,7 +801,7 @@ $current_date = date('d M Y');
                   <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                       <label class="form-label fw-bold mb-0">Current Location Details</label>
-                      <button type="button" class="btn btn-sm btn-outline-primary" id="refreshLocationBtn">
+                      <button type="button" class="secondary-btn" id="refreshLocationBtn">
                         <i class="bi bi-arrow-clockwise"></i> Refresh GPS
                       </button>
                     </div>
@@ -596,11 +845,11 @@ $current_date = date('d M Y');
                     Make sure your device location is enabled. You can only punch in within the geo-fence radius.
                   </div>
 
-                  <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <button type="submit" class="primary-btn" id="submitBtn" disabled>
                       <i class="bi bi-box-arrow-in-right"></i> Confirm Punch In
                     </button>
-                    <a href="punchin.php" class="btn btn-outline-secondary">Cancel</a>
+                    <a href="punchin.php" class="secondary-btn">Cancel</a>
                   </div>
                 </form>
 
@@ -627,7 +876,7 @@ $current_date = date('d M Y');
                   <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                       <label class="form-label fw-bold mb-0">Current Location Details</label>
-                      <button type="button" class="btn btn-sm btn-outline-primary" id="refreshLocationBtn">
+                      <button type="button" class="secondary-btn" id="refreshLocationBtn">
                         <i class="bi bi-arrow-clockwise"></i> Refresh GPS
                       </button>
                     </div>
@@ -672,11 +921,11 @@ $current_date = date('d M Y');
                     <?= htmlspecialchars($punch_location_data['type'] ?? '') ?> location to punch out.
                   </div>
 
-                  <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <button type="submit" class="primary-btn" id="submitBtn" disabled>
                       <i class="bi bi-box-arrow-right"></i> Confirm Punch Out
                     </button>
-                    <a href="punchin.php" class="btn btn-outline-secondary">Cancel</a>
+                    <a href="punchin.php" class="secondary-btn">Cancel</a>
                   </div>
                 </form>
               <?php endif; ?>
@@ -684,13 +933,16 @@ $current_date = date('d M Y');
           </div>
 
           <div class="col-lg-4">
-            <div class="card-panel p-4">
-              <div class="d-flex align-items-center justify-content-between mb-3">
-                <h5 class="fw-bold mb-0">Employee Details</h5>
+            <div class="card-panel">
+              <div class="panel-header">
+                <div>
+                  <h5 class="panel-title">Employee Details</h5>
+                  <div class="panel-subtitle">Current attendance context</div>
+                </div>
                 <?php if ($isHrOrAdmin): ?>
-                  <span class="badge <?= $designation === 'administrator' || $designation === 'admin' ? 'bg-dark' : 'bg-info' ?>">
+                  <span class="badge-pill <?= $currentRoleKey === 'admin' ? 'role-admin' : 'role-hr' ?>">
                     <i class="bi bi-shield-check"></i>
-                    <?= $designation === 'administrator' || $designation === 'admin' ? 'ADMIN' : 'HR' ?>
+                    <?= $currentRoleKey === 'admin' ? 'ADMIN' : 'HR' ?>
                   </span>
                 <?php endif; ?>
               </div>
@@ -734,8 +986,6 @@ $current_date = date('d M Y');
 </div>
 <script src="assets/js/sidebar-toggle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
 <script>
 let map, geocoder, currentMarker, targetMarker, targetCircle;
 let currentLat = null, currentLng = null, currentAccuracy = null;
@@ -823,7 +1073,7 @@ function renderMap(currentLat, currentLng, targetLat, targetLng, radius) {
     map: map,
     title: 'Your Location',
     icon: {
-      url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+      url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
       scaledSize: new google.maps.Size(40, 40)
     }
   });
@@ -833,7 +1083,7 @@ function renderMap(currentLat, currentLng, targetLat, targetLng, radius) {
     map: map,
     title: 'Target Location',
     icon: {
-      url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+      url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
       scaledSize: new google.maps.Size(40, 40)
     }
   });

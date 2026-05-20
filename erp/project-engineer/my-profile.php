@@ -15,6 +15,74 @@ $employeeId = (int)$_SESSION['employee_id'];
 
 function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
+function tableExists($conn, string $table): bool {
+  $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+  $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+  if (!$res) return false;
+  $ok = mysqli_num_rows($res) > 0;
+  mysqli_free_result($res);
+  return $ok;
+}
+
+function columnExists($conn, string $table, string $column): bool {
+  $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+  $columnEsc = mysqli_real_escape_string($conn, $column);
+  $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
+  if (!$res) return false;
+  $ok = mysqli_num_rows($res) > 0;
+  mysqli_free_result($res);
+  return $ok;
+}
+
+function logProfileActivity($conn, int $employeeId, string $activityType, string $description, $referenceId = null): bool {
+  if (!$conn || !tableExists($conn, 'activity_logs')) return false;
+
+  $employeeName = $_SESSION['employee_name'] ?? $_SESSION['name'] ?? 'System';
+  $username = $_SESSION['username'] ?? '';
+  $designation = $_SESSION['designation'] ?? '';
+  $department = $_SESSION['department'] ?? '';
+  $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+  $map = [
+    'employee_id'   => ['i', $employeeId],
+    'employee_name' => ['s', $employeeName],
+    'username'      => ['s', $username],
+    'designation'   => ['s', $designation],
+    'department'    => ['s', $department],
+    'activity_type' => ['s', $activityType],
+    'module'        => ['s', 'my_profile'],
+    'description'   => ['s', $description],
+    'reference_id'  => ['i', $referenceId],
+    'ip_address'    => ['s', $ipAddress],
+  ];
+
+  $columns = [];
+  $types = '';
+  $values = [];
+
+  foreach ($map as $column => $pair) {
+    if (columnExists($conn, 'activity_logs', $column)) {
+      $columns[] = "`$column`";
+      $types .= $pair[0];
+      $values[] = $pair[1];
+    }
+  }
+
+  if (!$columns) return false;
+
+  $placeholders = implode(',', array_fill(0, count($columns), '?'));
+  $sql = "INSERT INTO activity_logs (" . implode(',', $columns) . ") VALUES ($placeholders)";
+  $st = mysqli_prepare($conn, $sql);
+  if (!$st) return false;
+
+  mysqli_stmt_bind_param($st, $types, ...$values);
+  $ok = mysqli_stmt_execute($st);
+  mysqli_stmt_close($st);
+
+  return $ok;
+}
+
+
 $success = '';
 $error   = '';
 
@@ -152,6 +220,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
         $_SESSION['employee_name']  = $full_name;
         $_SESSION['employee_email'] = $email;
 
+        logProfileActivity($conn, $employeeId, 'UPDATE', 'Updated profile details', $employeeId);
+
         $emp = fetchEmployee($conn, $employeeId);
       } else {
         $error = "Failed to update profile.";
@@ -218,6 +288,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
               // Session also store DB path
               $_SESSION['employee_photo'] = $dbPath;
 
+              logProfileActivity($conn, $employeeId, 'UPDATE', 'Updated profile photo', $employeeId);
+
               $emp = fetchEmployee($conn, $employeeId);
             } else {
               $error = "Failed to update photo in database.";
@@ -266,6 +338,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
           mysqli_stmt_bind_param($st2, "si", $newHash, $employeeId);
           if (mysqli_stmt_execute($st2)) {
             $success = "Password changed successfully.";
+            logProfileActivity($conn, $employeeId, 'UPDATE', 'Changed account password', $employeeId);
           } else {
             $error = "Failed to change password.";
           }
@@ -302,69 +375,313 @@ if ($photoAbs !== '' && is_file($photoAbs)) {
   <link href="assets/css/footer.css" rel="stylesheet" />
 
   <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-    .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px; }
-    .panel-title{ font-weight:900; font-size:18px; margin:0; color:#111827; }
-    .muted{ color:#6b7280; font-weight:650; }
-    .avatar-lg{
-      width:90px;height:90px;border-radius:22px; overflow:hidden;
-      border:1px solid var(--border); background:#fff;
-      display:flex; align-items:center; justify-content:center;
-      box-shadow: var(--shadow);
+    :root{
+      --page-bg:#f5f7fb;
+      --card-bg:#ffffff;
+      --border:#e5e7eb;
+      --text:#111827;
+      --muted:#6b7280;
+      --soft:#f8fafc;
+      --shadow:0 10px 26px rgba(15,23,42,.055);
+      --radius:15px;
+      --blue:#2f80ed;
+      --green:#27ae60;
+      --red:#eb5757;
     }
-    .avatar-lg img{ width:100%;height:100%;object-fit:cover; }
-    .chip{
-      display:inline-flex; align-items:center; gap:8px;
-      padding:6px 10px; border-radius:999px; border:1px solid var(--border);
-      background:#fff; font-weight:750; color:#374151; font-size:12px;
+
+    body{ background:var(--page-bg); }
+
+    .content-scroll{
+      flex:1 1 auto;
+      overflow:auto;
+      padding:16px;
     }
-    .form-control, .form-select{
-      border-radius: 12px;
-      border:1px solid var(--border);
-      padding: 10px 12px;
-      font-weight: 650;
+
+    .projects-wrapper{ width:100%; }
+
+    .page-heading{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:14px;
     }
-    .btn-tek{
-      border-radius: 12px; font-weight: 800;
-      padding: 10px 14px;
+
+    .page-heading h1{
+      font-size:19px;
+      font-weight:900;
+      color:var(--text);
+      margin:0;
     }
-    .btn-download{
-      background:#fff;
-      border:1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 10px 14px;
-      color:green;
-      font-weight: 900;
+
+    .page-heading p{
+      margin:3px 0 0;
+      color:var(--muted);
+      font-size:12px;
+      font-weight:600;
+    }
+
+    .primary-btn,.secondary-btn,.success-btn,.dark-btn{
+      min-height:36px;
+      padding:0 14px;
+      border-radius:11px;
+      font-size:12px;
+      font-weight:900;
       display:inline-flex;
       align-items:center;
-      gap:8px;
+      justify-content:center;
+      gap:7px;
       text-decoration:none;
-    }
-    .btn-download:hover{ background:#f9fafb; color: var(--blue); border-color: rgba(45,156,219,.25); }
-
-    .alert{ border-radius: var(--radius); border:none; box-shadow: var(--shadow); }
-
-    @media (max-width: 991.98px){
-      .main{
-        margin-left: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-      }
-      .sidebar{
-        position: fixed !important;
-        transform: translateX(-100%);
-        z-index: 1040 !important;
-      }
-      .sidebar.open, .sidebar.active, .sidebar.show{
-        transform: translateX(0) !important;
-      }
+      white-space:nowrap;
+      border:0;
     }
 
-    @media (max-width: 768px) {
-      .content-scroll { padding: 12px 10px 12px !important; }
-      .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
-      .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
-      .sec-head { padding: 10px !important; border-radius: 12px; }
+    .primary-btn,.dark-btn{
+      background:#111827;
+      color:#fff;
+    }
+
+    .primary-btn:hover,.dark-btn:hover{
+      background:#020617;
+      color:#fff;
+    }
+
+    .secondary-btn{
+      border:1px solid var(--border);
+      background:#fff;
+      color:#334155;
+    }
+
+    .secondary-btn:hover{
+      border-color:#cbd5e1;
+      background:#f8fafc;
+      color:#111827;
+    }
+
+    .success-btn{
+      background:#16a34a;
+      color:#fff;
+    }
+
+    .success-btn:hover{
+      background:#15803d;
+      color:#fff;
+    }
+
+    .panel{
+      background:var(--card-bg);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:13px;
+      margin-bottom:14px;
+      height:auto;
+    }
+
+    .panel-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+    }
+
+    .panel-title{
+      font-weight:900;
+      font-size:14px;
+      margin:0;
+      color:var(--text);
+    }
+
+    .panel-subtitle{
+      color:var(--muted);
+      font-size:11px;
+      font-weight:700;
+      margin-top:2px;
+    }
+
+    .profile-layout-row{
+      align-items:flex-start;
+    }
+
+    .profile-layout-row > [class*="col-"]{
+      align-self:flex-start;
+    }
+
+    .profile-card{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:12px;
+      border:1px solid #eef2f7;
+      border-radius:14px;
+      background:#f8fafc;
+      margin-bottom:13px;
+    }
+
+    .avatar-lg{
+      width:82px;
+      height:82px;
+      border-radius:22px;
+      overflow:hidden;
+      border:1px solid var(--border);
+      background:#111827;
+      color:#fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow:var(--shadow);
+      font-size:24px;
+      font-weight:950;
+      flex:0 0 auto;
+    }
+
+    .avatar-lg img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+
+    .profile-main-name{
+      font-size:17px;
+      font-weight:950;
+      color:#111827;
+      line-height:1.2;
+    }
+
+    .muted{
+      color:#64748b;
+      font-weight:700;
+      font-size:12px;
+    }
+
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:5px 8px;
+      border-radius:999px;
+      border:1px solid #e2e8f0;
+      background:#fff;
+      font-weight:900;
+      color:#475569;
+      font-size:10.5px;
+    }
+
+    .info-list{
+      border:1px solid #eef2f7;
+      background:#fff;
+      border-radius:13px;
+      padding:10px;
+      display:grid;
+      gap:8px;
+    }
+
+    .info-row{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      border-bottom:1px dashed #eef2f7;
+      padding-bottom:7px;
+    }
+
+    .info-row:last-child{
+      border-bottom:0;
+      padding-bottom:0;
+    }
+
+    .info-key{
+      color:#64748b;
+      font-size:10.5px;
+      font-weight:900;
+      text-transform:uppercase;
+    }
+
+    .info-val{
+      color:#111827;
+      font-size:11.5px;
+      font-weight:850;
+      text-align:right;
+      word-break:break-word;
+    }
+
+    .form-label{
+      font-size:11px;
+      font-weight:900;
+      color:#475569;
+      text-transform:uppercase;
+      margin-bottom:6px;
+    }
+
+    .form-control,.form-select{
+      min-height:38px;
+      border:1px solid var(--border);
+      border-radius:11px;
+      font-size:12px;
+      font-weight:800;
+      color:#111827;
+      padding:8px 11px;
+      background:#fff;
+    }
+
+    .form-control:focus,.form-select:focus{
+      border-color:#bfdbfe;
+      box-shadow:0 0 0 3px rgba(59,130,246,.10);
+    }
+
+    .file-note{
+      color:#64748b;
+      font-size:10.5px;
+      font-weight:750;
+      margin-top:7px;
+    }
+
+    .alert{
+      border-radius:14px;
+      border:1px solid transparent;
+      box-shadow:var(--shadow);
+      font-size:12px;
+      font-weight:850;
+    }
+
+    .alert-success{
+      background:#dcfce7;
+      border-color:#bbf7d0;
+      color:#166534;
+    }
+
+    .alert-danger{
+      background:#fee2e2;
+      border-color:#fecaca;
+      color:#991b1b;
+    }
+
+    .password-panel{
+      min-height:auto;
+    }
+
+    .section-divider{
+      margin:13px 0;
+      border-color:#eef2f7;
+      opacity:1;
+    }
+
+    @media(max-width:991.98px){
+      .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
+      .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
+      .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
+    }
+
+    @media(max-width:768px){
+      .content-scroll{ padding:12px 10px!important; }
+      .container-fluid.projects-wrapper{ padding-left:0!important; padding-right:0!important; }
+      .page-heading{ align-items:flex-start; flex-direction:column; }
+      .panel{ padding:12px; }
+      .profile-card{ align-items:flex-start; flex-direction:column; }
+      .primary-btn,.secondary-btn,.success-btn,.dark-btn{ width:100%; }
+      .info-row{ flex-direction:column; gap:3px; }
+      .info-val{ text-align:left; }
     }
   </style>
 </head>
@@ -376,17 +693,20 @@ if ($photoAbs !== '' && is_file($photoAbs)) {
     <?php include 'includes/topbar.php'; ?>
 
     <div class="content-scroll">
-      <div class="container-fluid maxw">
+      <div class="container-fluid projects-wrapper px-0">
 
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="page-heading">
           <div>
-            <h1 class="h3 fw-bold text-dark mb-1">My Profile</h1>
-            <div class="muted">Update your details, photo, and password</div>
+            <h1>My Profile</h1>
+            <p>Update your details, photo, and password</p>
           </div>
 
-          <a href="download-my-profile-pdf.php" class="btn btn-success btn-sm btn-download">
-            <i class="bi bi-download me-1"></i> Download PDF
+          <a href="download-my-profile-pdf.php" class="secondary-btn">
+            <i class="bi bi-download"></i> Download PDF
           </a>
+        </div>
+
+         
         </div>
 
         <?php if ($success): ?>
@@ -403,11 +723,11 @@ if ($photoAbs !== '' && is_file($photoAbs)) {
           </div>
         <?php endif; ?>
 
-        <div class="row g-3">
+        <div class="row g-3 profile-layout-row">
           <!-- Left -->
           <div class="col-12 col-lg-4">
             <div class="panel">
-              <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="profile-card">
                 <div class="avatar-lg">
                   <?php if ($photoSrc !== ''): ?>
                     <img src="<?php echo e($photoSrc); ?>" alt="<?php echo e($emp['full_name']); ?>"
@@ -417,7 +737,7 @@ if ($photoAbs !== '' && is_file($photoAbs)) {
                   <?php endif; ?>
                 </div>
                 <div>
-                  <div class="fw-bold fs-5"><?php echo e($emp['full_name'] ?? ''); ?></div>
+                  <div class="profile-main-name"><?php echo e($emp['full_name'] ?? ''); ?></div>
                   <div class="muted"><?php echo e(($emp['email'] ?? '') ?: 'No email set'); ?></div>
                   <div class="mt-2 d-flex flex-wrap gap-2">
                     <span class="chip"><i class="bi bi-person-badge"></i><?php echo e($emp['designation'] ?? ''); ?></span>
@@ -426,27 +746,37 @@ if ($photoAbs !== '' && is_file($photoAbs)) {
                 </div>
               </div>
 
-              <hr class="my-3">
+              <hr class="section-divider">
 
               <form method="post" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="upload_photo">
-                <label class="form-label fw-bold">Update Photo</label>
+                <label class="form-label">Update Photo</label>
                 <input class="form-control mb-2" type="file" name="photo" accept="image/png,image/jpeg,image/webp" required>
-                <button class="btn btn-primary btn-tek w-100" type="submit">
+                <button class="primary-btn w-100" type="submit">
                   <i class="bi bi-upload me-1"></i>Upload Photo
                 </button>
-                <div class="muted mt-2" style="font-size:12px;">
-                  Max 2MB • JPG/PNG/WEBP
-                </div>
+                <div class="file-note">Max 2MB • JPG/PNG/WEBP</div>
               </form>
 
-              <hr class="my-3">
+              <hr class="section-divider">
 
-              <div class="muted" style="font-size:13px;">
-                <div class="mb-1"><b>Username:</b> <?php echo e($emp['username'] ?? ''); ?></div>
-                <div class="mb-1"><b>Mobile:</b> <?php echo e($emp['mobile_number'] ?? ''); ?></div>
-                <div class="mb-1"><b>Work Location:</b> <?php echo e($emp['work_location'] ?? ''); ?></div>
-                <div class="mb-1"><b>Site:</b> <?php echo e($emp['site_name'] ?? ''); ?></div>
+              <div class="info-list">
+                <div class="info-row">
+                  <div class="info-key">Username</div>
+                  <div class="info-val"><?php echo e($emp['username'] ?? ''); ?></div>
+                </div>
+                <div class="info-row">
+                  <div class="info-key">Mobile</div>
+                  <div class="info-val"><?php echo e($emp['mobile_number'] ?? ''); ?></div>
+                </div>
+                <div class="info-row">
+                  <div class="info-key">Work Location</div>
+                  <div class="info-val"><?php echo e($emp['work_location'] ?? ''); ?></div>
+                </div>
+                <div class="info-row">
+                  <div class="info-key">Site</div>
+                  <div class="info-val"><?php echo e($emp['site_name'] ?? ''); ?></div>
+                </div>
               </div>
             </div>
           </div>
@@ -455,8 +785,11 @@ if ($photoAbs !== '' && is_file($photoAbs)) {
           <div class="col-12 col-lg-8">
             <!-- Profile update -->
             <div class="panel mb-3">
-              <div class="d-flex align-items-center justify-content-between mb-2">
-                <h3 class="panel-title">Profile Details</h3>
+              <div class="panel-header">
+                <div>
+                  <h3 class="panel-title">Profile Details</h3>
+                  <div class="panel-subtitle">Personal and emergency contact information</div>
+                </div>
               </div>
 
               <form method="post">
@@ -464,31 +797,31 @@ if ($photoAbs !== '' && is_file($photoAbs)) {
 
                 <div class="row g-3">
                   <div class="col-12 col-md-6">
-                    <label class="form-label fw-bold">Full Name</label>
+                    <label class="form-label">Full Name</label>
                     <input type="text" class="form-control" name="full_name"
                            value="<?php echo e($emp['full_name'] ?? ''); ?>" required>
                   </div>
 
                   <div class="col-12 col-md-6">
-                    <label class="form-label fw-bold">Email</label>
+                    <label class="form-label">Email</label>
                     <input type="email" class="form-control" name="email"
                            value="<?php echo e($emp['email'] ?? ''); ?>" placeholder="name@example.com">
                   </div>
 
                   <div class="col-12 col-md-6">
-                    <label class="form-label fw-bold">Mobile Number</label>
+                    <label class="form-label">Mobile Number</label>
                     <input type="text" class="form-control" name="mobile_number"
                            value="<?php echo e($emp['mobile_number'] ?? ''); ?>" maxlength="15">
                   </div>
 
                   <div class="col-12 col-md-6">
-                    <label class="form-label fw-bold">Date of Birth</label>
+                    <label class="form-label">Date of Birth</label>
                     <input type="date" class="form-control" name="date_of_birth"
                            value="<?php echo e(($emp['date_of_birth'] ?? '') !== '0000-00-00' ? ($emp['date_of_birth'] ?? '') : ''); ?>">
                   </div>
 
                   <div class="col-12 col-md-6">
-                    <label class="form-label fw-bold">Gender</label>
+                    <label class="form-label">Gender</label>
                     <select class="form-select" name="gender">
                       <?php $g = (string)($emp['gender'] ?? ''); ?>
                       <option value="" <?php echo $g===''?'selected':''; ?>>Select</option>
@@ -499,32 +832,32 @@ if ($photoAbs !== '' && is_file($photoAbs)) {
                   </div>
 
                   <div class="col-12 col-md-6">
-                    <label class="form-label fw-bold">Blood Group</label>
+                    <label class="form-label">Blood Group</label>
                     <input type="text" class="form-control" name="blood_group"
                            value="<?php echo e($emp['blood_group'] ?? ''); ?>" placeholder="A+, O+, ...">
                   </div>
 
                   <div class="col-12">
-                    <label class="form-label fw-bold">Current Address</label>
+                    <label class="form-label">Current Address</label>
                     <textarea class="form-control" name="current_address" rows="3"
                               placeholder="Enter address"><?php echo e($emp['current_address'] ?? ''); ?></textarea>
                   </div>
 
                   <div class="col-12 col-md-6">
-                    <label class="form-label fw-bold">Emergency Contact Name</label>
+                    <label class="form-label">Emergency Contact Name</label>
                     <input type="text" class="form-control" name="emergency_contact_name"
                            value="<?php echo e($emp['emergency_contact_name'] ?? ''); ?>">
                   </div>
 
                   <div class="col-12 col-md-6">
-                    <label class="form-label fw-bold">Emergency Contact Phone</label>
+                    <label class="form-label">Emergency Contact Phone</label>
                     <input type="text" class="form-control" name="emergency_contact_phone"
                            value="<?php echo e($emp['emergency_contact_phone'] ?? ''); ?>" maxlength="15">
                   </div>
                 </div>
 
-                <div class="mt-3 d-flex justify-content-end">
-                  <button class="btn btn-primary btn-tek" type="submit">
+                <div class="mt-3 d-flex justify-content-end gap-2 flex-wrap">
+                  <button class="primary-btn" type="submit">
                     <i class="bi bi-save me-1"></i>Save Changes
                   </button>
                 </div>
@@ -532,35 +865,38 @@ if ($photoAbs !== '' && is_file($photoAbs)) {
             </div>
 
             <!-- Password change -->
-            <div class="panel">
-              <h3 class="panel-title mb-2">Change Password</h3>
+            <div class="panel password-panel">
+              <div class="panel-header">
+                <div>
+                  <h3 class="panel-title">Change Password</h3>
+                  <div class="panel-subtitle">Use at least 6 characters</div>
+                </div>
+              </div>
               <form method="post">
                 <input type="hidden" name="action" value="change_password">
 
                 <div class="row g-3">
                   <div class="col-12 col-md-4">
-                    <label class="form-label fw-bold">Current Password</label>
+                    <label class="form-label">Current Password</label>
                     <input type="password" class="form-control" name="current_password" required>
                   </div>
                   <div class="col-12 col-md-4">
-                    <label class="form-label fw-bold">New Password</label>
+                    <label class="form-label">New Password</label>
                     <input type="password" class="form-control" name="new_password" required>
                   </div>
                   <div class="col-12 col-md-4">
-                    <label class="form-label fw-bold">Confirm Password</label>
+                    <label class="form-label">Confirm Password</label>
                     <input type="password" class="form-control" name="confirm_password" required>
                   </div>
                 </div>
 
-                <div class="mt-3 d-flex justify-content-end">
-                  <button class="btn btn-dark btn-tek" type="submit">
+                <div class="mt-3 d-flex justify-content-end gap-2 flex-wrap">
+                  <button class="dark-btn" type="submit">
                     <i class="bi bi-shield-lock me-1"></i>Update Password
                   </button>
                 </div>
 
-                <div class="muted mt-2" style="font-size:12px;">
-                  Tip: Use at least 6 characters.
-                </div>
+                
               </form>
             </div>
           </div>
@@ -575,5 +911,26 @@ if ($photoAbs !== '' && is_file($photoAbs)) {
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="assets/js/sidebar-toggle.js"></script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const photoInput = document.querySelector('input[name="photo"]');
+    const avatar = document.querySelector('.avatar-lg');
+
+    if (photoInput && avatar) {
+      photoInput.addEventListener('change', function () {
+        const file = this.files && this.files[0] ? this.files[0] : null;
+        if (!file || !file.type.startsWith('image/')) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          avatar.innerHTML = '<img src="' + e.target.result + '" alt="Preview">';
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  });
+</script>
+
 </body>
 </html>
