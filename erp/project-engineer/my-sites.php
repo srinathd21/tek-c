@@ -1,14 +1,18 @@
 <?php
-// my-sites.php (Project Engineer) — show ONLY sites assigned to logged-in Project Engineer
-// + ✅ Reports button (opens today-tasks.php filtered by site)
-// ✅ Mobile: table -> cards (like report.php)
-// Reads from: sites + clients + employees + site_project_engineers
+// my-sites.php (Project Engineer)
+// Updated UI using TEK-C compact manage-page template.
+// Shows only sites assigned to the logged-in Project Engineer.
+// Reports button opens today-tasks.php filtered by site.
 
 session_start();
 require_once 'includes/db-config.php';
 
+date_default_timezone_set('Asia/Kolkata');
+
 $conn = get_db_connection();
-if (!$conn) { die("Database connection failed."); }
+if (!$conn) {
+  die("Database connection failed.");
+}
 
 $success = '';
 $error   = '';
@@ -23,19 +27,22 @@ if (empty($_SESSION['employee_id'])) {
 $empId = (int)$_SESSION['employee_id'];
 $designation = strtolower(trim((string)($_SESSION['designation'] ?? '')));
 
-// allow PE Grade 1/2 (and optionally Sr. Engineer)
+// allow PE Grade 1/2 and Sr. Engineer
 $allowed = [
   'project engineer grade 1',
   'project engineer grade 2',
   'sr. engineer',
 ];
+
 if (!in_array($designation, $allowed, true)) {
   header("Location: index.php");
   exit;
 }
 
 // ---------- Helpers ----------
-function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+function e($v){
+  return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+}
 
 function safeDate($v, $dash='—'){
   $v = trim((string)$v);
@@ -50,12 +57,14 @@ function projectStatusBadge($start, $end){
   $end   = trim((string)$end);
 
   if ($end !== '' && $end !== '0000-00-00' && $end < $today) {
-    return ['Completed', 'status-red', 'bi-check2-circle'];
+    return ['Completed', 'ontrack', 'bi-check2-circle'];
   }
+
   if ($start !== '' && $start !== '0000-00-00' && $start > $today) {
-    return ['Upcoming', 'status-yellow', 'bi-clock'];
+    return ['Upcoming', 'pending', 'bi-clock'];
   }
-  return ['Ongoing', 'status-green', 'bi-lightning'];
+
+  return ['Ongoing', 'progressing', 'bi-lightning-fill'];
 }
 
 function hasColumn(mysqli $conn, string $table, string $column): bool {
@@ -140,616 +149,916 @@ if (!$stmt) {
   mysqli_stmt_bind_param($stmt, "i", $empId);
   mysqli_stmt_execute($stmt);
   $res = mysqli_stmt_get_result($stmt);
-  $sites = mysqli_fetch_all($res, MYSQLI_ASSOC);
+  $sites = $res ? mysqli_fetch_all($res, MYSQLI_ASSOC) : [];
   mysqli_stmt_close($stmt);
 }
 
 // ---------- Stats ----------
 $total_sites = count($sites);
-$ongoing = 0; $upcoming = 0; $completed = 0;
+$ongoing = 0;
+$upcoming = 0;
+$completed = 0;
 $today = date('Y-m-d');
 
 foreach ($sites as $p) {
   $start = $p['start_date'] ?? '';
   $end   = $p['expected_completion_date'] ?? '';
-  if (!empty($end) && $end !== '0000-00-00' && $end < $today) $completed++;
-  elseif (!empty($start) && $start !== '0000-00-00' && $start > $today) $upcoming++;
-  else $ongoing++;
+
+  if (!empty($end) && $end !== '0000-00-00' && $end < $today) {
+    $completed++;
+  } elseif (!empty($start) && $start !== '0000-00-00' && $start > $today) {
+    $upcoming++;
+  } else {
+    $ongoing++;
+  }
 }
 ?>
 <!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>My Sites - TEK-C</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My Sites - TEK-C</title>
 
-  <!-- Bootstrap 5 -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
 
-  <!-- DataTables (Bootstrap 5 + Responsive) -->
-  <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-  <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
 
-  <!-- TEK-C Custom Styles -->
-  <link href="assets/css/layout-styles.css" rel="stylesheet" />
-  <link href="assets/css/topbar.css" rel="stylesheet" />
-  <link href="assets/css/footer.css" rel="stylesheet" />
+    <link href="assets/css/layout-styles.css" rel="stylesheet" />
+    <link href="assets/css/topbar.css" rel="stylesheet" />
+    <link href="assets/css/footer.css" rel="stylesheet" />
 
-  <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-
-    .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px 16px 12px; height:100%; }
-    .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-    .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
-    .panel-menu{ width:36px; height:36px; border-radius:12px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:#6b7280; }
-
-    .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-      padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; }
-    .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
-    .stat-ic.blue{ background: var(--blue); }
-    .stat-ic.green{ background: #10b981; }
-    .stat-ic.yellow{ background: #f59e0b; }
-    .stat-ic.red{ background: #ef4444; }
-    .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-    .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
-
-    .table-responsive { overflow-x: hidden !important; }
-    table.dataTable { width:100% !important; }
-    .table thead th{
-      font-size: 11px; color:#6b7280; font-weight:800;
-      border-bottom:1px solid var(--border)!important;
-      padding: 10px 10px !important;
-      white-space: normal !important;
-    }
-    .table td{
-      vertical-align: top; border-color: var(--border);
-      font-weight:650; color:#374151;
-      padding: 10px 10px !important;
-      white-space: normal !important;
-      word-break: break-word;
+    <style>
+    :root {
+        --page-bg: #f5f7fb;
+        --card-bg: #ffffff;
+        --border: #e5e7eb;
+        --text: #111827;
+        --muted: #6b7280;
+        --soft: #f8fafc;
+        --shadow: 0 10px 26px rgba(15, 23, 42, .055);
+        --radius: 15px;
     }
 
-    .btn-action {
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 7px 10px;
-      color: var(--muted);
-      font-size: 12px;
-      text-decoration:none;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:6px;
-      font-weight: 900;
-    }
-    .btn-action:hover { background: var(--bg); color: var(--blue); }
-    .btn-action.reports{
-      border-color: rgba(45,156,219,.25);
+    body {
+        background: var(--page-bg);
     }
 
-    .proj-title{ font-weight:900; font-size:13px; color:#1f2937; margin-bottom:2px; line-height:1.2; }
-    .proj-sub{ font-size:11px; color:#6b7280; font-weight:700; line-height:1.25; }
+    .content-scroll {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 16px;
+    }
 
-    .status-badge{
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 10px;
-      font-weight: 1000;
-      letter-spacing: .3px;
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      white-space: nowrap;
-      text-transform: uppercase;
-      border:1px solid transparent;
+    .projects-wrapper {
+        width: 100%;
     }
-    .status-green{ background: rgba(16,185,129,.12); color:#10b981; border-color: rgba(16,185,129,.22); }
-    .status-yellow{ background: rgba(245,158,11,.12); color:#f59e0b; border-color: rgba(245,158,11,.22); }
-    .status-red{ background: rgba(239,68,68,.12); color:#ef4444; border-color: rgba(239,68,68,.22); }
 
-    .alert { border-radius: var(--radius); border:none; box-shadow: var(--shadow); margin-bottom: 20px; }
+    .page-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
 
-    div.dataTables_wrapper .dataTables_length select,
-    div.dataTables_wrapper .dataTables_filter input{
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 7px 10px;
-      font-weight: 650;
-      outline: none;
+    .page-heading h1 {
+        font-size: 19px;
+        font-weight: 900;
+        color: var(--text);
+        margin: 0;
     }
-    div.dataTables_wrapper .dataTables_filter input:focus{
-      border-color: var(--blue);
-      box-shadow: 0 0 0 3px rgba(45, 156, 219, 0.1);
-    }
-    .dataTables_paginate .pagination .page-link{
-      border-radius: 10px;
-      margin: 0 3px;
-      font-weight: 750;
-    }
-    th.actions-col, td.actions-col { width: 160px !important; }
 
-    .team-block b{ color:#111827; }
-    .team-block .line{ margin-bottom:4px; }
-    .team-block .muted{ color:#6b7280; font-weight:800; }
+    .page-heading p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+    }
 
-    /* ---------- Mobile Cards ---------- */
-    .site-card{
-      border:1px solid var(--border);
-      border-radius: 16px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-      padding: 12px;
+    .primary-btn {
+        border: 0;
+        background: #111827;
+        color: #fff;
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        text-decoration: none;
+        white-space: nowrap;
     }
-    .site-card .top{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:10px;
-    }
-    .site-card .title{
-      font-weight:1000;
-      color:#111827;
-      font-size: 14px;
-      line-height:1.2;
-      margin:0;
-    }
-    .site-card .meta{
-      margin-top:6px;
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px 10px;
-      color:#6b7280;
-      font-weight:800;
-      font-size:12px;
-    }
-    .site-kv{ margin-top:10px; display:grid; gap:8px; }
-    .site-row{ display:flex; gap:10px; align-items:flex-start; }
-    .site-key{
-      flex:0 0 92px;
-      color:#6b7280;
-      font-weight:1000;
-      font-size:12px;
-    }
-    .site-val{
-      flex:1 1 auto;
-      font-weight:900;
-      color:#111827;
-      font-size:12.5px;
-      line-height:1.3;
-      word-break: break-word;
-    }
-    .site-actions{
-      margin-top:12px;
-      display:grid;
-      gap:8px;
-    }
-    .site-actions a{ width:100%; border-radius:12px; justify-content:center; }
 
-    @media (max-width: 991.98px){
-      .main{
-        margin-left: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-      }
-      .sidebar{
-        position: fixed !important;
-        transform: translateX(-100%);
-        z-index: 1040 !important;
-      }
-      .sidebar.open, .sidebar.active, .sidebar.show{
-        transform: translateX(0) !important;
-      }
+    .primary-btn:hover {
+        background: #020617;
+        color: #fff;
     }
-    @media (max-width: 768px) {
-      .content-scroll { padding: 12px 10px 12px !important; }
-      .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
-      .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
-      .sec-head { padding: 10px !important; border-radius: 12px; }
+
+    .secondary-btn {
+        border: 1px solid var(--border) !important;
+        background: #fff !important;
+        color: #334155 !important;
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        text-decoration: none;
+        white-space: nowrap;
     }
-  </style>
+
+    .secondary-btn:hover {
+        border-color: #cbd5e1 !important;
+        background: #f8fafc !important;
+        color: #111827 !important;
+    }
+
+    .stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 12px 13px;
+        min-height: 78px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .stat-ic {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 17px;
+        flex: 0 0 auto;
+    }
+
+    .blue {
+        background: #2f80ed;
+    }
+
+    .orange {
+        background: #f2994a;
+    }
+
+    .green {
+        background: #27ae60;
+    }
+
+    .red {
+        background: #eb5757;
+    }
+
+    .gray {
+        background: #64748b;
+    }
+
+    .stat-label {
+        color: var(--muted);
+        font-weight: 800;
+        font-size: 10.5px;
+        text-transform: uppercase;
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: 950;
+        color: #111827;
+        line-height: 1;
+    }
+
+    .panel {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 13px;
+    }
+
+    .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        gap: 10px;
+    }
+
+    .panel-title {
+        font-weight: 900;
+        font-size: 14px;
+        margin: 0;
+        color: #111827;
+    }
+
+    .panel-subtitle {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+
+    .filter-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .search-box {
+        position: relative;
+        flex: 1 1 260px;
+        max-width: 430px;
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 13px;
+    }
+
+    .search-box input {
+        width: 100%;
+        height: 36px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: #fff;
+        padding: 0 12px 0 34px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text);
+        outline: none;
+    }
+
+    .search-box input:focus {
+        border-color: #bfdbfe;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+    }
+
+    .filter-select {
+        height: 36px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: #fff;
+        padding: 0 42px 0 12px;
+        font-size: 12px;
+        font-weight: 800;
+        min-width: 145px;
+    }
+
+    .compact-table-wrap {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .compact-table {
+        width: 100%;
+        margin: 0;
+        table-layout: auto;
+    }
+
+    .compact-table thead th {
+        background: var(--soft);
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 900;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 8px 9px;
+    }
+
+    .compact-table tbody td {
+        padding: 8px 9px;
+        vertical-align: middle;
+        border-color: #eef2f7;
+        color: #334155;
+        font-weight: 700;
+        font-size: 11.5px;
+    }
+
+    .compact-table tbody tr:hover {
+        background: #fbfdff;
+    }
+
+    .table-title-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .table-icon {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        background: #eff6ff;
+        color: #2563eb;
+        font-size: 13px;
+        flex: 0 0 auto;
+    }
+
+    .table-primary-text {
+        color: #111827;
+        font-size: 11.5px;
+        font-weight: 900;
+    }
+
+    .table-secondary-text {
+        color: #64748b;
+        font-size: 10px;
+        font-weight: 700;
+        margin-top: 1px;
+    }
+
+    .badge-pill {
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-weight: 900;
+        font-size: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        text-decoration: none;
+    }
+
+    .mini-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .ontrack {
+        color: #15803d;
+        background: #dcfce7;
+        border-color: #bbf7d0;
+    }
+
+    .progressing {
+        color: #2563eb;
+        background: #dbeafe;
+        border-color: #bfdbfe;
+    }
+
+    .pending {
+        color: #6d28d9;
+        background: #ede9fe;
+        border-color: #ddd6fe;
+    }
+
+    .atrisk {
+        color: #b91c1c;
+        background: #fee2e2;
+        border-color: #fecaca;
+    }
+
+    .neutral {
+        color: #475569;
+        background: #f1f5f9;
+        border-color: #e2e8f0;
+    }
+
+    .action-group {
+        display: flex;
+        justify-content: flex-end;
+        gap: 5px;
+    }
+
+    .action-btn {
+        width: 27px;
+        height: 27px;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: #fff;
+        display: grid;
+        place-items: center;
+        text-decoration: none;
+    }
+
+    .view-btn {
+        color: #475569;
+        background: #f8fafc;
+    }
+
+    .file-btn {
+        color: #10b981;
+        background: #ecfdf5;
+    }
+
+    .report-btn {
+        color: #2563eb;
+        background: #eff6ff;
+    }
+
+    .team-text {
+        font-size: 10px;
+        color: #64748b;
+        line-height: 1.5;
+        font-weight: 750;
+    }
+
+    .team-text b {
+        color: #111827;
+    }
+
+    .reason-cell {
+        max-width: 260px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .empty-state {
+        text-align: center;
+        color: #64748b;
+        padding: 30px 12px;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .empty-state i {
+        font-size: 34px;
+        display: block;
+        margin-bottom: 8px;
+        opacity: .45;
+    }
+
+    .pagination-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding-top: 12px;
+        flex-wrap: wrap;
+    }
+
+    .pagination-info {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .alert {
+        border-radius: var(--radius);
+        border: none;
+        box-shadow: var(--shadow);
+        margin-bottom: 14px;
+    }
+
+    @media(max-width:991.98px) {
+        .main {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        .sidebar {
+            position: fixed !important;
+            transform: translateX(-100%);
+            z-index: 1040 !important;
+        }
+
+        .sidebar.open,
+        .sidebar.active,
+        .sidebar.show {
+            transform: translateX(0) !important;
+        }
+    }
+
+    @media(max-width:1199px) {
+        .compact-table thead {
+            display: none;
+        }
+
+        .compact-table,
+        .compact-table tbody,
+        .compact-table tr,
+        .compact-table td {
+            display: block;
+            width: 100%;
+        }
+
+        .compact-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            padding: 10px;
+        }
+
+        .compact-table tbody td {
+            border: 0;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .compact-table tbody td::before {
+            content: attr(data-label);
+            font-size: 10px;
+            font-weight: 900;
+            color: #64748b;
+            text-transform: uppercase;
+            flex: 0 0 95px;
+        }
+
+        .compact-table tbody td:first-child {
+            display: block;
+        }
+
+        .compact-table tbody td:first-child::before {
+            display: none;
+        }
+
+        .action-group {
+            justify-content: flex-start;
+        }
+
+        .reason-cell {
+            max-width: none;
+            white-space: normal;
+            text-align: right;
+        }
+    }
+
+    @media(max-width:768px) {
+        .content-scroll {
+            padding: 12px 10px 12px !important;
+        }
+
+        .page-heading {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .filter-bar {
+            align-items: stretch;
+        }
+
+        .search-box {
+            max-width: none;
+            width: 100%;
+            flex: 1 1 100%;
+        }
+
+        .filter-select,
+        .primary-btn,
+        .secondary-btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .panel {
+            padding: 12px;
+        }
+
+        .compact-table tbody td {
+            align-items: flex-start;
+        }
+    }
+    </style>
 </head>
 
 <body>
-<div class="app">
-  <?php include 'includes/sidebar.php'; ?>
-  <main class="main" aria-label="Main">
-    <?php include 'includes/topbar.php'; ?>
+    <div class="app">
+        <?php include 'includes/sidebar.php'; ?>
 
-    <div id="contentScroll" class="content-scroll">
-      <div class="container-fluid maxw">
+        <main class="main" aria-label="Main">
+            <?php include 'includes/topbar.php'; ?>
 
-        <div class="d-flex justify-content-between align-items-center mb-4">
-          <div>
-            <h1 class="h3 fw-bold text-dark mb-1">My Sites</h1>
-            <p class="text-muted mb-0">Sites where you are assigned as Project Engineer</p>
-          </div>
-        </div>
+            <div class="content-scroll">
+                <div class="container-fluid projects-wrapper px-0">
 
-        <?php if ($success): ?>
-          <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="bi bi-check-circle-fill me-2"></i>
-            <?php echo e($success); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-        <?php endif; ?>
-
-        <?php if ($error): ?>
-          <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <?php echo e($error); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-        <?php endif; ?>
-
-        <!-- Stats -->
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic blue"><i class="bi bi-geo-alt-fill"></i></div>
-              <div>
-                <div class="stat-label">Total</div>
-                <div class="stat-value"><?php echo (int)$total_sites; ?></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic green"><i class="bi bi-lightning-fill"></i></div>
-              <div>
-                <div class="stat-label">Ongoing</div>
-                <div class="stat-value"><?php echo (int)$ongoing; ?></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic yellow"><i class="bi bi-clock-fill"></i></div>
-              <div>
-                <div class="stat-label">Upcoming</div>
-                <div class="stat-value"><?php echo (int)$upcoming; ?></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic red"><i class="bi bi-check2-circle"></i></div>
-              <div>
-                <div class="stat-label">Completed</div>
-                <div class="stat-value"><?php echo (int)$completed; ?></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Directory -->
-        <div class="panel mb-4">
-          <div class="panel-header">
-            <h3 class="panel-title">Site Directory</h3>
-            <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-          </div>
-
-          <!-- MOBILE: Cards -->
-          <div class="d-block d-md-none">
-            <div class="d-grid gap-3">
-              <?php if (empty($sites)): ?>
-                <div class="text-muted fw-bold">No matching sites found.</div>
-              <?php else: ?>
-                <?php foreach ($sites as $p): ?>
-                  <?php
-                    [$stLabel, $stClass, $stIcon] = projectStatusBadge($p['start_date'] ?? '', $p['expected_completion_date'] ?? '');
-
-                    $clientName = trim((string)($p['client_name'] ?? ''));
-                    $company    = trim((string)($p['company_name'] ?? ''));
-                    $clientLine = $company !== '' ? ($clientName . ' • ' . $company) : $clientName;
-
-                    $mgrName = trim((string)($p['manager_name'] ?? ''));
-                    $mgrCode = trim((string)($p['manager_code'] ?? ''));
-
-                    $tlName  = trim((string)($p['team_lead_name'] ?? ''));
-                    $tlCode  = trim((string)($p['team_lead_code'] ?? ''));
-
-                    $engineers = trim((string)($p['engineer_names'] ?? ''));
-
-                    $siteId = (int)$p['id'];
-
-                    $loc = trim((string)($p['project_location'] ?? ''));
-                    $type = trim((string)($p['project_type'] ?? ''));
-                    $scope = trim((string)($p['scope_of_work'] ?? ''));
-                  ?>
-
-                  <div class="site-card">
-                    <div class="top">
-                      <div style="flex:1 1 auto;">
-                        <div class="d-flex align-items-center justify-content-between gap-2">
-                          <h4 class="title"><?php echo e($p['project_name'] ?? ''); ?></h4>
-                          <span class="status-badge <?php echo e($stClass); ?>">
-                            <i class="bi <?php echo e($stIcon); ?>"></i> <?php echo e($stLabel); ?>
-                          </span>
+                    <div class="page-heading">
+                        <div>
+                            <h1>My Sites</h1>
+                            <p>Sites where you are assigned as Project Engineer</p>
                         </div>
-
-                        <div class="meta">
-                          <?php if ($loc !== ''): ?>
-                            <span><i class="bi bi-geo-alt"></i> <?php echo e($loc); ?></span>
-                          <?php endif; ?>
-                          <?php if ($type !== ''): ?>
-                            <span><i class="bi bi-kanban"></i> <?php echo e($type); ?></span>
-                          <?php endif; ?>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a href="today-tasks.php" class="primary-btn">
+                                <i class="bi bi-list-task"></i>
+                                Today Tasks
+                            </a>
+                            <a href="report.php" class="secondary-btn">
+                                <i class="bi bi-file-text"></i>
+                                Reports
+                            </a>
                         </div>
-
-                        <?php if ($scope !== ''): ?>
-                          <div class="proj-sub mt-1"><i class="bi bi-tools"></i> <?php echo e($scope); ?></div>
-                        <?php endif; ?>
-                      </div>
                     </div>
 
-                    <div class="site-kv">
-                      <div class="site-row">
-                        <div class="site-key">Client</div>
-                        <div class="site-val"><?php echo e($clientLine); ?></div>
-                      </div>
+                    <?php if ($success): ?>
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        <?php echo e($success); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <?php endif; ?>
 
-                      <div class="site-row">
-                        <div class="site-key">Dates</div>
-                        <div class="site-val">
-                          Start: <?php echo e(safeDate($p['start_date'] ?? '')); ?><br>
-                          End: <?php echo e(safeDate($p['expected_completion_date'] ?? '')); ?>
+                    <?php if ($error): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <?php echo e($error); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic blue"><i class="bi bi-geo-alt-fill"></i></div>
+                                <div>
+                                    <div class="stat-label">Total Sites</div>
+                                    <div class="stat-value"><?php echo (int)$total_sites; ?></div>
+                                </div>
+                            </div>
                         </div>
-                      </div>
 
-                      <div class="site-row">
-                        <div class="site-key">Manager</div>
-                        <div class="site-val">
-                          <?php echo $mgrName !== '' ? e($mgrName) : '—'; ?>
-                          <?php if ($mgrCode !== ''): ?> <span class="proj-sub">(<?php echo e($mgrCode); ?>)</span><?php endif; ?>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic green"><i class="bi bi-lightning-fill"></i></div>
+                                <div>
+                                    <div class="stat-label">Ongoing</div>
+                                    <div class="stat-value"><?php echo (int)$ongoing; ?></div>
+                                </div>
+                            </div>
                         </div>
-                      </div>
 
-                      <div class="site-row">
-                        <div class="site-key">Team Lead</div>
-                        <div class="site-val">
-                          <?php echo $tlName !== '' ? e($tlName) : '—'; ?>
-                          <?php if ($tlCode !== ''): ?> <span class="proj-sub">(<?php echo e($tlCode); ?>)</span><?php endif; ?>
-                          <?php if (!$hasTeamLead): ?>
-                            <div class="proj-sub"><i class="bi bi-info-circle"></i> TL column not available</div>
-                          <?php endif; ?>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic orange"><i class="bi bi-clock-fill"></i></div>
+                                <div>
+                                    <div class="stat-label">Upcoming</div>
+                                    <div class="stat-value"><?php echo (int)$upcoming; ?></div>
+                                </div>
+                            </div>
                         </div>
-                      </div>
 
-                      <div class="site-row">
-                        <div class="site-key">Engineers</div>
-                        <div class="site-val"><?php echo $engineers !== '' ? e($engineers) : '—'; ?></div>
-                      </div>
-
-                      <?php if (!empty($p['client_mobile']) || !empty($p['client_email']) || !empty($p['client_state'])): ?>
-                        <div class="site-row">
-                          <div class="site-key">Contact</div>
-                          <div class="site-val">
-                            <?php if (!empty($p['client_state'])): ?>
-                              <div><i class="bi bi-pin-map"></i> <?php echo e($p['client_state']); ?></div>
-                            <?php endif; ?>
-                            <?php if (!empty($p['client_mobile'])): ?>
-                              <div><i class="bi bi-telephone"></i> <?php echo e($p['client_mobile']); ?></div>
-                            <?php endif; ?>
-                            <?php if (!empty($p['client_email'])): ?>
-                              <div><i class="bi bi-envelope"></i> <?php echo e($p['client_email']); ?></div>
-                            <?php endif; ?>
-                          </div>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic red"><i class="bi bi-check2-circle"></i></div>
+                                <div>
+                                    <div class="stat-label">Completed</div>
+                                    <div class="stat-value"><?php echo (int)$completed; ?></div>
+                                </div>
+                            </div>
                         </div>
-                      <?php endif; ?>
                     </div>
 
-                    <div class="site-actions">
-                      <a href="view-site.php?id=<?php echo $siteId; ?>" class="btn-action" title="View Site">
-                        <i class="bi bi-eye"></i> View Site
-                      </a>
-
-                      <a href="today-tasks.php?site_id=<?php echo $siteId; ?>" class="btn-action reports" title="Reports / Today Tasks">
-                        <i class="bi bi-clipboard-data"></i> Reports
-                      </a>
-                    </div>
-                  </div>
-
-                <?php endforeach; ?>
-              <?php endif; ?>
-            </div>
-
-            <div class="proj-sub mt-3">
-              <i class="bi bi-info-circle"></i>
-              Reports button will open Today Tasks filtered by the selected site.
-            </div>
-          </div>
-
-          <!-- DESKTOP/TABLET: DataTable -->
-          <div class="d-none d-md-block">
-            <div class="table-responsive">
-              <table id="mySitesTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
-                <thead>
-                  <tr>
-                    <th>Site</th>
-                    <th>Client</th>
-                    <th>Management</th>
-                    <th>Dates</th>
-                    <th>Status</th>
-                    <th class="text-end actions-col">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($sites as $p): ?>
-                  <?php
-                    [$stLabel, $stClass, $stIcon] = projectStatusBadge($p['start_date'] ?? '', $p['expected_completion_date'] ?? '');
-
-                    $clientName = trim((string)($p['client_name'] ?? ''));
-                    $company    = trim((string)($p['company_name'] ?? ''));
-                    $clientLine = $company !== '' ? ($clientName . ' • ' . $company) : $clientName;
-
-                    $mgrName = trim((string)($p['manager_name'] ?? ''));
-                    $mgrCode = trim((string)($p['manager_code'] ?? ''));
-
-                    $tlName  = trim((string)($p['team_lead_name'] ?? ''));
-                    $tlCode  = trim((string)($p['team_lead_code'] ?? ''));
-
-                    $engineers = trim((string)($p['engineer_names'] ?? ''));
-
-                    $siteId = (int)$p['id'];
-                  ?>
-                  <tr>
-                    <td>
-                      <div class="proj-title"><?php echo e($p['project_name'] ?? ''); ?></div>
-                      <div class="proj-sub">
-                        <i class="bi bi-geo-alt"></i> <?php echo e($p['project_location'] ?? ''); ?>
-                        &nbsp;•&nbsp; <i class="bi bi-kanban"></i> <?php echo e($p['project_type'] ?? ''); ?>
-                      </div>
-                      <?php if (!empty($p['scope_of_work'])): ?>
-                        <div class="proj-sub" title="<?php echo e($p['scope_of_work']); ?>">
-                          <i class="bi bi-tools"></i> <?php echo e($p['scope_of_work']); ?>
+                    <div class="panel mb-4">
+                        <div class="panel-header">
+                            <div>
+                                <h3 class="panel-title">Site Directory</h3>
+                                <div class="panel-subtitle">Showing <?php echo count($sites); ?> assigned site records
+                                </div>
+                            </div>
                         </div>
-                      <?php endif; ?>
-                    </td>
 
-                    <td>
-                      <div class="proj-title"><?php echo e($clientLine); ?></div>
-                      <?php if (!empty($p['client_state'])): ?>
-                        <div class="proj-sub"><i class="bi bi-pin-map"></i> <?php echo e($p['client_state']); ?></div>
-                      <?php endif; ?>
-                      <?php if (!empty($p['client_mobile'])): ?>
-                        <div class="proj-sub"><i class="bi bi-telephone"></i> <?php echo e($p['client_mobile']); ?></div>
-                      <?php endif; ?>
-                      <?php if (!empty($p['client_email'])): ?>
-                        <div class="proj-sub"><i class="bi bi-envelope"></i> <?php echo e($p['client_email']); ?></div>
-                      <?php endif; ?>
-                    </td>
+                        <div class="filter-bar">
+                            <div class="search-box">
+                                <i class="bi bi-search"></i>
+                                <input type="text" id="siteSearch"
+                                    placeholder="Search site, client, manager, team lead or location...">
+                            </div>
 
-                    <!-- Management -->
-                    <td class="team-block">
-                      <div class="line">
-                        <span class="muted">Manager:</span>
-                        <b><?php echo $mgrName !== '' ? e($mgrName) : '—'; ?></b>
-                        <?php if ($mgrCode !== ''): ?>
-                          <span class="muted">(<?php echo e($mgrCode); ?>)</span>
-                        <?php endif; ?>
-                      </div>
+                            <select class="filter-select" id="statusFilter">
+                                <option value="">All Status</option>
+                                <option value="ongoing">Ongoing</option>
+                                <option value="upcoming">Upcoming</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </div>
 
-                      <div class="line">
-                        <span class="muted">Team Lead:</span>
-                        <b><?php echo $tlName !== '' ? e($tlName) : '—'; ?></b>
-                        <?php if ($tlCode !== ''): ?>
-                          <span class="muted">(<?php echo e($tlCode); ?>)</span>
-                        <?php endif; ?>
-                        <?php if (!$hasTeamLead): ?>
-                          <div class="proj-sub"><i class="bi bi-info-circle"></i> TL column not available</div>
-                        <?php endif; ?>
-                      </div>
+                        <div class="compact-table-wrap">
+                            <table class="table compact-table align-middle" id="sitesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Site</th>
+                                        <th>Client</th>
+                                        <th>Management</th>
+                                        <th>Dates</th>
+                                        <th>Status</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($sites)): ?>
+                                    <tr>
+                                        <td colspan="6">
+                                            <div class="empty-state">
+                                                <i class="bi bi-inbox"></i>
+                                                No assigned sites found.
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php else: ?>
+                                    <?php foreach ($sites as $p): ?>
+                                    <?php
+              [$stLabel, $stClass, $stIcon] = projectStatusBadge($p['start_date'] ?? '', $p['expected_completion_date'] ?? '');
 
-                      <div class="line">
-                        <span class="muted">Engineers:</span>
-                        <b><?php echo $engineers !== '' ? e($engineers) : '—'; ?></b>
-                      </div>
-                    </td>
+              $clientName = trim((string)($p['client_name'] ?? ''));
+              $company    = trim((string)($p['company_name'] ?? ''));
+              $clientLine = $company !== '' ? ($clientName . ' • ' . $company) : $clientName;
 
-                    <td>
-                      <div class="proj-title">Start: <?php echo e(safeDate($p['start_date'] ?? '')); ?></div>
-                      <div class="proj-sub">End: <?php echo e(safeDate($p['expected_completion_date'] ?? '')); ?></div>
-                    </td>
+              $mgrName = trim((string)($p['manager_name'] ?? ''));
+              $mgrCode = trim((string)($p['manager_code'] ?? ''));
 
-                    <td>
-                      <span class="status-badge <?php echo e($stClass); ?>">
-                        <i class="bi <?php echo e($stIcon); ?>"></i> <?php echo e($stLabel); ?>
-                      </span>
-                    </td>
+              $tlName  = trim((string)($p['team_lead_name'] ?? ''));
+              $tlCode  = trim((string)($p['team_lead_code'] ?? ''));
 
-                    <td class="text-end actions-col">
-                      <!-- View -->
-                      <a href="view-site.php?id=<?php echo $siteId; ?>" class="btn-action" title="View Site">
-                        <i class="bi bi-eye"></i>
-                      </a>
+              $engineers = trim((string)($p['engineer_names'] ?? ''));
+              $siteId = (int)$p['id'];
 
-                      <!-- Reports -->
-                      <a href="today-tasks.php?site_id=<?php echo $siteId; ?>" class="btn-action reports" title="Reports / Today Tasks">
-                        <i class="bi bi-clipboard-data"></i>
-                        <span class="d-none d-lg-inline">Reports</span>
-                      </a>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
-                </tbody>
-              </table>
+              $statusKey = strtolower($stLabel);
+            ?>
+
+                                    <tr data-status="<?php echo e($statusKey); ?>">
+                                        <td data-label="Site">
+                                            <div class="table-title-cell">
+                                                <div class="table-icon"><i class="bi bi-building"></i></div>
+                                                <div>
+                                                    <div class="table-primary-text">
+                                                        <?php echo e($p['project_name'] ?? ''); ?></div>
+                                                    <div class="table-secondary-text">
+                                                        <i class="bi bi-geo-alt"></i>
+                                                        <?php echo e($p['project_location'] ?? '—'); ?>
+                                                        <?php if (!empty($p['project_type'])): ?>
+                                                        • <i class="bi bi-kanban"></i>
+                                                        <?php echo e($p['project_type']); ?>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <?php if (!empty($p['scope_of_work'])): ?>
+                                                    <div class="table-secondary-text reason-cell"
+                                                        title="<?php echo e($p['scope_of_work']); ?>">
+                                                        <i class="bi bi-tools"></i>
+                                                        <?php echo e($p['scope_of_work']); ?>
+                                                    </div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td data-label="Client">
+                                            <div class="table-primary-text">
+                                                <?php echo e($clientLine !== '' ? $clientLine : '—'); ?></div>
+                                            <?php if (!empty($p['client_state'])): ?>
+                                            <div class="table-secondary-text"><i class="bi bi-pin-map"></i>
+                                                <?php echo e($p['client_state']); ?></div>
+                                            <?php endif; ?>
+                                            <?php if (!empty($p['client_mobile'])): ?>
+                                            <div class="table-secondary-text"><i class="bi bi-telephone"></i>
+                                                <?php echo e($p['client_mobile']); ?></div>
+                                            <?php endif; ?>
+                                            <?php if (!empty($p['client_email'])): ?>
+                                            <div class="table-secondary-text"><i class="bi bi-envelope"></i>
+                                                <?php echo e($p['client_email']); ?></div>
+                                            <?php endif; ?>
+                                        </td>
+
+                                        <td data-label="Management">
+                                            <div class="team-text">
+                                                <div>
+                                                    <b>Manager:</b>
+                                                    <?php echo $mgrName !== '' ? e($mgrName) : '—'; ?>
+                                                    <?php if ($mgrCode !== ''): ?>
+                                                    <span>(<?php echo e($mgrCode); ?>)</span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div>
+                                                    <b>Team Lead:</b>
+                                                    <?php echo $tlName !== '' ? e($tlName) : '—'; ?>
+                                                    <?php if ($tlCode !== ''): ?>
+                                                    <span>(<?php echo e($tlCode); ?>)</span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <?php if (!$hasTeamLead): ?>
+                                                <div class="text-warning"><i class="bi bi-info-circle"></i> TL column
+                                                    not available</div>
+                                                <?php endif; ?>
+                                                <div>
+                                                    <b>Engineers:</b>
+                                                    <?php echo $engineers !== '' ? e($engineers) : '—'; ?>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td data-label="Dates">
+                                            <div class="table-primary-text">Start:
+                                                <?php echo e(safeDate($p['start_date'] ?? '')); ?></div>
+                                            <div class="table-secondary-text">End:
+                                                <?php echo e(safeDate($p['expected_completion_date'] ?? '')); ?></div>
+                                        </td>
+
+                                        <td data-label="Status">
+                                            <span class="badge-pill <?php echo e($stClass); ?>">
+                                                <i class="bi <?php echo e($stIcon); ?>"></i>
+                                                <?php echo e($stLabel); ?>
+                                            </span>
+                                        </td>
+
+                                        <td data-label="Actions">
+                                            <div class="action-group">
+                                                <a href="view-site.php?id=<?php echo $siteId; ?>"
+                                                    class="action-btn view-btn" title="View Site">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+
+                                                <a href="today-tasks.php?site_id=<?php echo $siteId; ?>"
+                                                    class="action-btn report-btn" title="Reports / Today Tasks">
+                                                    <i class="bi bi-clipboard-data"></i>
+                                                </a>
+
+                                                <a href="report.php?site_id=<?php echo $siteId; ?>"
+                                                    class="action-btn file-btn" title="All Reports">
+                                                    <i class="bi bi-file-text"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="pagination-wrap">
+                            <div class="pagination-info">
+                                Showing <span id="visibleCount"><?php echo count($sites); ?></span> of
+                                <?php echo count($sites); ?> assigned site records
+                            </div>
+                            <div class="pagination-info">
+                                <i class="bi bi-info-circle"></i>
+                                Reports button opens Today Tasks filtered by selected site.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
 
-            <div class="proj-sub mt-2">
-              <i class="bi bi-info-circle"></i>
-              Reports button will open Today Tasks filtered by the selected site.
-            </div>
-          </div>
-
-        </div>
-
-      </div>
+            <?php include 'includes/footer.php'; ?>
+        </main>
     </div>
 
-    <?php include 'includes/footer.php'; ?>
-  </main>
-</div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/sidebar-toggle.js"></script>
 
-<!-- JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('siteSearch');
+        const statusFilter = document.getElementById('statusFilter');
+        const tableRows = document.querySelectorAll('#sitesTable tbody tr[data-status]');
+        const visibleCount = document.getElementById('visibleCount');
 
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
+        function filterSites() {
+            const searchValue = (searchInput ? searchInput.value : '').toLowerCase().trim();
+            const statusValue = (statusFilter ? statusFilter.value : '').toLowerCase().trim();
+            let visible = 0;
 
-<script src="assets/js/sidebar-toggle.js"></script>
+            tableRows.forEach(function(row) {
+                const rowText = row.innerText.toLowerCase();
+                const rowStatus = row.getAttribute('data-status') || '';
+                const matchesSearch = rowText.includes(searchValue);
+                const matchesStatus = !statusValue || rowStatus === statusValue;
+                const show = matchesSearch && matchesStatus;
 
-<script>
-  // Init DataTable ONLY on md+ screens (table is hidden on mobile)
-  function initMySitesTable() {
-    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-    const tbl = document.getElementById('mySitesTable');
-    if (!tbl) return;
+                row.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
 
-    if (isDesktop) {
-      if (!$.fn.DataTable.isDataTable('#mySitesTable')) {
-        $('#mySitesTable').DataTable({
-          responsive: true,
-          autoWidth: false,
-          scrollX: false,
-          pageLength: 10,
-          lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-          order: [[0, 'asc']],
-          columnDefs: [
-            { targets: [5], orderable: false, searchable: false } // Action
-          ],
-          language: {
-            zeroRecords: "No matching sites found",
-            info: "Showing _START_ to _END_ of _TOTAL_ sites",
-            infoEmpty: "No sites to show",
-            lengthMenu: "Show _MENU_",
-            search: "Search:"
-          }
-        });
+            if (visibleCount) visibleCount.textContent = visible;
+        }
 
-        setTimeout(function() {
-          $('.dataTables_filter input').focus();
-        }, 400);
-      }
-    } else {
-      // if resized from desktop to mobile, destroy datatable cleanly
-      if ($.fn.DataTable.isDataTable('#mySitesTable')) {
-        $('#mySitesTable').DataTable().destroy();
-      }
-    }
-  }
-
-  $(function () {
-    initMySitesTable();
-    window.addEventListener('resize', initMySitesTable);
-  });
-</script>
-
+        if (searchInput) searchInput.addEventListener('input', filterSites);
+        if (statusFilter) statusFilter.addEventListener('change', filterSites);
+    });
+    </script>
 </body>
+
 </html>
+<?php
+try {
+  if (isset($conn) && $conn instanceof mysqli) {
+    $conn->close();
+  }
+} catch (Throwable $e) { }
+?>

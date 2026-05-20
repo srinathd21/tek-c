@@ -32,29 +32,176 @@ if (!$current_employee) {
     die("Employee not found.");
 }
 
-// Define role-based permissions
-$designation = strtolower(trim($current_employee['designation'] ?? ''));
-$department = strtolower(trim($current_employee['department'] ?? ''));
-
-// Check user roles
-$isAdmin = ($designation === 'administrator' || $designation === 'admin' || $designation === 'director');
-$isHr = ($designation === 'hr' || $department === 'hr');
-$isManager = in_array($designation, ['manager', 'team lead', 'project manager', 'project engineer grade 1', 'project engineer grade 2']);
-
-// Get reporting employees if manager
-$reporting_employees = [];
-if ($isManager && !$isHr && !$isAdmin) {
-    $reporting_stmt = mysqli_prepare($conn, "SELECT id FROM employees WHERE reporting_to = ?");
-    mysqli_stmt_bind_param($reporting_stmt, "i", $current_employee_id);
-    mysqli_stmt_execute($reporting_stmt);
-    $reporting_res = mysqli_stmt_get_result($reporting_stmt);
-    while ($row = mysqli_fetch_assoc($reporting_res)) {
-        $reporting_employees[] = $row['id'];
-    }
+// ---------------- SCHEMA / ROLE HELPERS ----------------
+function tableExists($conn, string $table): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
 }
 
-// Check if user has any approval permission
-$canApprove = ($isAdmin || $isHr || $isManager);
+function columnExists($conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $columnEsc = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function roleKeyFromEmployee(array $emp): string {
+    $designation = strtolower(trim((string)($emp['designation'] ?? '')));
+    $department  = strtolower(trim((string)($emp['department'] ?? '')));
+
+    if (
+        str_contains($designation, 'director') ||
+        str_contains($designation, 'admin') ||
+        str_contains($designation, 'administrator') ||
+        str_contains($designation, 'vice president') ||
+        str_contains($designation, 'general manager')
+    ) return 'admin';
+
+    if (
+        str_contains($designation, 'hr') ||
+        str_contains($department, 'hr') ||
+        str_contains($department, 'human resource')
+    ) return 'hr';
+
+    if (str_contains($designation, 'manager')) return 'manager';
+
+    if (
+        str_contains($designation, 'team lead') ||
+        str_contains($designation, 'tl') ||
+        str_contains($designation, 'lead')
+    ) return 'tl';
+
+    return 'employee';
+}
+
+function sendNotification($conn, int $employeeId, string $title, string $message, string $module, int $referenceId, string $link = ''): bool {
+    if ($employeeId <= 0 || !tableExists($conn, 'notifications')) return false;
+
+    $cols = [];
+    $vals = [];
+    $types = '';
+
+    $map = [
+        'employee_id'  => ['i', $employeeId],
+        'title'        => ['s', $title],
+        'message'      => ['s', $message],
+        'type'         => ['s', 'leave'],
+        'module'       => ['s', $module],
+        'reference_id' => ['i', $referenceId],
+        'link'         => ['s', $link],
+        'is_read'      => ['i', 0],
+    ];
+
+    foreach ($map as $col => $pair) {
+        if (columnExists($conn, 'notifications', $col)) {
+            $cols[] = "`$col`";
+            $types .= $pair[0];
+            $vals[] = $pair[1];
+        }
+    }
+
+    if (!$cols) return false;
+
+    $placeholders = implode(',', array_fill(0, count($cols), '?'));
+    $stmt = mysqli_prepare($conn, "INSERT INTO notifications (" . implode(',', $cols) . ") VALUES ($placeholders)");
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$vals);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    return $ok;
+}
+
+function logActivitySafe($conn, string $activityType, string $module, string $description, $referenceId = null, $referenceName = null, $oldData = null, $newData = null): bool {
+    if (!$conn || !tableExists($conn, 'activity_logs')) return false;
+
+    if (is_array($oldData) || is_object($oldData)) $oldData = json_encode($oldData, JSON_UNESCAPED_UNICODE);
+    if (is_array($newData) || is_object($newData)) $newData = json_encode($newData, JSON_UNESCAPED_UNICODE);
+
+    $employeeId   = $_SESSION['employee_id'] ?? $_SESSION['user_id'] ?? null;
+    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['user_name'] ?? $_SESSION['name'] ?? 'System';
+    $username     = $_SESSION['username'] ?? $_SESSION['user_name'] ?? '';
+    $designation  = $_SESSION['designation'] ?? $_SESSION['user_role'] ?? '';
+    $department   = $_SESSION['department'] ?? '';
+    $ipAddress    = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+    $cols = [];
+    $vals = [];
+    $types = '';
+
+    $map = [
+        'employee_id'    => ['i', $employeeId],
+        'employee_name'  => ['s', $employeeName],
+        'username'       => ['s', $username],
+        'designation'    => ['s', $designation],
+        'department'     => ['s', $department],
+        'activity_type'  => ['s', $activityType],
+        'action_type'    => ['s', $activityType],
+        'module'         => ['s', $module],
+        'description'    => ['s', $description],
+        'reference_id'   => ['i', $referenceId],
+        'reference_name' => ['s', $referenceName],
+        'module_id'      => ['i', $referenceId],
+        'module_name'    => ['s', $referenceName],
+        'old_data'       => ['s', $oldData],
+        'new_data'       => ['s', $newData],
+        'ip_address'     => ['s', $ipAddress],
+    ];
+
+    foreach ($map as $col => $pair) {
+        if (columnExists($conn, 'activity_logs', $col)) {
+            $cols[] = "`$col`";
+            $types .= $pair[0];
+            $vals[] = $pair[1];
+        }
+    }
+
+    if (!$cols) return false;
+
+    $placeholders = implode(',', array_fill(0, count($cols), '?'));
+    $stmt = mysqli_prepare($conn, "INSERT INTO activity_logs (" . implode(',', $cols) . ") VALUES ($placeholders)");
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$vals);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    return $ok;
+}
+
+function canProcessLeave(array $leave, int $currentEmployeeId, string $roleKey): bool {
+    if ($currentEmployeeId <= 0) return false;
+
+    // Current DB workflow: leave_requests.approver_id is the assigned approver.
+    if (isset($leave['approver_id']) && (int)$leave['approver_id'] === $currentEmployeeId) {
+        return true;
+    }
+
+    // HR/Admin can process all as final fallback.
+    if (in_array($roleKey, ['admin', 'hr'], true)) {
+        return true;
+    }
+
+    return false;
+}
+
+// Define role-based permissions using current employee table.
+$designation = strtolower(trim($current_employee['designation'] ?? ''));
+$department = strtolower(trim($current_employee['department'] ?? ''));
+$currentRoleKey = roleKeyFromEmployee($current_employee ?: []);
+
+$isAdmin = ($currentRoleKey === 'admin');
+$isHr = ($currentRoleKey === 'hr');
+$isManager = ($currentRoleKey === 'manager');
+$isTl = ($currentRoleKey === 'tl');
+
+$canApprove = ($isAdmin || $isHr || $isManager || $isTl);
 
 if (!$canApprove) {
     $_SESSION['flash_error'] = "You don't have permission to access this page.";
@@ -91,24 +238,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['leave_action'])) {
             
             if ($leave_data) {
                 // Check if user has permission to approve/reject this specific leave
-                $hasPermission = false;
-                
-                if ($isAdmin || $isHr) {
-                    // Admin/HR can approve any leave
-                    $hasPermission = true;
-                } elseif ($isManager) {
-                    // Manager can only approve leaves of their reporting employees
-                    if ($leave_data['reporting_to'] == $current_employee_id) {
-                        $hasPermission = true;
-                    } else {
-                        // Check if employee is in reporting list
-                        $reporting_check = in_array($leave_data['employee_id'], $reporting_employees);
-                        if ($reporting_check) {
-                            $hasPermission = true;
-                        }
-                    }
-                }
-                
+                $hasPermission = canProcessLeave($leave_data, (int)$current_employee_id, $currentRoleKey);
+
                 if (!$hasPermission) {
                     $action_message = "You don't have permission to process this leave request.";
                     $action_message_type = "danger";
@@ -152,7 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['leave_action'])) {
                     
                     if (isset($update_stmt) && $update_stmt) {
                         if (mysqli_stmt_execute($update_stmt)) {
-                            logActivity(
+                            logActivitySafe(
                                 $conn,
                                 $log_action,
                                 'leave',
@@ -191,7 +322,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action'])) {
         
         // Get all selected leaves with their reporting info
         $verify_query = "
-            SELECT lr.id, lr.employee_id, lr.status, e.reporting_to
+            SELECT lr.*, e.reporting_to
             FROM leave_requests lr
             JOIN employees e ON lr.employee_id = e.id
             WHERE lr.id IN ({$ids_string})
@@ -207,15 +338,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action'])) {
                 continue;
             }
             
-            $hasPermission = false;
-            if ($isAdmin || $isHr) {
-                $hasPermission = true;
-            } elseif ($isManager) {
-                if ($row['reporting_to'] == $current_employee_id || in_array($row['employee_id'], $reporting_employees)) {
-                    $hasPermission = true;
-                }
-            }
-            
+            $hasPermission = canProcessLeave($row, (int)$current_employee_id, $currentRoleKey);
+
             if ($hasPermission) {
                 $valid_ids[] = $row['id'];
             } else {
@@ -256,7 +380,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action'])) {
                 if (mysqli_query($conn, $update_query)) {
                     $affected = mysqli_affected_rows($conn);
                     
-                    logActivity(
+                    logActivitySafe(
                         $conn,
                         $log_action,
                         'leave',
@@ -314,17 +438,10 @@ $query = "
     WHERE 1=1
 ";
 
-// Add permission restrictions based on role
+// Add permission restrictions based on role.
+// Current DB: leave_requests.approver_id stores assigned approver.
 if (!$isAdmin && !$isHr) {
-    if ($isManager) {
-        // Managers can see leaves of their reporting employees
-        if (!empty($reporting_employees)) {
-            $reporting_ids = implode(',', $reporting_employees);
-            $query .= " AND (e.reporting_to = {$current_employee_id} OR e.id IN ({$reporting_ids}) OR lr.employee_id IN ({$reporting_ids}))";
-        } else {
-            $query .= " AND e.reporting_to = {$current_employee_id}";
-        }
-    }
+    $query .= " AND lr.approver_id = " . (int)$current_employee_id;
 }
 
 // Apply filters
@@ -380,14 +497,7 @@ if ($result) {
 // Get statistics with permission restrictions
 $stats_condition = "";
 if (!$isAdmin && !$isHr) {
-    if ($isManager) {
-        if (!empty($reporting_employees)) {
-            $reporting_ids = implode(',', $reporting_employees);
-            $stats_condition = " AND (e.reporting_to = {$current_employee_id} OR e.id IN ({$reporting_ids}))";
-        } else {
-            $stats_condition = " AND e.reporting_to = {$current_employee_id}";
-        }
-    }
+    $stats_condition = " AND lr.approver_id = " . (int)$current_employee_id;
 }
 
 $stats_query = "
@@ -423,13 +533,12 @@ $employees_query = "
     WHERE employee_status = 'active'
 ";
 
-if (!$isAdmin && !$isHr && $isManager) {
-    if (!empty($reporting_employees)) {
-        $reporting_ids = implode(',', $reporting_employees);
-        $employees_query .= " AND (reporting_to = {$current_employee_id} OR id IN ({$reporting_ids}))";
-    } else {
-        $employees_query .= " AND reporting_to = {$current_employee_id}";
-    }
+if (!$isAdmin && !$isHr) {
+    $employees_query .= " AND id IN (
+        SELECT DISTINCT employee_id
+        FROM leave_requests
+        WHERE approver_id = " . (int)$current_employee_id . "
+    )";
 }
 
 $employees_query .= " ORDER BY full_name";
@@ -448,10 +557,10 @@ $pending_count = $stats['pending_count'] ?? 0;
 $user_role = 'User';
 if ($isAdmin) $user_role = 'Administrator';
 elseif ($isHr) $user_role = 'HR';
+elseif ($isTl) $user_role = 'Team Lead';
 elseif ($isManager) $user_role = 'Manager';
 
 // ---------------- HELPERS ----------------
-function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
 function safeDate($v, $dash='—'){
     $v = trim((string)$v);
@@ -470,15 +579,15 @@ function safeDateTime($v, $dash='—'){
 function getStatusBadge($status) {
     switch($status) {
         case 'Approved':
-            return '<span class="badge bg-success px-3 py-2"><i class="bi bi-check-circle"></i> Approved</span>';
+            return '<span class="badge-pill ontrack"><span class="mini-dot"></span> Approved</span>';
         case 'Rejected':
-            return '<span class="badge bg-danger px-3 py-2"><i class="bi bi-x-circle"></i> Rejected</span>';
+            return '<span class="badge-pill atrisk"><span class="mini-dot"></span> Rejected</span>';
         case 'Pending':
-            return '<span class="badge bg-warning text-dark px-3 py-2"><i class="bi bi-clock"></i> Pending</span>';
+            return '<span class="badge-pill pending"><span class="mini-dot"></span> Pending</span>';
         case 'Cancelled':
-            return '<span class="badge bg-secondary px-3 py-2"><i class="bi bi-x"></i> Cancelled</span>';
+            return '<span class="badge-pill neutral"><span class="mini-dot"></span> Cancelled</span>';
         default:
-            return '<span class="badge bg-light text-dark px-3 py-2">' . e($status) . '</span>';
+            return '<span class="badge-pill neutral">' . e($status) . '</span>';
     }
 }
 
@@ -501,7 +610,7 @@ function getApproverInfo($request) {
 }
 
 $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
-$userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
+$userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pending' : 'neutral'));
 ?>
 <!doctype html>
 <html lang="en">
@@ -515,63 +624,322 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
     <link href="assets/css/layout-styles.css" rel="stylesheet" />
     <link href="assets/css/topbar.css" rel="stylesheet" />
     <link href="assets/css/footer.css" rel="stylesheet" />
-    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 
     <style>
-        .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px; }
-        .panel{ background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 8px 24px rgba(17,24,39,.06); padding:20px; }
-        .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-        .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
+        :root{
+            --page-bg:#f5f7fb;
+            --card-bg:#ffffff;
+            --border:#e5e7eb;
+            --text:#111827;
+            --muted:#6b7280;
+            --soft:#f8fafc;
+            --shadow:0 10px 26px rgba(15,23,42,.055);
+            --radius:15px;
+        }
 
-        .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-            padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; cursor:pointer; transition: all 0.2s; }
-        .stat-card:hover{ transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,0.1); }
-        .stat-card.active{ border:2px solid #3b82f6; background:#eff6ff; }
-        .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
-        .stat-ic.blue{ background: var(--blue); }
-        .stat-ic.green{ background: var(--green); }
-        .stat-ic.orange{ background: var(--orange); }
-        .stat-ic.purple{ background: #8e44ad; }
-        .stat-ic.red{ background: #e74c3c; }
-        .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-        .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
+        body{ background:var(--page-bg); }
 
-        .filter-card{ background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:20px; }
+        .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px; }
+        .projects-wrapper{ width:100%; }
 
-        .table thead th{ font-size:12px; letter-spacing:.2px; color:#6b7280; font-weight:800; border-bottom:1px solid #e5e7eb!important; }
-        .table td{ vertical-align:middle; border-color:#e5e7eb; font-weight:600; color:#374151; padding:14px 8px; }
+        .page-heading{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:14px;
+        }
 
-        .action-btn{ width:32px; height:32px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; 
-            display:inline-flex; align-items:center; justify-content:center; color:#6b7280; text-decoration:none; margin:0 2px; }
-        .action-btn:hover{ background:#f3f4f6; color:#374151; }
-        .action-btn.approve:hover{ background:#d1fae5; color:#065f46; border-color:#065f46; }
-        .action-btn.reject:hover{ background:#fee2e2; color:#991b1b; border-color:#991b1b; }
+        .page-heading h1{ font-size:19px; font-weight:900; color:var(--text); margin:0; }
+        .page-heading p{ margin:3px 0 0; color:var(--muted); font-size:12px; font-weight:600; }
 
-        .employee-avatar{ width:40px; height:40px; border-radius:50%; background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-weight:800; color:#4b5563; }
-        .employee-avatar img{ width:40px; height:40px; border-radius:50%; object-fit:cover; }
+        .primary-btn,.secondary-btn,.success-btn,.danger-btn{
+            min-height:36px;
+            padding:0 14px;
+            border-radius:11px;
+            font-size:12px;
+            font-weight:900;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:7px;
+            text-decoration:none;
+            white-space:nowrap;
+            border:0;
+        }
 
-        .days-badge{ background:#e6f7ff; color:#0050b3; padding:4px 8px; border-radius:20px; font-weight:700; font-size:12px; }
+        .primary-btn{ background:#111827; color:#fff; }
+        .primary-btn:hover{ background:#020617; color:#fff; }
+        .secondary-btn{ border:1px solid var(--border); background:#fff; color:#334155; }
+        .secondary-btn:hover{ border-color:#cbd5e1; background:#f8fafc; color:#111827; }
+        .success-btn{ background:#16a34a; color:#fff; }
+        .success-btn:hover{ background:#15803d; color:#fff; }
+        .danger-btn{ background:#dc2626; color:#fff; }
+        .danger-btn:hover{ background:#b91c1c; color:#fff; }
 
-        .bulk-action-bar{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin-bottom:16px; display:none; align-items:center; gap:12px; }
+        .panel,.filter-card{
+            background:var(--card-bg);
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:13px;
+            margin-bottom:14px;
+        }
+
+        .panel-header{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:12px;
+        }
+
+        .panel-title{ font-weight:900; font-size:14px; margin:0; color:var(--text); }
+        .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
+
+        .stat-card{
+            background:var(--card-bg);
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:12px 13px;
+            min-height:78px;
+            display:flex;
+            align-items:center;
+            gap:11px;
+            cursor:pointer;
+            transition:.15s ease;
+        }
+
+        .stat-card:hover{ transform:translateY(-1px); box-shadow:0 14px 32px rgba(15,23,42,.09); }
+        .stat-card.active{ border-color:#93c5fd; background:#eff6ff; }
+
+        .stat-ic{
+            width:38px;
+            height:38px;
+            border-radius:12px;
+            display:grid;
+            place-items:center;
+            color:#fff;
+            font-size:17px;
+            flex:0 0 auto;
+        }
+
+        .blue{background:#2f80ed;}
+        .orange{background:#f2994a;}
+        .green{background:#27ae60;}
+        .red{background:#eb5757;}
+        .purple{background:#8b5cf6;}
+
+        .stat-label{ color:var(--muted); font-weight:800; font-size:10.5px; text-transform:uppercase; }
+        .stat-value{ font-size:24px; font-weight:950; color:var(--text); line-height:1; }
+
+        .form-label{
+            font-size:11px;
+            font-weight:900;
+            color:#475569;
+            text-transform:uppercase;
+            margin-bottom:6px;
+        }
+
+        .form-control,.form-select{
+            min-height:38px;
+            border:1px solid var(--border);
+            border-radius:11px;
+            font-size:12px;
+            font-weight:800;
+            color:#111827;
+            padding:8px 11px;
+        }
+
+        .form-control:focus,.form-select:focus{
+            border-color:#bfdbfe;
+            box-shadow:0 0 0 3px rgba(59,130,246,.10);
+        }
+
+        .badge-pill{
+            border-radius:999px;
+            padding:5px 8px;
+            font-weight:900;
+            font-size:10px;
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            border:1px solid transparent;
+            text-decoration:none;
+            white-space:nowrap;
+        }
+
+        .mini-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+        .ontrack{color:#15803d;background:#dcfce7;border-color:#bbf7d0;}
+        .progressing{color:#2563eb;background:#dbeafe;border-color:#bfdbfe;}
+        .pending{color:#6d28d9;background:#ede9fe;border-color:#ddd6fe;}
+        .atrisk{color:#b91c1c;background:#fee2e2;border-color:#fecaca;}
+        .neutral{color:#475569;background:#f1f5f9;border-color:#e2e8f0;}
+
+        .compact-table-wrap{
+            width:100%;
+            border:1px solid var(--border);
+            border-radius:13px;
+            overflow:hidden;
+            background:#fff;
+        }
+
+        .compact-table{ width:100%; margin:0; table-layout:auto; }
+
+        .compact-table thead th{
+            background:var(--soft);
+            color:#64748b;
+            font-size:10px;
+            text-transform:uppercase;
+            font-weight:900;
+            border-bottom:1px solid var(--border)!important;
+            padding:8px 9px;
+        }
+
+        .compact-table tbody td{
+            padding:8px 9px;
+            vertical-align:middle;
+            border-color:#eef2f7;
+            color:#334155;
+            font-weight:700;
+            font-size:11.5px;
+        }
+
+        .compact-table tbody tr:hover{ background:#fbfdff; }
+
+        .employee-cell{ display:flex; align-items:center; gap:8px; min-width:190px; }
+        .employee-avatar{
+            width:34px;
+            height:34px;
+            border-radius:12px;
+            background:#111827;
+            display:grid;
+            place-items:center;
+            font-weight:950;
+            font-size:12px;
+            color:#fff;
+            overflow:hidden;
+            flex:0 0 auto;
+        }
+
+        .employee-avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+        .table-primary-text{ color:#111827; font-size:11.5px; font-weight:900; }
+        .table-secondary-text{ color:#64748b; font-size:10px; font-weight:700; margin-top:1px; }
+
+        .days-badge{
+            background:#eff6ff;
+            color:#2563eb;
+            border:1px solid #bfdbfe;
+            padding:4px 8px;
+            border-radius:999px;
+            font-weight:900;
+            font-size:10px;
+            display:inline-flex;
+            gap:5px;
+            align-items:center;
+        }
+
+        .action-btn{
+            width:32px;
+            height:32px;
+            border-radius:10px;
+            border:1px solid var(--border);
+            background:#fff;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            color:#64748b;
+            text-decoration:none;
+            transition:.15s ease;
+        }
+
+        .action-btn:hover{ background:#f8fafc; color:#111827; }
+        .action-btn.approve:hover{ background:#dcfce7; color:#15803d; border-color:#86efac; }
+        .action-btn.reject:hover{ background:#fee2e2; color:#b91c1c; border-color:#fecaca; }
+
+        .bulk-action-bar{
+            background:#fff;
+            border:1px solid var(--border);
+            border-radius:13px;
+            box-shadow:var(--shadow);
+            padding:10px 12px;
+            margin-bottom:14px;
+            display:none;
+            align-items:center;
+            gap:12px;
+        }
+
         .bulk-action-bar.show{ display:flex; }
 
-        .nav-tabs .nav-link{ font-weight:700; color:#6b7280; border:none; padding:10px 20px; }
-        .nav-tabs .nav-link.active{ color:#3b82f6; border-bottom:3px solid #3b82f6; background:none; }
-        .nav-tabs .nav-link .badge{ margin-left:6px; }
+        .leave-card{
+            background:#fff;
+            border:1px solid var(--border);
+            border-radius:14px;
+            box-shadow:var(--shadow);
+            padding:12px;
+            margin-bottom:12px;
+        }
 
-        .leave-card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:12px; }
-        .leave-card:hover{ box-shadow:0 4px 12px rgba(0,0,0,0.05); }
+        .empty-state{
+            text-align:center;
+            padding:30px 12px;
+            color:#64748b;
+            font-size:12px;
+            font-weight:900;
+        }
 
-        .role-badge{ font-size:11px; padding:4px 8px; border-radius:20px; font-weight:700; }
-        .role-admin{ background:#fee2e2; color:#991b1b; }
-        .role-hr{ background:#dbeafe; color:#1e40af; }
-        .role-manager{ background:#fef3c7; color:#92400e; }
+        .empty-state i{
+            display:block;
+            font-size:34px;
+            opacity:.45;
+            margin-bottom:8px;
+        }
 
-        @media (max-width: 768px) {
-            .content-scroll{ padding:12px; }
+        .modal-content{
+            border:1px solid var(--border);
+            border-radius:16px;
+            box-shadow:0 24px 55px rgba(15,23,42,.18);
+        }
+
+        .modal-header{ border-bottom:1px solid #eef2f7; }
+        .modal-title{ font-size:15px; font-weight:950; color:#111827; }
+
+        @media(max-width:991.98px){
+            .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
+            .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
+            .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
+        }
+
+        @media(max-width:1199px){
+            .compact-table thead{ display:none; }
+            .compact-table,.compact-table tbody,.compact-table tr,.compact-table td{ display:block; width:100%; }
+            .compact-table tbody tr{ border-bottom:1px solid var(--border); padding:10px; }
+            .compact-table tbody td{
+                border:0;
+                display:flex;
+                justify-content:space-between;
+                gap:12px;
+            }
+            .compact-table tbody td::before{
+                content:attr(data-label);
+                font-size:10px;
+                font-weight:900;
+                color:#64748b;
+                text-transform:uppercase;
+                flex:0 0 105px;
+            }
+            .compact-table tbody td:first-child{ display:block; }
+            .compact-table tbody td:first-child::before{ display:none; }
+        }
+
+        @media(max-width:768px){
+            .content-scroll{ padding:12px 10px!important; }
+            .page-heading{ align-items:flex-start; flex-direction:column; }
+            .panel,.filter-card{ padding:12px; }
             .bulk-action-bar{ flex-wrap:wrap; }
+            .primary-btn,.secondary-btn,.success-btn,.danger-btn{ width:100%; }
         }
     </style>
 </head>
@@ -583,32 +951,38 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
         <?php include 'includes/topbar.php'; ?>
 
         <div class="content-scroll">
-            <div class="container-fluid maxw">
+            <div class="container-fluid projects-wrapper px-0">
 
-                <!-- Page Header with Role Badge -->
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <!-- Page Header -->
+                <div class="page-heading">
                     <div>
-                        <h1 class="h3 fw-bold mb-1">
+                        <h1>
                             Leave Requests Management
                             <?php if ($pending_count > 0): ?>
-                                <span class="badge bg-warning text-dark ms-2"><?= $pending_count ?> Pending</span>
+                                <span class="badge-pill pending ms-2">
+                                    <span class="mini-dot"></span><?= $pending_count ?> Pending
+                                </span>
                             <?php endif; ?>
                         </h1>
-                        <div class="d-flex align-items-center gap-2">
-                            <p class="text-muted mb-0">Review and manage employee leave requests</p>
-                            <span class="role-badge <?= $userRoleBadge ?>">
-                                <i class="bi bi-shield-check me-1"></i> <?= $user_role ?>
-                            </span>
-                        </div>
+                        <p>Review and manage leave requests using current DB workflow: approver_id based approval.</p>
                     </div>
-                    <div class="d-flex gap-2">
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="badge-pill <?= $userRoleBadge ?>">
+                            <i class="bi bi-shield-check"></i>
+                            <?= e($user_role) ?>
+                        </span>
+
                         <?php if ($isAdmin || $isHr): ?>
-                        <button class="btn btn-outline-primary" onclick="exportToExcel()">
-                            <i class="bi bi-file-excel"></i> Export
+                        <button class="secondary-btn" onclick="exportToExcel()">
+                            <i class="bi bi-file-excel"></i>
+                            Export
                         </button>
                         <?php endif; ?>
-                        <button class="btn btn-outline-secondary" onclick="window.print()">
-                            <i class="bi bi-printer"></i> Print
+
+                        <button class="primary-btn" onclick="window.print()">
+                            <i class="bi bi-printer"></i>
+                            Print
                         </button>
                     </div>
                 </div>
@@ -671,7 +1045,7 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                     <form method="GET" action="" id="filterForm">
                         <div class="row g-3">
                             <div class="col-md-2">
-                                <label class="form-label fw-bold">Status</label>
+                                <label class="form-label">Status</label>
                                 <select name="status" class="form-select" onchange="this.form.submit()">
                                     <option value="pending" <?= $status_filter === 'pending' ? 'selected' : '' ?>>Pending</option>
                                     <option value="approved" <?= $status_filter === 'approved' ? 'selected' : '' ?>>Approved</option>
@@ -680,8 +1054,8 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label fw-bold">Employee</label>
-                                <select name="employee_id" class="form-select select2" onchange="this.form.submit()">
+                                <label class="form-label">Employee</label>
+                                <select name="employee_id" class="form-select" onchange="this.form.submit()">
                                     <option value="0">All Employees</option>
                                     <?php foreach ($employees as $emp): ?>
                                         <option value="<?= $emp['id'] ?>" <?= $employee_filter == $emp['id'] ? 'selected' : '' ?>>
@@ -691,15 +1065,15 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label fw-bold">From Date</label>
+                                <label class="form-label">From Date</label>
                                 <input type="date" name="date_from" class="form-control" value="<?= e($date_from) ?>" onchange="this.form.submit()">
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label fw-bold">To Date</label>
+                                <label class="form-label">To Date</label>
                                 <input type="date" name="date_to" class="form-control" value="<?= e($date_to) ?>" onchange="this.form.submit()">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label fw-bold">Search</label>
+                                <label class="form-label">Search</label>
                                 <input type="text" name="search" class="form-control" placeholder="Name, Code, Reason..." value="<?= e($search) ?>">
                             </div>
                         </div>
@@ -716,13 +1090,13 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                         </label>
                     </div>
                     <div class="ms-auto d-flex gap-2">
-                        <button class="btn btn-success" onclick="bulkApprove()">
+                        <button class="success-btn" onclick="bulkApprove()">
                             <i class="bi bi-check-all"></i> Approve Selected
                         </button>
-                        <button class="btn btn-danger" onclick="bulkReject()">
+                        <button class="danger-btn" onclick="bulkReject()">
                             <i class="bi bi-x-circle"></i> Reject Selected
                         </button>
-                        <button class="btn btn-outline-secondary" onclick="clearSelection()">
+                        <button class="secondary-btn" onclick="clearSelection()">
                             <i class="bi bi-x"></i> Clear
                         </button>
                     </div>
@@ -732,16 +1106,19 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                 <!-- Leave Requests Table/Cards -->
                 <div class="panel">
                     <div class="panel-header">
-                        <h5 class="panel-title">
-                            <i class="bi bi-list-ul me-2"></i>
-                            Leave Requests
-                            <span class="badge bg-secondary ms-2"><?= count($leave_requests) ?></span>
-                        </h5>
+                        <div>
+                            <h5 class="panel-title">
+                                <i class="bi bi-list-ul me-2"></i>
+                                Leave Requests
+                            </h5>
+                            <div class="panel-subtitle">Filtered requests assigned by approver_id</div>
+                        </div>
+                        <span class="badge-pill neutral"><?= count($leave_requests) ?> Records</span>
                     </div>
 
                     <!-- Desktop Table View -->
-                    <div class="table-responsive d-none d-lg-block">
-                        <table class="table align-middle" id="leaveTable">
+                    <div class="compact-table-wrap">
+                        <table class="table compact-table align-middle mb-0" id="leaveTable">
                             <thead>
                                 <tr>
                                     <?php if ($status_filter === 'pending'): ?>
@@ -764,21 +1141,18 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                             <tbody>
                                 <?php if (empty($leave_requests)): ?>
                                     <tr>
-                                        <td colspan="<?= $status_filter === 'pending' ? '9' : '8' ?>" class="text-center text-muted py-4">
-                                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                                            No leave requests found.
-                                        </td>
+                                        <td colspan="<?= $status_filter === 'pending' ? '9' : '8' ?>"><div class="empty-state"><i class="bi bi-inbox"></i>No leave requests found.</div></td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($leave_requests as $request): ?>
                                         <tr>
                                             <?php if ($status_filter === 'pending'): ?>
-                                                <td>
+                                                <td data-label="Select">
                                                     <input class="form-check-input row-select" type="checkbox" value="<?= $request['id'] ?>">
                                                 </td>
                                             <?php endif; ?>
-                                            <td>
-                                                <div class="d-flex align-items-center gap-2">
+                                            <td data-label="Employee">
+                                                <div class="employee-cell">
                                                     <div class="employee-avatar">
                                                         <?php if (!empty($request['employee_photo'])): ?>
                                                             <img src="<?= e($request['employee_photo']) ?>" alt="<?= e($request['full_name']) ?>">
@@ -787,32 +1161,32 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                                                         <?php endif; ?>
                                                     </div>
                                                     <div>
-                                                        <div class="fw-bold"><?= e($request['full_name']) ?></div>
-                                                        <small class="text-muted"><?= e($request['employee_code']) ?></small>
+                                                        <div class="table-primary-text"><?= e($request['full_name']) ?></div>
+                                                        <div class="table-secondary-text"><?= e($request['employee_code']) ?></div>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td>
-                                                <span class="badge bg-light text-dark"><?= e($request['leave_type']) ?></span>
+                                            <td data-label="Leave Type">
+                                                <span class="badge-pill neutral"><?= e($request['leave_type']) ?></span>
                                             </td>
-                                            <td>
+                                            <td data-label="Period">
                                                 <?= safeDate($request['from_date']) ?><br>
                                                 <small class="text-muted">to <?= safeDate($request['to_date']) ?></small>
                                             </td>
-                                            <td>
+                                            <td data-label="Days">
                                                 <span class="days-badge">
                                                     <i class="bi bi-calendar"></i> <?= $request['total_days'] ?> days
                                                 </span>
                                             </td>
-                                            <td>
-                                                <div data-bs-toggle="tooltip" title="<?= e($request['reason']) ?>">
+                                            <td data-label="Reason">
+                                                <div class="table-secondary-text" data-bs-toggle="tooltip" title="<?= e($request['reason']) ?>">
                                                     <?= e(substr($request['reason'], 0, 30)) ?>...
                                                 </div>
                                             </td>
-                                            <td>
+                                            <td data-label="Applied On">
                                                 <?= safeDateTime($request['applied_at'] ?? $request['created_at']) ?>
                                             </td>
-                                            <td>
+                                            <td data-label="Status / Approver">
                                                 <?= getStatusBadge($request['status']) ?>
                                                 <?php if ($request['status'] !== 'Pending'): ?>
                                                     <div class="small text-muted mt-1">
@@ -821,7 +1195,7 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                                                 <?php endif; ?>
                                             </td>
                                             <?php if ($status_filter === 'pending'): ?>
-                                            <td>
+                                            <td data-label="Actions">
                                                 <div class="d-flex gap-1">
                                                     <button class="action-btn" onclick="viewDetails(<?= $request['id'] ?>)" title="View Details">
                                                         <i class="bi bi-eye"></i>
@@ -829,14 +1203,7 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                                                     
                                                     <?php 
                                                     // Check if user can approve this specific request
-                                                    $canApproveThis = false;
-                                                    if ($isAdmin || $isHr) {
-                                                        $canApproveThis = true;
-                                                    } elseif ($isManager) {
-                                                        if ($request['reporting_to'] == $current_employee_id) {
-                                                            $canApproveThis = true;
-                                                        }
-                                                    }
+                                                    $canApproveThis = canProcessLeave($request, (int)$current_employee_id, $currentRoleKey);
                                                     
                                                     if ($canApproveThis): 
                                                     ?>
@@ -857,89 +1224,7 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                         </table>
                     </div>
 
-                    <!-- Mobile Card View -->
-                    <div class="d-block d-lg-none">
-                        <?php if (empty($leave_requests)): ?>
-                            <div class="text-center text-muted py-4">
-                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                                No leave requests found.
-                            </div>
-                        <?php else: ?>
-                            <?php foreach ($leave_requests as $request): ?>
-                                <div class="leave-card">
-                                    <div class="d-flex justify-content-between align-items-start mb-2">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="employee-avatar" style="width:32px;height:32px;">
-                                                <?php if (!empty($request['employee_photo'])): ?>
-                                                    <img src="<?= e($request['employee_photo']) ?>" alt="<?= e($request['full_name']) ?>" style="width:32px;height:32px;">
-                                                <?php else: ?>
-                                                    <?= getInitials($request['full_name']) ?>
-                                                <?php endif; ?>
-                                            </div>
-                                            <div>
-                                                <div class="fw-bold"><?= e($request['full_name']) ?></div>
-                                                <small class="text-muted"><?= e($request['employee_code']) ?></small>
-                                            </div>
-                                        </div>
-                                        <?= getStatusBadge($request['status']) ?>
                                     </div>
-                                    
-                                    <div class="row g-2 mb-2">
-                                        <div class="col-6">
-                                            <small class="text-muted">Type:</small>
-                                            <div><?= e($request['leave_type']) ?></div>
-                                        </div>
-                                        <div class="col-6">
-                                            <small class="text-muted">Days:</small>
-                                            <div><span class="days-badge"><?= $request['total_days'] ?> days</span></div>
-                                        </div>
-                                        <div class="col-12">
-                                            <small class="text-muted">Period:</small>
-                                            <div><?= safeDate($request['from_date']) ?> - <?= safeDate($request['to_date']) ?></div>
-                                        </div>
-                                        <div class="col-12">
-                                            <small class="text-muted">Reason:</small>
-                                            <div><?= e(substr($request['reason'], 0, 50)) ?>...</div>
-                                        </div>
-                                        <?php if ($request['status'] !== 'Pending'): ?>
-                                        <div class="col-12">
-                                            <small class="text-muted">Approver:</small>
-                                            <div><?= getApproverInfo($request) ?></div>
-                                        </div>
-                                        <?php endif; ?>
-                                    </div>
-                                    
-                                    <?php if ($status_filter === 'pending'): ?>
-                                    <div class="d-flex gap-2 justify-content-end mt-2">
-                                        <button class="btn btn-sm btn-outline-secondary" onclick="viewDetails(<?= $request['id'] ?>)">
-                                            <i class="bi bi-eye"></i> View
-                                        </button>
-                                        <?php 
-                                        $canApproveThis = false;
-                                        if ($isAdmin || $isHr) {
-                                            $canApproveThis = true;
-                                        } elseif ($isManager) {
-                                            if ($request['reporting_to'] == $current_employee_id) {
-                                                $canApproveThis = true;
-                                            }
-                                        }
-                                        
-                                        if ($canApproveThis): 
-                                        ?>
-                                            <button class="btn btn-sm btn-success" onclick="openApproveModal(<?= $request['id'] ?>, '<?= e($request['full_name']) ?>')">
-                                                <i class="bi bi-check-lg"></i> Approve
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" onclick="openRejectModal(<?= $request['id'] ?>, '<?= e($request['full_name']) ?>')">
-                                                <i class="bi bi-x-lg"></i> Reject
-                                            </button>
-                                        <?php endif; ?>
-                                    </div>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
 
             </div>
         </div>
@@ -967,7 +1252,7 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                     <p>Are you sure you want to approve leave request for <strong id="approve_employee_name"></strong>?</p>
                     
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Remarks (Optional)</label>
+                        <label class="form-label">Remarks (Optional)</label>
                         <textarea name="remarks" class="form-control" rows="2" placeholder="Add any remarks..."></textarea>
                     </div>
                     
@@ -977,8 +1262,8 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="success-btn">
                         <i class="bi bi-check-lg"></i> Confirm Approval
                     </button>
                 </div>
@@ -1016,8 +1301,8 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger">
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="danger-btn">
                         <i class="bi bi-x-lg"></i> Confirm Rejection
                     </button>
                 </div>
@@ -1055,8 +1340,8 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger">
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="danger-btn">
                         <i class="bi bi-x-lg"></i> Confirm Bulk Rejection
                     </button>
                 </div>
@@ -1066,43 +1351,16 @@ $userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-$(document).ready(function() {
-    // Initialize DataTable
-    <?php if (!empty($leave_requests)): ?>
-    $('#leaveTable').DataTable({
-        pageLength: 25,
-        ordering: true,
-        searching: false,
-        info: true,
-        paging: true,
-        language: {
-            info: "Showing _START_ to _END_ of _TOTAL_ requests",
-            infoEmpty: "No requests to show",
-            infoFiltered: "(filtered from _MAX_ total requests)"
-        }
-    });
-    <?php endif; ?>
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.bootstrap) {
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+            new bootstrap.Tooltip(el);
+        });
+    }
 
-    // Initialize Select2
-    $('.select2').select2({
-        theme: 'bootstrap-5',
-        width: '100%'
-    });
-
-    // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
-    // Bulk selection functionality
     <?php if ($status_filter === 'pending' && !empty($leave_requests)): ?>
     const selectAllHeader = document.getElementById('selectAllHeader');
     const selectAllCheckbox = document.getElementById('selectAllCheckbox');
@@ -1110,55 +1368,43 @@ $(document).ready(function() {
     const bulkActionBar = document.getElementById('bulkActionBar');
     const selectedCountSpan = document.getElementById('selectedCount');
 
-    function updateBulkSelection() {
+    window.updateBulkSelection = function() {
         const checked = document.querySelectorAll('.row-select:checked');
-        selectedCountSpan.textContent = checked.length;
-        
-        if (checked.length > 0) {
-            bulkActionBar.classList.add('show');
-        } else {
-            bulkActionBar.classList.remove('show');
+        if (selectedCountSpan) selectedCountSpan.textContent = checked.length;
+
+        if (bulkActionBar) {
+            if (checked.length > 0) bulkActionBar.classList.add('show');
+            else bulkActionBar.classList.remove('show');
         }
 
-        // Update select all checkbox
         if (selectAllHeader) {
-            selectAllHeader.checked = checked.length === rowCheckboxes.length;
+            selectAllHeader.checked = checked.length === rowCheckboxes.length && rowCheckboxes.length > 0;
             selectAllHeader.indeterminate = checked.length > 0 && checked.length < rowCheckboxes.length;
         }
+
         if (selectAllCheckbox) {
-            selectAllCheckbox.checked = checked.length === rowCheckboxes.length;
+            selectAllCheckbox.checked = checked.length === rowCheckboxes.length && rowCheckboxes.length > 0;
             selectAllCheckbox.indeterminate = checked.length > 0 && checked.length < rowCheckboxes.length;
         }
-    }
+    };
 
-    // Select all functionality
     if (selectAllHeader) {
         selectAllHeader.addEventListener('change', function() {
-            rowCheckboxes.forEach(cb => {
-                cb.checked = selectAllHeader.checked;
-            });
+            rowCheckboxes.forEach(cb => cb.checked = selectAllHeader.checked);
             updateBulkSelection();
         });
     }
 
     if (selectAllCheckbox) {
         selectAllCheckbox.addEventListener('change', function() {
-            rowCheckboxes.forEach(cb => {
-                cb.checked = selectAllCheckbox.checked;
-            });
+            rowCheckboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
             updateBulkSelection();
         });
     }
 
-    // Individual checkbox changes
-    if (rowCheckboxes.length > 0) {
-        rowCheckboxes.forEach(cb => {
-            cb.addEventListener('change', updateBulkSelection);
-        });
-    }
+    rowCheckboxes.forEach(cb => cb.addEventListener('change', updateBulkSelection));
     <?php endif; ?>
 
-    // Auto-submit filter form on search input change with debounce
     let searchTimeout;
     const searchInput = document.querySelector('input[name="search"]');
     if (searchInput) {
@@ -1171,26 +1417,22 @@ $(document).ready(function() {
     }
 });
 
-// View Details
 function viewDetails(id) {
     window.location.href = 'leave-details.php?id=' + id;
 }
 
-// Open Approve Modal
 function openApproveModal(id, employeeName) {
     document.getElementById('approve_leave_id').value = id;
     document.getElementById('approve_employee_name').textContent = employeeName;
     new bootstrap.Modal(document.getElementById('approveModal')).show();
 }
 
-// Open Reject Modal
 function openRejectModal(id, employeeName) {
     document.getElementById('reject_leave_id').value = id;
     document.getElementById('reject_employee_name').textContent = employeeName;
     new bootstrap.Modal(document.getElementById('rejectModal')).show();
 }
 
-// Bulk Approve
 function bulkApprove() {
     const selected = document.querySelectorAll('.row-select:checked');
     if (selected.length === 0) {
@@ -1222,7 +1464,6 @@ function bulkApprove() {
     }
 }
 
-// Bulk Reject
 function bulkReject() {
     const selected = document.querySelectorAll('.row-select:checked');
     if (selected.length === 0) {
@@ -1230,10 +1471,9 @@ function bulkReject() {
         return;
     }
 
-    // Populate bulk reject modal
     const idsContainer = document.getElementById('bulkSelectedIds');
     idsContainer.innerHTML = '';
-    
+
     selected.forEach(cb => {
         const input = document.createElement('input');
         input.type = 'hidden';
@@ -1246,24 +1486,17 @@ function bulkReject() {
     new bootstrap.Modal(document.getElementById('bulkRejectModal')).show();
 }
 
-// Clear Selection
 function clearSelection() {
-    document.querySelectorAll('.row-select').forEach(cb => {
-        cb.checked = false;
-    });
-    updateBulkSelection();
+    document.querySelectorAll('.row-select').forEach(cb => cb.checked = false);
+    if (typeof updateBulkSelection === 'function') updateBulkSelection();
 }
 
-// Export to Excel
 function exportToExcel() {
     const rows = document.querySelectorAll('#leaveTable tbody tr');
     const csv = [];
-    
-    // Headers
     const headers = ['Employee', 'Leave Type', 'From Date', 'To Date', 'Days', 'Reason', 'Applied On', 'Status'];
     csv.push(headers.join(','));
-    
-    // Data rows
+
     rows.forEach(row => {
         if (row.cells.length >= 8) {
             const startIdx = <?= $status_filter === 'pending' ? '1' : '0' ?>;
@@ -1278,7 +1511,7 @@ function exportToExcel() {
             const fromDate = period.split('to')[0]?.trim() || '';
             const toDate = period.split('to')[1]?.trim() || '';
 
-            const rowData = [
+            csv.push([
                 '"' + employee.replace(/"/g, '""') + '"',
                 '"' + leaveType.replace(/"/g, '""') + '"',
                 '"' + fromDate.replace(/"/g, '""') + '"',
@@ -1287,13 +1520,11 @@ function exportToExcel() {
                 '"' + reason.replace(/"/g, '""') + '"',
                 '"' + appliedOn.replace(/"/g, '""') + '"',
                 '"' + status.replace(/"/g, '""') + '"'
-            ];
-            csv.push(rowData.join(','));
+            ].join(','));
         }
     });
-    
-    const csvString = csv.join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+
+    const blob = new Blob(["\uFEFF" + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

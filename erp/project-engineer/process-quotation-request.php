@@ -35,6 +35,99 @@ if (!function_exists('sanitizeInput')) {
     }
 }
 
+if (!function_exists('tableExists')) {
+    function tableExists($conn, string $table): bool {
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+        $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+        if (!$res) return false;
+        $ok = mysqli_num_rows($res) > 0;
+        mysqli_free_result($res);
+        return $ok;
+    }
+}
+
+if (!function_exists('columnExists')) {
+    function columnExists($conn, string $table, string $column): bool {
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+        $columnEsc = mysqli_real_escape_string($conn, $column);
+        $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
+        if (!$res) return false;
+        $ok = mysqli_num_rows($res) > 0;
+        mysqli_free_result($res);
+        return $ok;
+    }
+}
+
+if (!function_exists('logActivityCurrentDb')) {
+    function logActivityCurrentDb($conn, string $activity_type, string $module, string $description, $reference_id = null, $reference_name = null, $old_data = null, $new_data = null): bool {
+        if (!$conn || !tableExists($conn, 'activity_logs')) return false;
+
+        if (is_array($old_data) || is_object($old_data)) {
+            $old_data = json_encode($old_data, JSON_UNESCAPED_UNICODE);
+        }
+
+        if (is_array($new_data) || is_object($new_data)) {
+            $new_data = json_encode($new_data, JSON_UNESCAPED_UNICODE);
+        }
+
+        $employee_id = $_SESSION['employee_id'] ?? null;
+        $employee_name = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? $_SESSION['name'] ?? 'System';
+        $username = $_SESSION['username'] ?? '';
+        $designation = $_SESSION['designation'] ?? '';
+        $department = $_SESSION['department'] ?? '';
+        $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+        $map = [
+            'employee_id'    => ['i', $employee_id],
+            'employee_name'  => ['s', $employee_name],
+            'username'       => ['s', $username],
+            'designation'    => ['s', $designation],
+            'department'     => ['s', $department],
+            'activity_type'  => ['s', $activity_type],
+            'module'         => ['s', $module],
+            'description'    => ['s', $description],
+            'reference_id'   => ['i', $reference_id],
+            'reference_name' => ['s', $reference_name],
+            'old_data'       => ['s', $old_data],
+            'new_data'       => ['s', $new_data],
+            'ip_address'     => ['s', $ip_address],
+        ];
+
+        $columns = [];
+        $values = [];
+        $types = '';
+
+        foreach ($map as $column => $pair) {
+            if (columnExists($conn, 'activity_logs', $column)) {
+                $columns[] = "`$column`";
+                $types .= $pair[0];
+                $values[] = $pair[1];
+            }
+        }
+
+        if (!$columns) return false;
+
+        $placeholders = implode(',', array_fill(0, count($columns), '?'));
+        $sql = "INSERT INTO activity_logs (" . implode(',', $columns) . ") VALUES ($placeholders)";
+
+        $stmt = mysqli_prepare($conn, $sql);
+        if (!$stmt) {
+            error_log("Activity log prepare failed: " . mysqli_error($conn));
+            return false;
+        }
+
+        mysqli_stmt_bind_param($stmt, $types, ...$values);
+        $ok = mysqli_stmt_execute($stmt);
+
+        if (!$ok) {
+            error_log("Activity log execute failed: " . mysqli_stmt_error($stmt));
+        }
+
+        mysqli_stmt_close($stmt);
+        return $ok;
+    }
+}
+
 // Generate unique request number
 function generateRequestNo($conn) {
     $prefix = 'QR';
@@ -143,15 +236,36 @@ try {
         throw new Exception('Please fill in all required fields');
     }
     
-    // Validate site exists and user is assigned as Project Engineer
-    $site_check_query = "SELECT s.id, s.project_name 
-                         FROM sites s 
-                         INNER JOIN site_project_engineers spe ON spe.site_id = s.id
-                         WHERE s.id = ? 
-                         AND spe.employee_id = ? 
-                         AND s.deleted_at IS NULL";
-    $stmt = mysqli_prepare($conn, $site_check_query);
-    mysqli_stmt_bind_param($stmt, "ii", $site_id, $user_id);
+    // Validate site exists and user is assigned as Project Engineer or Team Lead.
+    // PE access: site_project_engineers.employee_id
+    // TL access: sites.team_lead_employee_id or site_project_engineers fallback
+    $hasTeamLeadCol = columnExists($conn, 'sites', 'team_lead_employee_id');
+
+    if ($hasTeamLeadCol) {
+        $site_check_query = "SELECT DISTINCT s.id, s.project_name
+                             FROM sites s
+                             LEFT JOIN site_project_engineers spe ON spe.site_id = s.id
+                             WHERE s.id = ?
+                               AND (
+                                 spe.employee_id = ?
+                                 OR s.team_lead_employee_id = ?
+                               )
+                               AND s.deleted_at IS NULL
+                             LIMIT 1";
+        $stmt = mysqli_prepare($conn, $site_check_query);
+        mysqli_stmt_bind_param($stmt, "iii", $site_id, $user_id, $user_id);
+    } else {
+        $site_check_query = "SELECT DISTINCT s.id, s.project_name
+                             FROM sites s
+                             INNER JOIN site_project_engineers spe ON spe.site_id = s.id
+                             WHERE s.id = ?
+                               AND spe.employee_id = ?
+                               AND s.deleted_at IS NULL
+                             LIMIT 1";
+        $stmt = mysqli_prepare($conn, $site_check_query);
+        mysqli_stmt_bind_param($stmt, "ii", $site_id, $user_id);
+    }
+
     mysqli_stmt_execute($stmt);
     $site_result = mysqli_stmt_get_result($stmt);
     
@@ -255,30 +369,27 @@ try {
     $request_id = mysqli_insert_id($conn);
     mysqli_stmt_close($stmt);
     
-    // Log the activity
-    $log_query = "INSERT INTO activity_logs (
-        user_id, user_name, user_role, action_type, module,
-        module_id, module_name, description, created_at
-    ) VALUES (
-        ?, ?, (SELECT designation FROM employees WHERE id = ?), 'CREATE', 'quotation_requests',
-        ?, ?, ?, NOW()
-    )";
-    
-    $log_stmt = mysqli_prepare($conn, $log_query);
-    if ($log_stmt) {
-        $log_description = ($is_draft ? 'Draft saved' : 'Quotation request created') . ': ' . $request_no . ' - ' . $title;
-        
-        mysqli_stmt_bind_param($log_stmt, 'isisis', 
-            $user_id,
-            $user_name,
-            $user_id,
-            $request_id,
-            $title,
-            $log_description
-        );
-        mysqli_stmt_execute($log_stmt);
-        mysqli_stmt_close($log_stmt);
-    }
+    // Log the activity using current DB activity_logs columns.
+    // Important: current DB has employee_id/activity_type/reference_id, not user_id/action_type/module_id.
+    $log_description = ($is_draft ? 'Draft saved' : 'Quotation request created') . ': ' . $request_no . ' - ' . $title;
+
+    logActivityCurrentDb(
+        $conn,
+        'CREATE',
+        'quotation_requests',
+        $log_description,
+        $request_id,
+        $request_no,
+        null,
+        [
+            'request_no' => $request_no,
+            'title' => $title,
+            'site_id' => $site_id,
+            'site_name' => $site_name,
+            'status' => $status
+        ]
+    );
+
     
     // Commit transaction
     mysqli_commit($conn);
@@ -290,10 +401,10 @@ try {
     // Send notification to Team Lead/Manager if not draft
     if (!$is_draft) {
         // Get the manager/team lead for this site to notify
-        $notify_query = "SELECT e.id, e.full_name, e.email 
+        $notify_query = "SELECT e.id, e.full_name, e.email
                          FROM sites s
-                         LEFT JOIN employees e ON (e.id = s.manager_employee_id OR e.id = s.team_lead_employee_id)
-                         WHERE s.id = ? 
+                         LEFT JOIN employees e ON e.id = COALESCE(s.team_lead_employee_id, s.manager_employee_id)
+                         WHERE s.id = ?
                          AND e.id IS NOT NULL
                          LIMIT 1";
         $notify_stmt = mysqli_prepare($conn, $notify_query);

@@ -12,10 +12,27 @@ if (!isset($_SESSION['employee_id'])) {
 $conn = get_db_connection();
 if (!$conn) { die("Database connection failed."); }
 
-$user_id = $_SESSION['employee_id'];
-$user_designation = strtolower(trim((string)($_SESSION['designation'] ?? '')));
+$user_id = (int)$_SESSION['employee_id'];
 $success = '';
 $error   = '';
+
+$currentEmployee = null;
+$empStmt = mysqli_prepare($conn, "SELECT id, full_name, designation, department FROM employees WHERE id = ? AND employee_status = 'active' LIMIT 1");
+if ($empStmt) {
+    mysqli_stmt_bind_param($empStmt, "i", $user_id);
+    mysqli_stmt_execute($empStmt);
+    $empRes = mysqli_stmt_get_result($empStmt);
+    $currentEmployee = mysqli_fetch_assoc($empRes);
+    mysqli_stmt_close($empStmt);
+}
+
+if (!$currentEmployee) {
+    header('Location: ../login.php');
+    exit();
+}
+
+$user_designation = strtolower(trim((string)($currentEmployee['designation'] ?? ($_SESSION['designation'] ?? ''))));
+$userRoleKey = roleKeyFromDesignation($user_designation);
 
 // Get site_id from URL if present
 $preselected_site_id = isset($_GET['site_id']) ? intval($_GET['site_id']) : 0;
@@ -23,17 +40,7 @@ $preselected_site_id = isset($_GET['site_id']) ? intval($_GET['site_id']) : 0;
 // ============================================================
 // AUTHORIZATION: Only allow Project Engineers and Team Leads
 // ============================================================
-$allowed_roles = [
-    'project engineer grade 1',
-    'project engineer grade 2',
-    'sr. engineer',
-    'senior engineer',
-    'team lead',
-    'teamleader'
-];
-
-if (!in_array($user_designation, $allowed_roles, true)) {
-    // Redirect unauthorized users
+if (!in_array($userRoleKey, ['project_engineer', 'tl'], true)) {
     header('Location: index.php');
     exit();
 }
@@ -41,31 +48,67 @@ if (!in_array($user_designation, $allowed_roles, true)) {
 // Helper functions
 function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
+function hasColumn(mysqli $conn, string $table, string $column): bool {
+    $sql = "SELECT 1
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+              AND COLUMN_NAME = ?
+            LIMIT 1";
+    $st = mysqli_prepare($conn, $sql);
+    if (!$st) return false;
+    mysqli_stmt_bind_param($st, "ss", $table, $column);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+    $ok = (bool)mysqli_fetch_assoc($res);
+    mysqli_stmt_close($st);
+    return $ok;
+}
+
+function roleKeyFromDesignation(string $designation): string {
+    $d = strtolower(trim($designation));
+
+    if (
+        str_contains($d, 'team lead') ||
+        str_contains($d, 'teamleader') ||
+        str_contains($d, 'tl') ||
+        str_contains($d, 'lead')
+    ) return 'tl';
+
+    if (
+        str_contains($d, 'project engineer') ||
+        str_contains($d, 'engineer')
+    ) return 'project_engineer';
+
+    return 'other';
+}
+
+
 function getPriorityBadge($priority) {
-    $badges = [
-        'Low' => ['bg-secondary', 'bi-arrow-down'],
-        'Medium' => ['bg-info', 'bi-dash'],
-        'High' => ['bg-warning', 'bi-arrow-up'],
-        'Urgent' => ['bg-danger', 'bi-exclamation-triangle']
+    $classes = [
+        'Low' => 'neutral',
+        'Medium' => 'progressing',
+        'High' => 'pending',
+        'Urgent' => 'atrisk'
     ];
-    $badge = $badges[$priority] ?? ['bg-secondary', 'bi-question'];
-    return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $priority . '</span>';
+    $class = $classes[$priority] ?? 'neutral';
+    return '<span class="badge-pill ' . $class . '"><span class="mini-dot"></span>' . e($priority) . '</span>';
 }
 
 function getStatusBadge($status) {
-    $badges = [
-        'Draft' => ['bg-secondary', 'bi-pencil'],
-        'Pending Assignment' => ['bg-warning', 'bi-clock'],
-        'Assigned' => ['bg-info', 'bi-person-check'],
-        'Quotations Received' => ['bg-primary', 'bi-file-text'],
-        'With QS' => ['bg-secondary', 'bi-arrow-right'],
-        'QS Finalized' => ['bg-success', 'bi-check-circle'],
-        'Approved' => ['bg-success', 'bi-check-circle-fill'],
-        'Rejected' => ['bg-danger', 'bi-x-circle'],
-        'Cancelled' => ['bg-dark', 'bi-x']
+    $classes = [
+        'Draft' => 'neutral',
+        'Pending Assignment' => 'pending',
+        'Assigned' => 'progressing',
+        'Quotations Received' => 'progressing',
+        'With QS' => 'pending',
+        'QS Finalized' => 'ontrack',
+        'Approved' => 'ontrack',
+        'Rejected' => 'atrisk',
+        'Cancelled' => 'neutral'
     ];
-    $badge = $badges[$status] ?? ['bg-secondary', 'bi-question'];
-    return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $status . '</span>';
+    $class = $classes[$status] ?? 'neutral';
+    return '<span class="badge-pill ' . $class . '"><span class="mini-dot"></span>' . e($status) . '</span>';
 }
 
 function safeDate($v, $dash='—'){
@@ -76,42 +119,80 @@ function safeDate($v, $dash='—'){
 }
 
 // ============================================================
-// GET SITES ASSIGNED TO THIS PE/TL (via site_project_engineers)
+// GET SITES ASSIGNED TO THIS PE/TL
+// PE: site_project_engineers
+// TL: sites.team_lead_employee_id OR fallback site_project_engineers
 // ============================================================
-$sites_query = "SELECT 
-                    s.id, 
-                    s.project_name, 
-                    s.project_code, 
-                    s.project_location, 
-                    s.project_type, 
-                    s.start_date, 
-                    s.expected_completion_date,
-                    c.client_name, 
-                    c.company_name
-                FROM sites s 
-                INNER JOIN site_project_engineers spe ON spe.site_id = s.id
-                LEFT JOIN clients c ON c.id = s.client_id
-                WHERE spe.employee_id = ? 
-                AND s.deleted_at IS NULL
-                ORDER BY s.project_name ASC";
+$hasTeamLeadCol = hasColumn($conn, 'sites', 'team_lead_employee_id');
+$teamLeadSelect = $hasTeamLeadCol ? "s.team_lead_employee_id," : "NULL AS team_lead_employee_id,";
 
-$stmt = mysqli_prepare($conn, $sites_query);
+if ($userRoleKey === 'tl' && $hasTeamLeadCol) {
+    $sites_query = "SELECT DISTINCT
+                        s.id,
+                        s.project_name,
+                        s.project_code,
+                        s.project_location,
+                        s.project_type,
+                        s.start_date,
+                        s.expected_completion_date,
+                        $teamLeadSelect
+                        c.client_name,
+                        c.company_name
+                    FROM sites s
+                    LEFT JOIN site_project_engineers spe ON spe.site_id = s.id
+                    LEFT JOIN clients c ON c.id = s.client_id
+                    WHERE (
+                        s.team_lead_employee_id = ?
+                        OR spe.employee_id = ?
+                    )
+                    AND s.deleted_at IS NULL
+                    ORDER BY s.project_name ASC";
+
+    $stmt = mysqli_prepare($conn, $sites_query);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "ii", $user_id, $user_id);
+    }
+} else {
+    $sites_query = "SELECT DISTINCT
+                        s.id,
+                        s.project_name,
+                        s.project_code,
+                        s.project_location,
+                        s.project_type,
+                        s.start_date,
+                        s.expected_completion_date,
+                        $teamLeadSelect
+                        c.client_name,
+                        c.company_name
+                    FROM sites s
+                    INNER JOIN site_project_engineers spe ON spe.site_id = s.id
+                    LEFT JOIN clients c ON c.id = s.client_id
+                    WHERE spe.employee_id = ?
+                    AND s.deleted_at IS NULL
+                    ORDER BY s.project_name ASC";
+
+    $stmt = mysqli_prepare($conn, $sites_query);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "i", $user_id);
+    }
+}
+
 if ($stmt) {
-    mysqli_stmt_bind_param($stmt, "i", $user_id);
     mysqli_stmt_execute($stmt);
     $sites_result = mysqli_stmt_get_result($stmt);
     $sites = mysqli_fetch_all($sites_result, MYSQLI_ASSOC);
     mysqli_stmt_close($stmt);
-    
-    // Validate preselected site belongs to this user
+
+    // Validate preselected site belongs to this user.
     if ($preselected_site_id > 0) {
         $site_valid = false;
         foreach ($sites as $site) {
-            if ($site['id'] == $preselected_site_id) {
+            if ((int)$site['id'] === (int)$preselected_site_id) {
                 $site_valid = true;
                 break;
             }
         }
+
         if (!$site_valid) {
             $preselected_site_id = 0;
             $error = "Invalid site selected or you don't have access to this site.";
@@ -188,14 +269,8 @@ if ($preselected_site_id > 0) {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-  <!-- Select2 for better dropdowns -->
-  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
   <!-- Flatpickr for date picker -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
-  <!-- DataTables -->
-  <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-  <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
 
   <!-- TEK-C Custom Styles -->
   <link href="assets/css/layout-styles.css" rel="stylesheet" />
@@ -203,172 +278,350 @@ if ($preselected_site_id > 0) {
   <link href="assets/css/footer.css" rel="stylesheet" />
   
   <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
+    :root{
+      --page-bg:#f5f7fb;
+      --card-bg:#ffffff;
+      --border:#e5e7eb;
+      --text:#111827;
+      --muted:#6b7280;
+      --soft:#f8fafc;
+      --shadow:0 10px 26px rgba(15,23,42,.055);
+      --radius:15px;
+      --blue:#2f80ed;
+      --orange:#f2994a;
+      --green:#27ae60;
+      --red:#eb5757;
+      --purple:#7c3aed;
+    }
 
-    .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:24px; height:100%; }
-    .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
-    .panel-title{ font-weight:900; font-size:20px; color:#1f2937; margin:0; display:flex; align-items:center; gap:10px; }
-    .panel-title i{ color: var(--blue); font-size:24px; }
-    .panel-menu{ width:36px; height:36px; border-radius:12px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:#6b7280; }
+    body{ background:var(--page-bg); }
 
-    .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-      padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; }
-    .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
-    .stat-ic.blue{ background: var(--blue); }
-    .stat-ic.green{ background: #10b981; }
-    .stat-ic.yellow{ background: #f59e0b; }
-    .stat-ic.red{ background: #ef4444; }
-    .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-    .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
+    .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px; }
+    .projects-wrapper{ width:100%; }
 
-    .form-section{ margin-bottom:30px; }
-    .form-section-title{ font-weight:850; font-size:16px; color:#374151; margin-bottom:16px; padding-bottom:8px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
-    .form-section-title i{ color: var(--blue); font-size:18px; }
+    .page-heading{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:14px;
+    }
 
-    .form-label{ font-weight:800; color:#4b5563; font-size:13px; margin-bottom:6px; }
-    .form-control, .form-select{ border:1px solid var(--border); border-radius:12px; padding:10px 14px; font-weight:600; color:#1f2937; background-color:#fff; }
-    .form-control:focus, .form-select:focus{ border-color: var(--blue); box-shadow:0 0 0 3px rgba(45,156,219,.15); outline:none; }
-    .form-control::placeholder{ color:#9ca3af; font-weight:500; }
+    .page-heading h1{ font-size:19px; font-weight:900; color:var(--text); margin:0; }
+    .page-heading p{ margin:3px 0 0; color:var(--muted); font-size:12px; font-weight:600; }
 
-    .required:after{ content:" *"; color: var(--red); font-weight:900; }
-
-    .btn{ padding:10px 20px; border-radius:12px; font-weight:800; font-size:14px; display:inline-flex; align-items:center; gap:8px; border:1px solid transparent; transition:all .15s; }
-    .btn-primary{ background: var(--blue); color:#fff; border-color: var(--blue); }
-    .btn-primary:hover{ background: #1f7ab0; border-color: #1f7ab0; }
-    .btn-outline-secondary{ background:#fff; border-color: var(--border); color:#4b5563; }
-    .btn-outline-secondary:hover{ background:#f3f4f6; border-color:#d1d5db; }
-
-    .btn-action {
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 7px 10px;
-      color: var(--muted);
-      font-size: 12px;
+    .primary-btn,.secondary-btn{
+      min-height:36px;
+      padding:0 14px;
+      border-radius:11px;
+      font-size:12px;
+      font-weight:900;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:7px;
       text-decoration:none;
+      white-space:nowrap;
+      border:0;
+    }
+
+    .primary-btn{ background:#111827; color:#fff; }
+    .primary-btn:hover{ background:#020617; color:#fff; }
+
+    .secondary-btn{ border:1px solid var(--border); background:#fff; color:#334155; }
+    .secondary-btn:hover{ border-color:#cbd5e1; background:#f8fafc; color:#111827; }
+
+    .panel{
+      background:var(--card-bg);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:13px;
+      margin-bottom:14px;
+    }
+
+    .panel-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+    }
+
+    .panel-title{
+      font-weight:900;
+      font-size:14px;
+      color:var(--text);
+      margin:0;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    .panel-title i{ color:var(--blue); font-size:16px; }
+    .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
+
+    .stat-card{
+      background:var(--card-bg);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:12px 13px;
+      min-height:78px;
+      display:flex;
+      align-items:center;
+      gap:11px;
+    }
+
+    .stat-ic{
+      width:38px;
+      height:38px;
+      border-radius:12px;
+      display:grid;
+      place-items:center;
+      color:#fff;
+      font-size:17px;
+      flex:0 0 auto;
+    }
+
+    .stat-ic.blue{ background:var(--blue); }
+    .stat-ic.green{ background:var(--green); }
+    .stat-ic.yellow{ background:var(--orange); }
+    .stat-ic.red{ background:var(--red); }
+
+    .stat-label{ color:var(--muted); font-weight:800; font-size:10.5px; text-transform:uppercase; }
+    .stat-value{ font-size:24px; font-weight:950; color:var(--text); line-height:1; }
+
+    .form-section{
+      border:1px solid #eef2f7;
+      background:#fff;
+      border-radius:14px;
+      padding:13px;
+      margin-bottom:13px;
+    }
+
+    .form-section-title{
+      font-weight:900;
+      font-size:13px;
+      color:#111827;
+      margin-bottom:12px;
+      padding-bottom:8px;
+      border-bottom:1px solid #eef2f7;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    .form-section-title i{ color:var(--blue); font-size:15px; }
+
+    .form-label{
+      font-size:11px;
+      font-weight:900;
+      color:#475569;
+      text-transform:uppercase;
+      margin-bottom:6px;
+    }
+
+    .form-control,.form-select{
+      min-height:38px;
+      border:1px solid var(--border);
+      border-radius:11px;
+      font-size:12px;
+      font-weight:800;
+      color:#111827;
+      padding:8px 11px;
+      background-color:#fff;
+    }
+
+    .form-control:focus,.form-select:focus{
+      border-color:#bfdbfe;
+      box-shadow:0 0 0 3px rgba(59,130,246,.10);
+    }
+
+    .form-control::placeholder{ color:#9ca3af; font-weight:600; }
+    .required:after{ content:" *"; color:var(--red); font-weight:900; }
+
+    .badge-pill{
+      border-radius:999px;
+      padding:5px 8px;
+      font-weight:900;
+      font-size:10px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      border:1px solid transparent;
+      text-decoration:none;
+      white-space:nowrap;
+    }
+
+    .mini-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .ontrack{color:#15803d;background:#dcfce7;border-color:#bbf7d0;}
+    .progressing{color:#2563eb;background:#dbeafe;border-color:#bfdbfe;}
+    .pending{color:#6d28d9;background:#ede9fe;border-color:#ddd6fe;}
+    .atrisk{color:#b91c1c;background:#fee2e2;border-color:#fecaca;}
+    .neutral{color:#475569;background:#f1f5f9;border-color:#e2e8f0;}
+
+    .btn-action{
+      min-height:32px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      background:#fff;
       display:inline-flex;
       align-items:center;
       justify-content:center;
       gap:6px;
-      font-weight: 900;
-    }
-    .btn-action:hover { background: var(--bg); color: var(--blue); }
-
-    .file-upload{ border:2px dashed var(--border); border-radius:16px; padding:20px; text-align:center; background:#f9fafb; cursor:pointer; transition:all .15s; }
-    .file-upload:hover{ border-color: var(--blue); background:#f0f9ff; }
-    .file-upload i{ font-size:32px; color:#9ca3af; margin-bottom:8px; }
-    .file-upload p{ margin:0; font-weight:700; color:#6b7280; font-size:14px; }
-    .file-upload small{ color:#9ca3af; font-weight:600; font-size:12px; }
-
-    .file-list{ margin-top:15px; }
-    .file-item{ display:flex; align-items:center; gap:10px; padding:8px 12px; background:#f3f4f6; border-radius:10px; margin-bottom:8px; }
-    .file-item i{ color: var(--blue); }
-    .file-item .file-name{ flex:1; font-weight:700; color:#374151; }
-    .file-item .file-size{ color:#6b7280; font-weight:600; font-size:12px; }
-    .file-item .remove-file{ color: var(--red); cursor:pointer; }
-
-    .info-note{ background:#f0f9ff; border:1px solid #b8e0ff; border-radius:12px; padding:12px 16px; margin-top:20px; display:flex; align-items:center; gap:12px; }
-    .info-note i{ color: var(--blue); font-size:20px; }
-    .info-note p{ margin:0; color:#1f2937; font-weight:650; font-size:13px; }
-
-    .alert { border-radius: 12px; padding: 15px 20px; margin-bottom: 20px; border: none; }
-    .alert-success { background: #d4edda; color: #155724; }
-    .alert-danger { background: #f8d7da; color: #721c24; }
-
-    /* Site info banner when preselected */
-    .site-info-banner {
-      background: #e8f0fe;
-      border: 1px solid #b8e0ff;
-      border-radius: 12px;
-      padding: 12px 16px;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .site-info-banner i {
-      color: var(--blue);
-      font-size: 20px;
-    }
-    .site-info-banner .site-name {
-      font-weight: 900;
-      color: #1f2937;
+      color:#64748b;
+      text-decoration:none;
+      transition:.15s ease;
+      font-weight:900;
+      font-size:11px;
+      padding:0 10px;
     }
 
-    /* Mobile Cards */
-    .request-card{
-      border:1px solid var(--border);
-      border-radius: 16px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-      padding: 12px;
+    .btn-action:hover{ background:#f8fafc; color:#111827; }
+
+    .file-upload{
+      border:1.5px dashed #cbd5e1;
+      border-radius:14px;
+      padding:18px;
+      text-align:center;
+      background:#f8fafc;
+      cursor:pointer;
+      transition:.15s ease;
     }
-    .request-card .top{
+
+    .file-upload:hover{ border-color:#93c5fd; background:#eff6ff; }
+    .file-upload i{ font-size:30px; color:#94a3b8; margin-bottom:8px; }
+    .file-upload p{ margin:0; font-weight:900; color:#475569; font-size:12px; }
+    .file-upload small{ color:#94a3b8; font-weight:700; font-size:10.5px; }
+
+    .file-list{ margin-top:12px; }
+    .file-item{
       display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
+      align-items:center;
+      gap:9px;
+      padding:8px 10px;
+      background:#f8fafc;
+      border:1px solid #eef2f7;
+      border-radius:11px;
+      margin-bottom:8px;
+      font-size:11px;
+    }
+
+    .file-item i{ color:var(--blue); }
+    .file-item .file-name{ flex:1; font-weight:900; color:#334155; }
+    .file-item .file-size{ color:#64748b; font-weight:800; font-size:10px; }
+    .file-item .remove-file{ color:var(--red); cursor:pointer; }
+
+    .info-note,.site-info-banner{
+      background:#eff6ff;
+      border:1px solid #bfdbfe;
+      border-radius:13px;
+      padding:11px 13px;
+      margin-top:14px;
+      display:flex;
+      align-items:center;
       gap:10px;
     }
-    .request-card .title{
-      font-weight:1000;
-      color:#111827;
-      font-size: 14px;
-      line-height:1.2;
-      margin:0;
-    }
-    .request-card .meta{
-      margin-top:6px;
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px 10px;
-      color:#6b7280;
-      font-weight:800;
-      font-size:12px;
-    }
-    .request-kv{ margin-top:10px; display:grid; gap:8px; }
-    .request-row{ display:flex; gap:10px; align-items:flex-start; }
-    .request-key{
-      flex:0 0 85px;
-      color:#6b7280;
-      font-weight:1000;
-      font-size:12px;
-    }
-    .request-val{
-      flex:1 1 auto;
-      font-weight:900;
-      color:#111827;
-      font-size:12.5px;
-      line-height:1.3;
-      word-break: break-word;
-    }
-    .request-actions{
-      margin-top:12px;
-      display:grid;
-      gap:8px;
-    }
-    .request-actions a{ width:100%; border-radius:12px; justify-content:center; }
 
-    @media (max-width: 991.98px){
-      .content-scroll{ padding:18px; }
-      .panel{ padding:18px; }
-      .main{
-        margin-left: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-      }
-      .sidebar{
-        position: fixed !important;
-        transform: translateX(-100%);
-        z-index: 1040 !important;
-      }
-      .sidebar.open, .sidebar.active, .sidebar.show{
-        transform: translateX(0) !important;
-      }
+    .info-note i,.site-info-banner i{ color:#2563eb; font-size:18px; }
+    .info-note p,.site-info-banner p{ margin:0; color:#1e293b; font-weight:750; font-size:11.5px; }
+    .site-info-banner .site-name{ font-weight:950; color:#111827; }
+
+    .compact-table-wrap{
+      width:100%;
+      border:1px solid var(--border);
+      border-radius:13px;
+      overflow:hidden;
+      background:#fff;
     }
-    @media (max-width: 768px) {
-      .content-scroll { padding: 12px 10px 12px !important; }
-      .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
-      .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
+
+    .compact-table{ width:100%; margin:0; table-layout:auto; }
+
+    .compact-table thead th{
+      background:var(--soft);
+      color:#64748b;
+      font-size:10px;
+      text-transform:uppercase;
+      font-weight:900;
+      border-bottom:1px solid var(--border)!important;
+      padding:8px 9px;
+    }
+
+    .compact-table tbody td{
+      padding:8px 9px;
+      vertical-align:middle;
+      border-color:#eef2f7;
+      color:#334155;
+      font-weight:700;
+      font-size:11.5px;
+    }
+
+    .compact-table tbody tr:hover{ background:#fbfdff; }
+    .table-primary-text{ color:#111827; font-size:11.5px; font-weight:950; }
+    .table-secondary-text{ color:#64748b; font-size:10px; font-weight:700; margin-top:2px; }
+
+    .request-card{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:#fff;
+      box-shadow:var(--shadow);
+      padding:12px;
+    }
+
+    .request-card .top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .request-card .title{ font-weight:950; color:#111827; font-size:13px; line-height:1.25; margin:0; }
+    .request-card .meta{ margin-top:6px; display:flex; flex-wrap:wrap; gap:8px 10px; color:#64748b; font-weight:750; font-size:10.5px; }
+    .request-kv{ margin-top:10px; display:grid; gap:7px; }
+    .request-row{ display:flex; gap:10px; align-items:flex-start; }
+    .request-key{ flex:0 0 78px; color:#64748b; font-weight:900; font-size:10.5px; text-transform:uppercase; }
+    .request-val{ flex:1 1 auto; font-weight:900; color:#111827; font-size:11.5px; line-height:1.3; word-break:break-word; }
+    .request-actions{ margin-top:12px; display:grid; gap:8px; }
+    .request-actions a{ width:100%; border-radius:11px; justify-content:center; }
+
+    .empty-state{
+      text-align:center;
+      padding:30px 12px;
+      color:#64748b;
+      font-size:12px;
+      font-weight:900;
+    }
+
+    .empty-state i{ display:block; font-size:34px; opacity:.45; margin-bottom:8px; }
+
+    @media(max-width:991.98px){
+      .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
+      .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
+      .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
+    }
+
+    @media(max-width:1199px){
+      .compact-table thead{ display:none; }
+      .compact-table,.compact-table tbody,.compact-table tr,.compact-table td{ display:block; width:100%; }
+      .compact-table tbody tr{ border-bottom:1px solid var(--border); padding:10px; }
+      .compact-table tbody td{
+        border:0;
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+      }
+      .compact-table tbody td::before{
+        content:attr(data-label);
+        font-size:10px;
+        font-weight:900;
+        color:#64748b;
+        text-transform:uppercase;
+        flex:0 0 100px;
+      }
+      .compact-table tbody td:first-child{ display:block; }
+      .compact-table tbody td:first-child::before{ display:none; }
+    }
+
+    @media(max-width:768px){
+      .content-scroll{ padding:12px 10px!important; }
+      .page-heading{ align-items:flex-start; flex-direction:column; }
+      .panel{ padding:12px; }
+      .primary-btn,.secondary-btn{ width:100%; }
     }
   </style>
 </head>
@@ -382,7 +635,7 @@ if ($preselected_site_id > 0) {
       <?php include 'includes/topbar.php'; ?>
 
       <div id="contentScroll" class="content-scroll">
-        <div class="container-fluid maxw">
+        <div class="container-fluid projects-wrapper px-0">
 
           <!-- Status Messages -->
           <?php if ($status && $message): ?>
@@ -405,14 +658,20 @@ if ($preselected_site_id > 0) {
           <?php endif; ?>
 
           <!-- Page Header -->
-          <div class="d-flex align-items-center justify-content-between mb-4">
+          <div class="page-heading">
             <div>
-              <h1 class="h3 fw-900 text-dark mb-1">New Quotation Request</h1>
-              <p class="text-muted fw-650 mb-0" style="font-size:14px;">Create a request for supplier quotations based on project drawings</p>
+              <h1>New Quotation Request</h1>
+              <p>Create supplier quotation request based on project drawings and requirements.</p>
             </div>
-            <div>
-              <a href="my-quotation-requests.php" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left"></i> Back to Requests
+
+            <div class="d-flex gap-2 flex-wrap">
+              <span class="badge-pill neutral">
+                <i class="bi bi-person-badge"></i>
+                <?php echo e(strtoupper(str_replace('_', ' ', $userRoleKey))); ?>
+              </span>
+              <a href="my-quotation-requests.php" class="secondary-btn">
+                <i class="bi bi-arrow-left"></i>
+                Back to Requests
               </a>
             </div>
           </div>
@@ -488,7 +747,7 @@ if ($preselected_site_id > 0) {
                       ?>
                     </select>
                     <?php if (empty($sites)): ?>
-                      <small class="text-danger">You don't have any sites assigned. Please contact admin.</small>
+                      <small class="text-danger">No projects assigned to you. TL projects are checked from sites.team_lead_employee_id and PE projects from site_project_engineers.</small>
                     <?php endif; ?>
                   </div>
                   
@@ -595,18 +854,18 @@ if ($preselected_site_id > 0) {
               <!-- Info Note -->
               <div class="info-note">
                 <i class="bi bi-info-circle-fill"></i>
-                <p>After submission, this request will be assigned to the Project Engineer (TL) who will contact dealers and obtain quotations based on the provided drawings.</p>
+                <p>After submission, this request will move to the quotation workflow for TL/QS/dealer follow-up based on the selected project.</p>
               </div>
 
               <!-- Form Actions -->
               <div class="d-flex gap-2 justify-content-end mt-4">
-                <button type="button" class="btn btn-outline-secondary" onclick="window.location.href='my-quotation-requests.php'">
+                <button type="button" class="secondary-btn" onclick="window.location.href='my-quotation-requests.php'">
                   <i class="bi bi-x-lg"></i> Cancel
                 </button>
-                <button type="submit" class="btn btn-primary" <?php echo empty($sites) ? 'disabled' : ''; ?>>
+                <button type="submit" class="primary-btn" <?php echo empty($sites) ? 'disabled' : ''; ?>>
                   <i class="bi bi-check-lg"></i> Submit Request
                 </button>
-                <button type="button" class="btn btn-outline-secondary" id="saveDraft" <?php echo empty($sites) ? 'disabled' : ''; ?>>
+                <button type="button" class="secondary-btn" id="saveDraft" <?php echo empty($sites) ? 'disabled' : ''; ?>>
                   <i class="bi bi-save"></i> Save as Draft
                 </button>
               </div>
@@ -626,9 +885,9 @@ if ($preselected_site_id > 0) {
             <div class="d-block d-md-none">
               <div class="d-grid gap-3">
                 <?php if (empty($recent_requests_list)): ?>
-                  <div class="text-center py-4 text-muted">
-                    <i class="bi bi-inbox" style="font-size: 32px;"></i>
-                    <p class="mt-2 fw-bold">No quotation requests yet</p>
+                  <div class="empty-state">
+                    <i class="bi bi-inbox"></i>
+                    No quotation requests yet
                   </div>
                 <?php else: ?>
                   <?php foreach ($recent_requests_list as $request): ?>
@@ -683,8 +942,8 @@ if ($preselected_site_id > 0) {
 
             <!-- DESKTOP/TABLET: DataTable -->
             <div class="d-none d-md-block">
-              <div class="table-responsive">
-                <table id="recentRequestsTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
+              <div class="compact-table-wrap">
+                <table id="recentRequestsTable" class="table compact-table align-middle mb-0">
                   <thead>
                     <tr>
                       <th>Request No.</th>
@@ -701,14 +960,14 @@ if ($preselected_site_id > 0) {
                     <?php if (!empty($recent_requests_list)): ?>
                       <?php foreach ($recent_requests_list as $request): ?>
                         <tr>
-                          <td><span class="fw-800"><?php echo e($request['request_no']); ?></span></td>
-                          <td><?php echo e($request['title']); ?></td>
-                          <td><?php echo e($request['project_name']); ?></td>
-                          <td><?php echo e($request['quotation_type']); ?></td>
-                          <td><?php echo safeDate($request['request_date']); ?></td>
-                          <td><?php echo getPriorityBadge($request['priority']); ?></td>
-                          <td><?php echo getStatusBadge($request['status']); ?></td>
-                          <td class="text-end">
+                          <td data-label="Request No."><span class="table-primary-text"><?php echo e($request['request_no']); ?></span></td>
+                          <td data-label="Title"><span class="table-primary-text"><?php echo e($request['title']); ?></span></td>
+                          <td data-label="Project"><?php echo e($request['project_name']); ?></td>
+                          <td data-label="Type"><?php echo e($request['quotation_type']); ?></td>
+                          <td data-label="Date"><?php echo safeDate($request['request_date']); ?></td>
+                          <td data-label="Priority"><?php echo getPriorityBadge($request['priority']); ?></td>
+                          <td data-label="Status"><?php echo getStatusBadge($request['status']); ?></td>
+                          <td data-label="Action" class="text-end">
                             <a href="view-quotation-request.php?id=<?php echo $request['id']; ?>" class="btn-action" title="View Details">
                               <i class="bi bi-eye"></i>
                             </a>
@@ -732,65 +991,46 @@ if ($preselected_site_id > 0) {
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-  <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-  <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-  <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
   
   <!-- TEK-C Custom JavaScript -->
   <script src="assets/js/sidebar-toggle.js"></script>
   
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Initialize Select2 for better dropdowns
-      $('.form-select').select2({
-        theme: 'bootstrap-5',
-        width: '100%',
-        placeholder: 'Select an option'
-      });
+      if (typeof flatpickr !== 'undefined') {
+        flatpickr(".datepicker", {
+          dateFormat: "Y-m-d",
+          allowInput: true
+        });
+      }
 
-      // Initialize Flatpickr for date pickers
-      flatpickr(".datepicker", {
-        dateFormat: "Y-m-d",
-        allowInput: true
-      });
-
-      // File upload handling
       const fileUploadArea = document.getElementById('fileUploadArea');
       const fileInput = document.getElementById('fileInput');
       const fileList = document.getElementById('fileList');
       let filesArray = [];
 
-      if (fileUploadArea) {
-        fileUploadArea.addEventListener('click', () => {
-          fileInput.click();
-        });
+      if (fileUploadArea && fileInput) {
+        fileUploadArea.addEventListener('click', () => fileInput.click());
 
         fileUploadArea.addEventListener('dragover', (e) => {
           e.preventDefault();
-          fileUploadArea.style.borderColor = 'var(--blue)';
-          fileUploadArea.style.background = '#f0f9ff';
+          fileUploadArea.style.borderColor = '#93c5fd';
+          fileUploadArea.style.background = '#eff6ff';
         });
 
         fileUploadArea.addEventListener('dragleave', () => {
-          fileUploadArea.style.borderColor = 'var(--border)';
-          fileUploadArea.style.background = '#f9fafb';
+          fileUploadArea.style.borderColor = '#cbd5e1';
+          fileUploadArea.style.background = '#f8fafc';
         });
 
         fileUploadArea.addEventListener('drop', (e) => {
           e.preventDefault();
-          fileUploadArea.style.borderColor = 'var(--border)';
-          fileUploadArea.style.background = '#f9fafb';
-          
-          const files = e.dataTransfer.files;
-          handleFiles(files);
+          fileUploadArea.style.borderColor = '#cbd5e1';
+          fileUploadArea.style.background = '#f8fafc';
+          handleFiles(e.dataTransfer.files);
         });
-      }
 
-      if (fileInput) {
         fileInput.addEventListener('change', (e) => {
           handleFiles(e.target.files);
         });
@@ -802,7 +1042,7 @@ if ($preselected_site_id > 0) {
             alert(`File ${file.name} is too large. Max size is 25MB.`);
             continue;
           }
-          
+
           filesArray.push(file);
           displayFileItem(file);
         }
@@ -810,106 +1050,60 @@ if ($preselected_site_id > 0) {
 
       function displayFileItem(file) {
         if (!fileList) return;
-        
+
         const fileItem = document.createElement('div');
         fileItem.className = 'file-item';
-        
-        const fileSize = (file.size / 1024).toFixed(1);
-        const sizeUnit = fileSize > 1024 ? 'MB' : 'KB';
-        const displaySize = fileSize > 1024 ? (fileSize / 1024).toFixed(1) : fileSize;
-        
+
+        const sizeKb = file.size / 1024;
+        const displaySize = sizeKb > 1024 ? (sizeKb / 1024).toFixed(1) : sizeKb.toFixed(1);
+        const sizeUnit = sizeKb > 1024 ? 'MB' : 'KB';
+
         fileItem.innerHTML = `
           <i class="bi bi-file-earmark"></i>
-          <span class="file-name">${file.name}</span>
+          <span class="file-name"></span>
           <span class="file-size">${displaySize} ${sizeUnit}</span>
           <i class="bi bi-x-circle remove-file"></i>
         `;
-        
+
+        fileItem.querySelector('.file-name').textContent = file.name;
         fileItem.querySelector('.remove-file').addEventListener('click', () => {
           fileItem.remove();
           filesArray = filesArray.filter(f => f.name !== file.name);
         });
-        
+
         fileList.appendChild(fileItem);
       }
 
-      // Form validation
       const form = document.getElementById('quotationRequestForm');
       if (form) {
         form.addEventListener('submit', (e) => {
-          e.preventDefault();
-          
-          // Basic validation
-          const title = form.querySelector('[name="title"]').value;
-          const type = form.querySelector('[name="quotation_type"]').value;
+          const title = form.querySelector('[name="title"]').value.trim();
+          const type = form.querySelector('[name="quotation_type"]').value.trim();
           const site = form.querySelector('[name="site_id"]').value;
-          const description = form.querySelector('[name="description"]').value;
-          
+          const description = form.querySelector('[name="description"]').value.trim();
+
           if (!title || !type || !site || !description) {
+            e.preventDefault();
             alert('Please fill in all required fields');
-            return;
           }
-          
-          // Submit form
-          form.submit();
         });
       }
 
-      // Save draft
       const saveDraftBtn = document.getElementById('saveDraft');
-      if (saveDraftBtn) {
+      if (saveDraftBtn && form) {
         saveDraftBtn.addEventListener('click', () => {
-          // Add a hidden field to indicate draft
-          const draftInput = document.createElement('input');
-          draftInput.type = 'hidden';
-          draftInput.name = 'save_as_draft';
+          let draftInput = form.querySelector('[name="save_as_draft"]');
+          if (!draftInput) {
+            draftInput = document.createElement('input');
+            draftInput.type = 'hidden';
+            draftInput.name = 'save_as_draft';
+            form.appendChild(draftInput);
+          }
           draftInput.value = '1';
-          form.appendChild(draftInput);
-          
-          // Submit as draft
           form.submit();
         });
       }
 
-      // Initialize DataTable for recent requests
-      function initRequestsTable() {
-        const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-        const tbl = document.getElementById('recentRequestsTable');
-        if (!tbl) return;
-
-        if (isDesktop) {
-          if (!$.fn.DataTable.isDataTable('#recentRequestsTable')) {
-            $('#recentRequestsTable').DataTable({
-              responsive: true,
-              autoWidth: false,
-              scrollX: false,
-              pageLength: 5,
-              lengthMenu: [[5, 10, 25, 50, -1], [5, 10, 25, 50, 'All']],
-              order: [[4, 'desc']], // Sort by date descending
-              columnDefs: [
-                { targets: [7], orderable: false, searchable: false } // Action column
-              ],
-              language: {
-                zeroRecords: "No quotation requests found",
-                info: "Showing _START_ to _END_ of _TOTAL_ requests",
-                infoEmpty: "No requests to show",
-                lengthMenu: "Show _MENU_",
-                search: "Search:"
-              }
-            });
-          }
-        } else {
-          // If resized from desktop to mobile, destroy datatable cleanly
-          if ($.fn.DataTable.isDataTable('#recentRequestsTable')) {
-            $('#recentRequestsTable').DataTable().destroy();
-          }
-        }
-      }
-
-      initRequestsTable();
-      window.addEventListener('resize', initRequestsTable);
-
-      // Set current year in footer
       const yearElement = document.getElementById("year");
       if (yearElement) {
         yearElement.textContent = new Date().getFullYear();

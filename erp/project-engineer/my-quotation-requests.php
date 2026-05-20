@@ -22,10 +22,6 @@ $empId = (int)$_SESSION['employee_id'];
 $designation = strtolower(trim((string)($_SESSION['designation'] ?? '')));
 $user_name = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? '';
 
-// Debug: Log the designation to see what's actually in the session
-error_log("User designation: " . $designation);
-error_log("User ID: " . $empId);
-error_log("User Name: " . $user_name);
 
 // ============================================================
 // Edit permission: User can edit if status is Draft OR Pending Assignment
@@ -46,30 +42,32 @@ function safeDate($v, $dash='—'){
 }
 
 function getPriorityBadge($priority) {
-    $badges = [
-        'Low' => ['bg-secondary', 'bi-arrow-down'],
-        'Medium' => ['bg-info', 'bi-dash'],
-        'High' => ['bg-warning', 'bi-arrow-up'],
-        'Urgent' => ['bg-danger', 'bi-exclamation-triangle']
+    $p = trim((string)$priority);
+    $map = [
+        'Low'    => ['neutral', 'bi-arrow-down'],
+        'Medium' => ['progressing', 'bi-dash'],
+        'High'   => ['delayed', 'bi-arrow-up'],
+        'Urgent' => ['atrisk', 'bi-exclamation-triangle']
     ];
-    $badge = $badges[$priority] ?? ['bg-secondary', 'bi-question'];
-    return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $priority . '</span>';
+    $m = $map[$p] ?? ['neutral', 'bi-question'];
+    return '<span class="badge-pill ' . $m[0] . '"><i class="bi ' . $m[1] . '"></i>' . e($p !== '' ? $p : '—') . '</span>';
 }
 
 function getStatusBadge($status) {
-    $badges = [
-        'Draft' => ['bg-secondary', 'bi-pencil'],
-        'Pending Assignment' => ['bg-warning', 'bi-clock'],
-        'Assigned' => ['bg-info', 'bi-person-check'],
-        'Quotations Received' => ['bg-primary', 'bi-file-text'],
-        'With QS' => ['bg-secondary', 'bi-arrow-right'],
-        'QS Finalized' => ['bg-success', 'bi-check-circle'],
-        'Approved' => ['bg-success', 'bi-check-circle-fill'],
-        'Rejected' => ['bg-danger', 'bi-x-circle'],
-        'Cancelled' => ['bg-dark', 'bi-x']
+    $s = trim((string)$status);
+    $map = [
+        'Draft'               => ['neutral', 'bi-pencil'],
+        'Pending Assignment'  => ['pending', 'bi-clock'],
+        'Assigned'            => ['progressing', 'bi-person-check'],
+        'Quotations Received' => ['progressing', 'bi-file-text'],
+        'With QS'             => ['pending', 'bi-arrow-right'],
+        'QS Finalized'        => ['ontrack', 'bi-check-circle'],
+        'Approved'            => ['ontrack', 'bi-check-circle-fill'],
+        'Rejected'            => ['atrisk', 'bi-x-circle'],
+        'Cancelled'           => ['delayed', 'bi-slash-circle']
     ];
-    $badge = $badges[$status] ?? ['bg-secondary', 'bi-question'];
-    return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $status . '</span>';
+    $m = $map[$s] ?? ['neutral', 'bi-info-circle'];
+    return '<span class="badge-pill ' . $m[0] . '"><i class="bi ' . $m[1] . '"></i>' . e($s !== '' ? $s : '—') . '</span>';
 }
 
 // ---------- Fetch all quotation requests for this user ----------
@@ -115,12 +113,6 @@ if (!$stmt) {
   mysqli_stmt_close($stmt);
 }
 
-// Debug: Log the number of requests found
-error_log("Found " . count($requests) . " quotation requests for user ID: " . $empId);
-if (count($requests) > 0) {
-    error_log("First request status: " . $requests[0]['status']);
-    error_log("First request title: " . $requests[0]['title']);
-}
 
 // ---------- Stats ----------
 $total_requests = count($requests);
@@ -163,572 +155,973 @@ $editable_statuses_js = json_encode($editable_statuses);
 ?>
 <!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>My Quotation Requests - TEK-C</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>My Quotation Requests - TEK-C</title>
 
-  <!-- Bootstrap 5 -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <link href="assets/css/layout-styles.css" rel="stylesheet" />
+    <link href="assets/css/topbar.css" rel="stylesheet" />
+    <link href="assets/css/footer.css" rel="stylesheet" />
 
-  <!-- DataTables (Bootstrap 5 + Responsive) -->
-  <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-  <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
-
-  <!-- TEK-C Custom Styles -->
-  <link href="assets/css/layout-styles.css" rel="stylesheet" />
-  <link href="assets/css/topbar.css" rel="stylesheet" />
-  <link href="assets/css/footer.css" rel="stylesheet" />
-
-  <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-
-    .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px 16px 12px; height:100%; }
-    .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-    .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
-    .panel-menu{ width:36px; height:36px; border-radius:12px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:#6b7280; }
-
-    .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-      padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; }
-    .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
-    .stat-ic.blue{ background: var(--blue); }
-    .stat-ic.green{ background: #10b981; }
-    .stat-ic.yellow{ background: #f59e0b; }
-    .stat-ic.red{ background: #ef4444; }
-    .stat-ic.purple{ background: #8b5cf6; }
-    .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-    .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
-
-    .table-responsive { overflow-x: hidden !important; }
-    table.dataTable { width:100% !important; }
-    .table thead th{
-      font-size: 11px; color:#6b7280; font-weight:800;
-      border-bottom:1px solid var(--border)!important;
-      padding: 10px 10px !important;
-      white-space: normal !important;
-    }
-    .table td{
-      vertical-align: middle; border-color: var(--border);
-      font-weight:650; color:#374151;
-      padding: 10px 10px !important;
-      white-space: normal !important;
-      word-break: break-word;
+    <style>
+    :root {
+        --page-bg: #f5f7fb;
+        --card-bg: #ffffff;
+        --border: #e5e7eb;
+        --text: #111827;
+        --muted: #6b7280;
+        --soft: #f8fafc;
+        --shadow: 0 10px 26px rgba(15, 23, 42, .055);
+        --radius: 15px;
     }
 
-    .btn-action {
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 7px 10px;
-      color: var(--muted);
-      font-size: 12px;
-      text-decoration:none;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:6px;
-      font-weight: 900;
-    }
-    .btn-action:hover { background: var(--bg); color: var(--blue); }
-    .btn-action.reports{
-      border-color: rgba(45,156,219,.25);
-    }
-    .btn-action.quotation{
-      border-color: rgba(16,185,129,.25);
-    }
-    .btn-action.danger{
-      border-color: rgba(239,68,68,.25);
-      color: #ef4444;
-    }
-    .btn-action.danger:hover { 
-      background: #fee2e2; 
-      color: #dc2626;
-    }
-    .btn-action.disabled, .btn-action:disabled {
-      opacity: 0.5;
-      pointer-events: none;
-      cursor: not-allowed;
+    body {
+        background: var(--page-bg);
     }
 
-    .proj-title{ font-weight:900; font-size:13px; color:#1f2937; margin-bottom:2px; line-height:1.2; }
-    .proj-sub{ font-size:11px; color:#6b7280; font-weight:700; line-height:1.25; }
-
-    .alert { border-radius: var(--radius); border:none; box-shadow: var(--shadow); margin-bottom: 20px; }
-
-    div.dataTables_wrapper .dataTables_length select,
-    div.dataTables_wrapper .dataTables_filter input{
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 7px 10px;
-      font-weight: 650;
-      outline: none;
+    .content-scroll {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 16px;
     }
-    div.dataTables_wrapper .dataTables_filter input:focus{
-      border-color: var(--blue);
-      box-shadow: 0 0 0 3px rgba(45, 156, 219, 0.1);
-    }
-    .dataTables_paginate .pagination .page-link{
-      border-radius: 10px;
-      margin: 0 3px;
-      font-weight: 750;
-    }
-    th.actions-col, td.actions-col { width: 130px !important; }
 
-    /* Role badge */
+    .projects-wrapper {
+        width: 100%;
+    }
+
+    .page-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .page-heading h1 {
+        font-size: 19px;
+        font-weight: 900;
+        color: var(--text);
+        margin: 0;
+    }
+
+    .page-heading p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .primary-btn {
+        border: 0;
+        background: #111827;
+        color: #fff;
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .primary-btn:hover {
+        background: #020617;
+        color: #fff;
+    }
+
+    .secondary-btn {
+        border: 1px solid var(--border) !important;
+        background: #fff !important;
+        color: #334155 !important;
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .secondary-btn:hover {
+        border-color: #cbd5e1 !important;
+        background: #f8fafc !important;
+        color: #111827 !important;
+    }
+
+    .export-btn {
+        background: #10b981;
+    }
+
+    .export-btn:hover {
+        background: #059669;
+    }
+
+    .stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 12px 13px;
+        min-height: 78px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .stat-ic {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 17px;
+        flex: 0 0 auto;
+    }
+
+    .blue {
+        background: #2f80ed;
+    }
+
+    .orange {
+        background: #f2994a;
+    }
+
+    .green {
+        background: #27ae60;
+    }
+
+    .red {
+        background: #eb5757;
+    }
+
+    .gray {
+        background: #64748b;
+    }
+
+    .purple {
+        background: #8b5cf6;
+    }
+
+    .stat-label {
+        color: var(--muted);
+        font-weight: 800;
+        font-size: 10.5px;
+        text-transform: uppercase;
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: 950;
+        color: #111827;
+        line-height: 1;
+    }
+
+    .panel {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 13px;
+    }
+
+    .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .panel-title {
+        font-weight: 900;
+        font-size: 14px;
+        margin: 0;
+        color: #111827;
+    }
+
+    .panel-subtitle {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+
+    .filter-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .search-box {
+        position: relative;
+        flex: 1 1 260px;
+        max-width: 430px;
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 13px;
+    }
+
+    .search-box input {
+        width: 100%;
+        height: 36px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: #fff;
+        padding: 0 12px 0 34px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text);
+        outline: none;
+    }
+
+    .search-box input:focus {
+        border-color: #bfdbfe;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+    }
+
+    .filter-select {
+        height: 36px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: #fff;
+        padding: 0 42px 0 12px;
+        font-size: 12px;
+        font-weight: 800;
+        min-width: 155px;
+    }
+
     .role-badge {
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 20px;
-      background: #f3f4f6;
-      color: #6b7280;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-weight: 900;
+        font-size: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        color: #475569;
     }
 
-    /* Debug info (visible only to admins - remove in production) */
-    .debug-info {
-      background: #fef9c3;
-      border: 1px solid #facc15;
-      border-radius: 8px;
-      padding: 8px 12px;
-      margin-bottom: 15px;
-      font-size: 12px;
-      font-family: monospace;
-      color: #854d0e;
+    .compact-table-wrap {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        overflow: hidden;
+        background: #fff;
     }
 
-    /* ---------- Mobile Cards ---------- */
-    .request-card{
-      border:1px solid var(--border);
-      border-radius: 16px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-      padding: 12px;
-    }
-    .request-card .top{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:10px;
-    }
-    .request-card .title{
-      font-weight:1000;
-      color:#111827;
-      font-size: 14px;
-      line-height:1.2;
-      margin:0;
-    }
-    .request-card .meta{
-      margin-top:6px;
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px 10px;
-      color:#6b7280;
-      font-weight:800;
-      font-size:12px;
-    }
-    .request-kv{ margin-top:10px; display:grid; gap:8px; }
-    .request-row{ display:flex; gap:10px; align-items:flex-start; }
-    .request-key{
-      flex:0 0 85px;
-      color:#6b7280;
-      font-weight:1000;
-      font-size:12px;
-    }
-    .request-val{
-      flex:1 1 auto;
-      font-weight:900;
-      color:#111827;
-      font-size:12.5px;
-      line-height:1.3;
-      word-break: break-word;
-    }
-    .request-actions{
-      margin-top:12px;
-      display:flex;
-      gap:8px;
-      justify-content:flex-end;
-    }
-    .request-actions a{ 
-      padding: 6px 12px; 
-      border-radius:10px; 
-      justify-content:center;
-      white-space: nowrap;
+    .compact-table {
+        width: 100%;
+        margin: 0;
+        table-layout: auto;
     }
 
-    @media (max-width: 991.98px){
-      .main{
-        margin-left: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-      }
-      .sidebar{
-        position: fixed !important;
-        transform: translateX(-100%);
-        z-index: 1040 !important;
-      }
-      .sidebar.open, .sidebar.active, .sidebar.show{
-        transform: translateX(0) !important;
-      }
+    .compact-table thead th {
+        background: var(--soft);
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 900;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 8px 9px;
     }
-    @media (max-width: 768px) {
-      .content-scroll { padding: 12px 10px 12px !important; }
-      .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
-      .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
-      .request-actions { flex-wrap: wrap; }
+
+    .compact-table tbody td {
+        padding: 8px 9px;
+        vertical-align: middle;
+        border-color: #eef2f7;
+        color: #334155;
+        font-weight: 700;
+        font-size: 11.5px;
     }
-  </style>
+
+    .compact-table tbody tr:hover {
+        background: #fbfdff;
+    }
+
+    .table-title-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .table-icon {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        background: #eff6ff;
+        color: #2563eb;
+        font-size: 13px;
+        flex: 0 0 auto;
+    }
+
+    .table-primary-text {
+        color: #111827;
+        font-size: 11.5px;
+        font-weight: 900;
+    }
+
+    .table-secondary-text {
+        color: #64748b;
+        font-size: 10px;
+        font-weight: 700;
+        margin-top: 1px;
+    }
+
+    .badge-pill {
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-weight: 900;
+        font-size: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        text-decoration: none;
+    }
+
+    .mini-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .ontrack {
+        color: #15803d;
+        background: #dcfce7;
+        border-color: #bbf7d0;
+    }
+
+    .progressing {
+        color: #2563eb;
+        background: #dbeafe;
+        border-color: #bfdbfe;
+    }
+
+    .pending {
+        color: #6d28d9;
+        background: #ede9fe;
+        border-color: #ddd6fe;
+    }
+
+    .atrisk {
+        color: #b91c1c;
+        background: #fee2e2;
+        border-color: #fecaca;
+    }
+
+    .delayed {
+        color: #a16207;
+        background: #fef3c7;
+        border-color: #fde68a;
+    }
+
+    .neutral {
+        color: #475569;
+        background: #f1f5f9;
+        border-color: #e2e8f0;
+    }
+
+    .action-group {
+        display: flex;
+        justify-content: flex-end;
+        gap: 5px;
+    }
+
+    .action-btn {
+        width: 27px;
+        height: 27px;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: #fff;
+        display: grid;
+        place-items: center;
+        text-decoration: none;
+    }
+
+    .view-btn {
+        color: #475569;
+        background: #f8fafc;
+    }
+
+    .edit-btn {
+        color: #2563eb;
+        background: #eff6ff;
+    }
+
+    .delete-btn {
+        color: #dc2626;
+        background: #fef2f2;
+    }
+
+    .file-btn {
+        color: #10b981;
+        background: #ecfdf5;
+    }
+
+    .empty-state {
+        text-align: center;
+        color: #64748b;
+        padding: 30px 12px;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .empty-state i {
+        font-size: 34px;
+        display: block;
+        margin-bottom: 8px;
+        opacity: .45;
+    }
+
+    .request-title {
+        max-width: 260px;
+    }
+
+    .budget-text {
+        font-weight: 900;
+        color: #111827;
+        white-space: nowrap;
+    }
+
+    .alert {
+        border-radius: var(--radius);
+        border: none;
+        box-shadow: var(--shadow);
+        margin-bottom: 14px;
+    }
+
+    .modal-content {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+    }
+
+    .modal-title {
+        font-size: 15px;
+        font-weight: 900;
+    }
+
+    @media(max-width:991.98px) {
+        .main {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        .sidebar {
+            position: fixed !important;
+            transform: translateX(-100%);
+            z-index: 1040 !important;
+        }
+
+        .sidebar.open,
+        .sidebar.active,
+        .sidebar.show {
+            transform: translateX(0) !important;
+        }
+    }
+
+    @media(max-width:1199px) {
+        .compact-table thead {
+            display: none;
+        }
+
+        .compact-table,
+        .compact-table tbody,
+        .compact-table tr,
+        .compact-table td {
+            display: block;
+            width: 100%;
+        }
+
+        .compact-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            padding: 10px;
+        }
+
+        .compact-table tbody td {
+            border: 0;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .compact-table tbody td::before {
+            content: attr(data-label);
+            font-size: 10px;
+            font-weight: 900;
+            color: #64748b;
+            text-transform: uppercase;
+            flex: 0 0 100px;
+        }
+
+        .compact-table tbody td:first-child {
+            display: block;
+        }
+
+        .compact-table tbody td:first-child::before {
+            display: none;
+        }
+
+        .request-title {
+            max-width: none;
+        }
+
+        .action-group {
+            justify-content: flex-start;
+            flex-wrap: wrap;
+        }
+    }
+
+    @media(max-width:768px) {
+        .content-scroll {
+            padding: 12px 10px 12px !important;
+        }
+
+        .page-heading {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .filter-bar {
+            align-items: stretch;
+        }
+
+        .filter-select,
+        .primary-btn,
+        .secondary-btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .search-box {
+            max-width: none;
+            width: 100%;
+            flex: 1 1 100%;
+        }
+
+        .stat-card {
+            min-height: 72px;
+        }
+    }
+    </style>
 </head>
 
 <body>
-<div class="app">
-  <?php include 'includes/sidebar.php'; ?>
-  <main class="main" aria-label="Main">
-    <?php include 'includes/topbar.php'; ?>
+    <div class="app">
+        <?php include 'includes/sidebar.php'; ?>
 
-    <div id="contentScroll" class="content-scroll">
-      <div class="container-fluid maxw">
+        <main class="main" aria-label="Main">
+            <?php include 'includes/topbar.php'; ?>
 
-        
+            <div id="contentScroll" class="content-scroll">
+                <div class="container-fluid projects-wrapper px-0">
 
-        <!-- Status Messages -->
-        <?php if ($status && $message): ?>
-          <div class="alert alert-<?php echo $status === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show" role="alert">
-            <i class="bi bi-<?php echo $status === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'; ?> me-2"></i>
-            <?php echo htmlspecialchars($message); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-        <?php endif; ?>
+                    <div class="page-heading">
+                        <div>
+                            <h1>My Quotation Requests</h1>
+                            <p>
+                                <i class="bi bi-person-badge me-1"></i>
+                                Role:
+                                <span class="role-badge">
+                                    <i class="bi bi-pencil-square"></i>
+                                    <?php echo e(getRoleDisplay($designation)); ?>
+                                </span>
+                                <span class="ms-1">Edit and delete available for draft / pending assignment only.</span>
+                            </p>
+                        </div>
 
-        <!-- Page Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
-          <div>
-            <h1 class="h3 fw-bold text-dark mb-1">My Quotation Requests</h1>
-            <p class="text-muted mb-0">
-              <i class="bi bi-person-badge me-1"></i> Your role: 
-              <span class="role-badge">
-                <i class="bi bi-pencil-square"></i>
-                <?php echo getRoleDisplay($designation); ?>
-              </span>
-              <span class="ms-2 text-success small">(You can edit and delete draft/pending requests)</span>
-            </p>
-          </div>
-          <div>
-            <a href="quotation-requests.php" class="btn btn-primary">
-              <i class="bi bi-plus-circle"></i> New Request
-            </a>
-          </div>
-        </div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a href="quotation-requests.php" class="primary-btn">
+                                <i class="bi bi-plus-circle"></i>
+                                New Request
+                            </a>
+                        </div>
+                    </div>
 
-        <!-- Stats -->
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic blue"><i class="bi bi-file-text"></i></div>
-              <div>
-                <div class="stat-label">Total Requests</div>
-                <div class="stat-value"><?php echo (int)$total_requests; ?></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic yellow"><i class="bi bi-clock-history"></i></div>
-              <div>
-                <div class="stat-label">Pending</div>
-                <div class="stat-value"><?php echo (int)$pending_count; ?></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic green"><i class="bi bi-check-circle"></i></div>
-              <div>
-                <div class="stat-label">Approved</div>
-                <div class="stat-value"><?php echo (int)$approved_count; ?></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic red"><i class="bi bi-pencil"></i></div>
-              <div>
-                <div class="stat-label">Drafts</div>
-                <div class="stat-value"><?php echo (int)$draft_count; ?></div>
-              </div>
-            </div>
-          </div>
-        </div>
+                    <?php if ($status && $message): ?>
+                    <div class="alert alert-<?php echo $status === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show"
+                        role="alert">
+                        <i
+                            class="bi bi-<?php echo $status === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'; ?> me-2"></i>
+                        <?php echo e($message); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <?php endif; ?>
 
-        <!-- Rejected Count (if any) -->
-        <?php if ($rejected_count > 0): ?>
-        <div class="row g-3 mb-3">
-          <div class="col-12">
-            <div class="stat-card">
-              <div class="stat-ic purple"><i class="bi bi-x-circle"></i></div>
-              <div>
-                <div class="stat-label">Rejected / Cancelled</div>
-                <div class="stat-value"><?php echo (int)$rejected_count; ?></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <?php endif; ?>
+                    <?php if ($success): ?>
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        <?php echo e($success); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <?php endif; ?>
 
-        <!-- Directory -->
-        <div class="panel mb-4">
-          <div class="panel-header">
-            <h3 class="panel-title">Quotation Requests</h3>
-            <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-          </div>
+                    <?php if ($error): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <?php echo e($error); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <?php endif; ?>
 
-          <!-- MOBILE: Cards -->
-          <div class="d-block d-md-none">
-            <div class="d-grid gap-3">
-              <?php if (empty($requests)): ?>
-                <div class="text-center py-4 text-muted">
-                  <i class="bi bi-inbox" style="font-size: 48px;"></i>
-                  <p class="mt-2 fw-bold">No quotation requests found</p>
-                  <a href="quotation-requests.php" class="btn btn-primary btn-sm mt-2">
-                    <i class="bi bi-plus-circle"></i> Create your first request
-                  </a>
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic blue"><i class="bi bi-file-text"></i></div>
+                                <div>
+                                    <div class="stat-label">Total Requests</div>
+                                    <div class="stat-value"><?php echo (int)$total_requests; ?></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic orange"><i class="bi bi-hourglass-split"></i></div>
+                                <div>
+                                    <div class="stat-label">Pending</div>
+                                    <div class="stat-value"><?php echo (int)$pending_count; ?></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic green"><i class="bi bi-check2-circle"></i></div>
+                                <div>
+                                    <div class="stat-label">Approved</div>
+                                    <div class="stat-value"><?php echo (int)$approved_count; ?></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic red"><i class="bi bi-pencil-square"></i></div>
+                                <div>
+                                    <div class="stat-label">Drafts</div>
+                                    <div class="stat-value"><?php echo (int)$draft_count; ?></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <?php if ($rejected_count > 0): ?>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic purple"><i class="bi bi-x-circle"></i></div>
+                                <div>
+                                    <div class="stat-label">Rejected</div>
+                                    <div class="stat-value"><?php echo (int)$rejected_count; ?></div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="panel mb-4">
+                        <div class="panel-header">
+                            <div>
+                                <h3 class="panel-title">Quotation Requests</h3>
+                                <div class="panel-subtitle">
+                                    Showing <span id="visibleCount"><?php echo count($requests); ?></span> of
+                                    <?php echo (int)$total_requests; ?> records
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="filter-bar">
+                            <div class="search-box">
+                                <i class="bi bi-search"></i>
+                                <input type="text" id="requestSearch"
+                                    placeholder="Search request no, title, project, type or status...">
+                            </div>
+
+                            <select class="filter-select" id="statusFilter">
+                                <option value="">All Status</option>
+                                <option value="draft">Draft</option>
+                                <option value="pending assignment">Pending Assignment</option>
+                                <option value="assigned">Assigned</option>
+                                <option value="quotations received">Quotations Received</option>
+                                <option value="with qs">With QS</option>
+                                <option value="qs finalized">QS Finalized</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+
+                            <select class="filter-select" id="priorityFilter">
+                                <option value="">All Priority</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
+
+                            <button type="button" class="secondary-btn" id="resetFilters">
+                                <i class="bi bi-arrow-repeat"></i>
+                                Reset
+                            </button>
+                        </div>
+
+                        <div class="compact-table-wrap">
+                            <table class="table compact-table align-middle" id="quotationRequestsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Request</th>
+                                        <th>Project</th>
+                                        <th>Type</th>
+                                        <th>Date</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Budget</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    <?php if (empty($requests)): ?>
+                                    <tr class="empty-row">
+                                        <td colspan="8">
+                                            <div class="empty-state">
+                                                <i class="bi bi-inbox"></i>
+                                                No quotation requests found.
+                                                <div class="mt-2">
+                                                    <a href="quotation-requests.php" class="primary-btn">
+                                                        <i class="bi bi-plus-circle"></i>
+                                                        Create your first request
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php else: ?>
+                                    <?php foreach ($requests as $req): ?>
+                                    <?php
+              $is_editable = in_array($req['status'], $editable_statuses, true);
+              $statusKey = strtolower(trim((string)($req['status'] ?? '')));
+              $priorityKey = strtolower(trim((string)($req['priority'] ?? '')));
+              $budget = (!empty($req['estimated_budget']) && (float)$req['estimated_budget'] > 0)
+                ? '₹ ' . number_format((float)$req['estimated_budget'], 2)
+                : '—';
+            ?>
+                                    <tr data-status="<?php echo e($statusKey); ?>"
+                                        data-priority="<?php echo e($priorityKey); ?>">
+                                        <td data-label="Request">
+                                            <div class="table-title-cell">
+                                                <div class="table-icon"><i class="bi bi-file-earmark-text"></i></div>
+                                                <div class="request-title">
+                                                    <div class="table-primary-text">
+                                                        <?php echo e($req['title'] ?? ''); ?>
+                                                    </div>
+                                                    <div class="table-secondary-text">
+                                                        <?php echo e($req['request_no'] ?? ''); ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td data-label="Project">
+                                            <div class="table-primary-text">
+                                                <?php echo e($req['project_name'] ?? ''); ?>
+                                            </div>
+                                            <div class="table-secondary-text">
+                                                <?php if (!empty($req['project_code'])): ?>
+                                                Code: <?php echo e($req['project_code']); ?>
+                                                <?php endif; ?>
+                                                <?php if (!empty($req['project_location'])): ?>
+                                                <?php echo !empty($req['project_code']) ? ' • ' : ''; ?>
+                                                <?php echo e($req['project_location']); ?>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+
+                                        <td data-label="Type">
+                                            <div class="table-primary-text">
+                                                <?php echo e($req['quotation_type'] ?? '—'); ?></div>
+                                        </td>
+
+                                        <td data-label="Date">
+                                            <div class="table-primary-text">
+                                                <?php echo e(safeDate($req['request_date'] ?? '')); ?></div>
+                                            <div class="table-secondary-text">
+                                                Created: <?php echo e(safeDate($req['created_at'] ?? '')); ?>
+                                            </div>
+                                        </td>
+
+                                        <td data-label="Priority">
+                                            <?php echo getPriorityBadge($req['priority'] ?? ''); ?>
+                                        </td>
+
+                                        <td data-label="Status">
+                                            <?php echo getStatusBadge($req['status'] ?? ''); ?>
+                                        </td>
+
+                                        <td data-label="Budget">
+                                            <span class="budget-text"><?php echo e($budget); ?></span>
+                                        </td>
+
+                                        <td data-label="Actions">
+                                            <div class="action-group">
+                                                <a href="view-quotation-request.php?id=<?php echo (int)$req['id']; ?>"
+                                                    class="action-btn view-btn" title="View Details">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+
+                                                <?php if ($is_editable): ?>
+                                                <a href="edit-quotation-request.php?id=<?php echo (int)$req['id']; ?>"
+                                                    class="action-btn edit-btn" title="Edit">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                </a>
+
+                                                <a href="javascript:void(0);"
+                                                    onclick="deleteRequest(<?php echo (int)$req['id']; ?>, '<?php echo e(addslashes($req['title'] ?? '')); ?>')"
+                                                    class="action-btn delete-btn" title="Delete">
+                                                    <i class="bi bi-trash"></i>
+                                                </a>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="table-secondary-text mt-2">
+                            <i class="bi bi-info-circle"></i>
+                            Draft and Pending Assignment requests can be edited or deleted.
+                        </div>
+                    </div>
+
                 </div>
-              <?php else: ?>
-                <?php foreach ($requests as $req): ?>
-                  <?php 
-                    // Check if this request is editable (status is in editable_statuses array)
-                    $is_editable = in_array($req['status'], $editable_statuses);
-                  ?>
-                  <div class="request-card">
-                    <div class="top">
-                      <div style="flex:1 1 auto;">
-                        <div class="d-flex align-items-center justify-content-between gap-2">
-                          <h4 class="title"><?php echo e($req['title']); ?></h4>
-                          <span class="badge <?php 
-                            $priority = $req['priority'] ?? 'Medium';
-                            if ($priority === 'Urgent') echo 'bg-danger';
-                            elseif ($priority === 'High') echo 'bg-warning';
-                            elseif ($priority === 'Medium') echo 'bg-info';
-                            else echo 'bg-secondary';
-                          ?>"><?php echo e($priority); ?></span>
-                        </div>
-                        
-                        <div class="meta">
-                          <span><i class="bi bi-building"></i> <?php echo e($req['project_name'] ?? ''); ?></span>
-                          <span><i class="bi bi-tag"></i> <?php echo e($req['quotation_type'] ?? ''); ?></span>
-                          <span class="badge bg-light text-dark">Status: <?php echo $req['status']; ?></span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="request-kv">
-                      <div class="request-row">
-                        <div class="request-key">Request No.</div>
-                        <div class="request-val fw-800"><?php echo e($req['request_no']); ?></div>
-                      </div>
-
-                      <div class="request-row">
-                        <div class="request-key">Date</div>
-                        <div class="request-val"><?php echo safeDate($req['request_date']); ?></div>
-                      </div>
-
-                      <div class="request-row">
-                        <div class="request-key">Status</div>
-                        <div class="request-val"><?php echo getStatusBadge($req['status']); ?></div>
-                      </div>
-
-                      <?php if (!empty($req['estimated_budget']) && $req['estimated_budget'] > 0): ?>
-                      <div class="request-row">
-                        <div class="request-key">Budget</div>
-                        <div class="request-val">₹ <?php echo number_format($req['estimated_budget'], 2); ?></div>
-                      </div>
-                      <?php endif; ?>
-                    </div>
-
-                    <div class="request-actions">
-                      <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action" title="View Details">
-                        <i class="bi bi-eye"></i> View
-                      </a>
-                      <?php if ($is_editable): ?>
-                        <a href="edit-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action quotation" title="Edit">
-                          <i class="bi bi-pencil"></i> Edit
-                        </a>
-                        <a href="javascript:void(0);" onclick="deleteRequest(<?php echo $req['id']; ?>, '<?php echo e($req['title']); ?>')" class="btn-action danger" title="Delete">
-                          <i class="bi bi-trash"></i> Delete
-                        </a>
-                      <?php endif; ?>
-                    </div>
-                  </div>
-                <?php endforeach; ?>
-              <?php endif; ?>
             </div>
-          </div>
 
-          <!-- DESKTOP/TABLET: DataTable -->
-          <div class="d-none d-md-block">
-            <div class="table-responsive">
-              <table id="myQuotationRequestsTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
-                <thead>
-                  <tr>
-                    <th>Request No.</th>
-                    <th>Title</th>
-                    <th>Site/Project</th>
-                    <th>Type</th>
-                    <th>Date</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Budget</th>
-                    <th class="text-end actions-col">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($requests as $req): ?>
-                  <?php 
-                    $is_editable = in_array($req['status'], $editable_statuses);
-                  ?>
-                  <tr>
-                    <td>
-                      <span class="fw-800"><?php echo e($req['request_no']); ?></span>
-                    </td>
-                    <td>
-                      <div class="proj-title"><?php echo e($req['title']); ?></div>
-                    </td>
-                    <td>
-                      <div class="proj-title"><?php echo e($req['project_name']); ?></div>
-                      <?php if (!empty($req['project_code'])): ?>
-                        <div class="proj-sub">Code: <?php echo e($req['project_code']); ?></div>
-                      <?php endif; ?>
-                    </td>
-                    <td><?php echo e($req['quotation_type']); ?></td>
-                    <td><?php echo safeDate($req['request_date']); ?></td>
-                    <td><?php echo getPriorityBadge($req['priority']); ?></td>
-                    <td><?php echo getStatusBadge($req['status']); ?></td>
-                    <td>
-                      <?php if (!empty($req['estimated_budget']) && $req['estimated_budget'] > 0): ?>
-                        <span class="fw-800">₹ <?php echo number_format($req['estimated_budget'], 2); ?></span>
-                      <?php else: ?>
-                        —
-                      <?php endif; ?>
-                    </td>
-                    <td class="text-end actions-col">
-                      <a href="view-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action" title="View Details">
-                        <i class="bi bi-eye"></i>
-                      </a>
-                      <?php if ($is_editable): ?>
-                        <a href="edit-quotation-request.php?id=<?php echo $req['id']; ?>" class="btn-action quotation" title="Edit">
-                          <i class="bi bi-pencil"></i>
-                        </a>
-                        <a href="javascript:void(0);" onclick="deleteRequest(<?php echo $req['id']; ?>, '<?php echo e($req['title']); ?>')" class="btn-action danger" title="Delete">
-                          <i class="bi bi-trash"></i>
-                        </a>
-                      <?php endif; ?>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
-                </tbody>
-              </table>
+            <?php include 'includes/footer.php'; ?>
+        </main>
+    </div>
+
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteModalLabel">Delete Quotation Request</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Are you sure you want to delete this quotation request?</p>
+                    <div class="summary-card border rounded-3 p-3 bg-light">
+                        <div class="table-primary-text" id="deleteRequestTitle"></div>
+                    </div>
+                    <p class="text-danger small mt-3 mb-0">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                    <a href="#" id="confirmDeleteBtn" class="primary-btn" style="background:#dc2626;">
+                        <i class="bi bi-trash"></i>
+                        Delete
+                    </a>
+                </div>
             </div>
-          </div>
-
         </div>
-
-      </div>
     </div>
 
-    <?php include 'includes/footer.php'; ?>
-  </main>
-</div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/sidebar-toggle.js"></script>
 
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="deleteModalLabel">Delete Quotation Request</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <p>Are you sure you want to delete this quotation request?</p>
-        <p class="fw-bold" id="deleteRequestTitle"></p>
-        <p class="text-danger small">This action cannot be undone.</p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-        <a href="#" id="confirmDeleteBtn" class="btn btn-danger">Delete</a>
-      </div>
-    </div>
-  </div>
-</div>
+    <script>
+    function deleteRequest(id, title) {
+        const titleEl = document.getElementById('deleteRequestTitle');
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
 
-<!-- JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+        if (titleEl) titleEl.innerText = title || 'Selected request';
+        if (confirmBtn) confirmBtn.href = 'delete-quotation-request.php?id=' + encodeURIComponent(id);
 
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
-
-<script src="assets/js/sidebar-toggle.js"></script>
-
-<script>
-  // Delete request function
-  function deleteRequest(id, title) {
-    document.getElementById('deleteRequestTitle').innerText = title;
-    const confirmBtn = document.getElementById('confirmDeleteBtn');
-    confirmBtn.href = 'delete-quotation-request.php?id=' + id;
-    
-    // Show modal
-    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
-    deleteModal.show();
-  }
-  
-  // Init DataTable ONLY on md+ screens
-  function initQuotationRequestsTable() {
-    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-    const tbl = document.getElementById('myQuotationRequestsTable');
-    if (!tbl) return;
-
-    if (isDesktop) {
-      if (!$.fn.DataTable.isDataTable('#myQuotationRequestsTable')) {
-        $('#myQuotationRequestsTable').DataTable({
-          responsive: true,
-          autoWidth: false,
-          scrollX: false,
-          pageLength: 10,
-          lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-          order: [[4, 'desc']], // Sort by date descending
-          columnDefs: [
-            { targets: [8], orderable: false, searchable: false } // Action column
-          ],
-          language: {
-            zeroRecords: "No quotation requests found",
-            info: "Showing _START_ to _END_ of _TOTAL_ requests",
-            infoEmpty: "No requests to show",
-            lengthMenu: "Show _MENU_",
-            search: "Search:"
-          }
-        });
-
-        setTimeout(function() {
-          $('.dataTables_filter input').focus();
-        }, 400);
-      }
-    } else {
-      if ($.fn.DataTable.isDataTable('#myQuotationRequestsTable')) {
-        $('#myQuotationRequestsTable').DataTable().destroy();
-      }
+        const modalEl = document.getElementById('deleteModal');
+        if (modalEl) {
+            const deleteModal = new bootstrap.Modal(modalEl);
+            deleteModal.show();
+        }
     }
-  }
 
-  $(function () {
-    initQuotationRequestsTable();
-    window.addEventListener('resize', initQuotationRequestsTable);
-  });
-</script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('requestSearch');
+        const statusFilter = document.getElementById('statusFilter');
+        const priorityFilter = document.getElementById('priorityFilter');
+        const resetBtn = document.getElementById('resetFilters');
+        const visibleCount = document.getElementById('visibleCount');
+        const rows = Array.from(document.querySelectorAll('#quotationRequestsTable tbody tr')).filter(row => !
+            row.classList.contains('empty-row'));
 
+        function applyFilters() {
+            const searchValue = (searchInput?.value || '').toLowerCase().trim();
+            const statusValue = (statusFilter?.value || '').toLowerCase().trim();
+            const priorityValue = (priorityFilter?.value || '').toLowerCase().trim();
+
+            let shown = 0;
+
+            rows.forEach(function(row) {
+                const rowText = row.innerText.toLowerCase();
+                const rowStatus = (row.getAttribute('data-status') || '').toLowerCase();
+                const rowPriority = (row.getAttribute('data-priority') || '').toLowerCase();
+
+                const matchesSearch = !searchValue || rowText.includes(searchValue);
+                const matchesStatus = !statusValue || rowStatus === statusValue;
+                const matchesPriority = !priorityValue || rowPriority === priorityValue;
+
+                const show = matchesSearch && matchesStatus && matchesPriority;
+                row.style.display = show ? '' : 'none';
+
+                if (show) shown++;
+            });
+
+            if (visibleCount) visibleCount.textContent = shown;
+        }
+
+        if (searchInput) searchInput.addEventListener('input', applyFilters);
+        if (statusFilter) statusFilter.addEventListener('change', applyFilters);
+        if (priorityFilter) priorityFilter.addEventListener('change', applyFilters);
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', function() {
+                if (searchInput) searchInput.value = '';
+                if (statusFilter) statusFilter.value = '';
+                if (priorityFilter) priorityFilter.value = '';
+                applyFilters();
+            });
+        }
+    });
+    </script>
 </body>
+
 </html>

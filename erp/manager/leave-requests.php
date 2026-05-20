@@ -9,237 +9,6 @@ date_default_timezone_set('Asia/Kolkata');
 $conn = get_db_connection();
 if (!$conn) { die("Database connection failed."); }
 
-
-function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-
-function tableExists($conn, string $table): bool {
-    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
-    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
-    if (!$res) return false;
-    $ok = mysqli_num_rows($res) > 0;
-    mysqli_free_result($res);
-    return $ok;
-}
-
-function columnExists($conn, string $table, string $column): bool {
-    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
-    $columnEsc = mysqli_real_escape_string($conn, $column);
-    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
-    if (!$res) return false;
-    $ok = mysqli_num_rows($res) > 0;
-    mysqli_free_result($res);
-    return $ok;
-}
-
-function employeeRoleKey(array $empRow): string {
-    $designation = strtolower(trim((string)($empRow['designation'] ?? '')));
-    $department  = strtolower(trim((string)($empRow['department'] ?? '')));
-    $userRole    = strtolower(trim((string)($_SESSION['user_role'] ?? '')));
-
-    if (str_contains($designation, 'admin') || str_contains($designation, 'administrator') || str_contains($department, 'admin') || str_contains($userRole, 'admin')) return 'admin';
-    if (str_contains($designation, 'hr') || str_contains($designation, 'human resource') || str_contains($department, 'hr') || str_contains($department, 'human resource') || str_contains($userRole, 'hr')) return 'hr';
-    if (str_contains($designation, 'manager') || str_contains($designation, 'project manager') || str_contains($userRole, 'manager')) return 'manager';
-    if (str_contains($designation, 'team lead') || str_contains($designation, 'tl') || str_contains($designation, 'lead') || str_contains($userRole, 'team lead') || str_contains($userRole, 'tl')) return 'tl';
-    if (str_contains($designation, 'project engineer') || str_contains($designation, 'engineer')) return 'project_engineer';
-    return 'employee';
-}
-
-function sendNotification($conn, int $toEmployeeId, string $title, string $message, string $module = 'leave_requests', ?int $referenceId = null, string $link = ''): bool {
-    if ($toEmployeeId <= 0 || !tableExists($conn, 'notifications')) return false;
-
-    $cols = [];
-    $vals = [];
-    $types = '';
-
-    $map = [
-        'employee_id'  => ['i', $toEmployeeId],
-        'title'        => ['s', $title],
-        'message'      => ['s', $message],
-        'type'         => ['s', 'leave'],
-        'module'       => ['s', $module],
-        'reference_id' => ['i', $referenceId],
-        'link'         => ['s', $link],
-        'is_read'      => ['i', 0],
-    ];
-
-    foreach ($map as $col => $pair) {
-        if (columnExists($conn, 'notifications', $col)) {
-            $cols[] = "`$col`";
-            $types .= $pair[0];
-            $vals[] = $pair[1];
-        }
-    }
-
-    if (!$cols) return false;
-
-    $placeholders = implode(',', array_fill(0, count($cols), '?'));
-    $sql = "INSERT INTO notifications (" . implode(',', $cols) . ") VALUES ($placeholders)";
-    $stmt = mysqli_prepare($conn, $sql);
-    if (!$stmt) return false;
-
-    mysqli_stmt_bind_param($stmt, $types, ...$vals);
-    $ok = mysqli_stmt_execute($stmt);
-    mysqli_stmt_close($stmt);
-    return $ok;
-}
-
-function logActivitySafe($conn, string $activityType, string $module, string $description, $referenceId = null, $referenceName = null, $oldData = null, $newData = null): bool {
-    if (!$conn || !tableExists($conn, 'activity_logs')) return false;
-
-    if (is_array($oldData) || is_object($oldData)) $oldData = json_encode($oldData, JSON_UNESCAPED_UNICODE);
-    if (is_array($newData) || is_object($newData)) $newData = json_encode($newData, JSON_UNESCAPED_UNICODE);
-
-    $employeeId   = $_SESSION['employee_id'] ?? $_SESSION['user_id'] ?? null;
-    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['user_name'] ?? $_SESSION['name'] ?? 'System';
-    $username     = $_SESSION['username'] ?? $_SESSION['user_name'] ?? '';
-    $designation  = $_SESSION['designation'] ?? $_SESSION['user_role'] ?? '';
-    $department   = $_SESSION['department'] ?? '';
-    $ipAddress    = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
-    $userAgent    = $_SERVER['HTTP_USER_AGENT'] ?? 'UNKNOWN';
-
-    $columns = [];
-    $values  = [];
-    $types   = '';
-
-    $map = [
-        'employee_id'    => ['i', $employeeId],
-        'employee_name'  => ['s', $employeeName],
-        'username'       => ['s', $username],
-        'designation'    => ['s', $designation],
-        'department'     => ['s', $department],
-        'activity_type'  => ['s', $activityType],
-        'action_type'    => ['s', $activityType],
-        'module'         => ['s', $module],
-        'description'    => ['s', $description],
-        'reference_id'   => ['i', $referenceId],
-        'reference_name' => ['s', $referenceName],
-        'module_id'      => ['i', $referenceId],
-        'module_name'    => ['s', $referenceName],
-        'old_data'       => ['s', $oldData],
-        'new_data'       => ['s', $newData],
-        'ip_address'     => ['s', $ipAddress],
-        'user_agent'     => ['s', $userAgent],
-        'user_id'        => ['i', $employeeId],
-        'user_name'      => ['s', $employeeName],
-        'user_role'      => ['s', $designation],
-    ];
-
-    foreach ($map as $col => $pair) {
-        if (columnExists($conn, 'activity_logs', $col)) {
-            $columns[] = "`$col`";
-            $types .= $pair[0];
-            $values[] = $pair[1];
-        }
-    }
-
-    if (!$columns) return false;
-
-    $placeholders = implode(',', array_fill(0, count($columns), '?'));
-    $stmt = mysqli_prepare($conn, "INSERT INTO activity_logs (" . implode(',', $columns) . ") VALUES ($placeholders)");
-    if (!$stmt) return false;
-
-    mysqli_stmt_bind_param($stmt, $types, ...$values);
-    $ok = mysqli_stmt_execute($stmt);
-    mysqli_stmt_close($stmt);
-    return $ok;
-}
-
-function userCanProcessLeave($conn, array $leaveData, int $currentEmployeeId, string $roleKey): bool {
-    if ($currentEmployeeId <= 0) return false;
-
-    // Admin / HR can process all leave requests.
-    if (in_array($roleKey, ['admin', 'hr'], true)) {
-        return true;
-    }
-
-    // New hierarchy columns from apply-leave.php.
-    if (array_key_exists('approver_id', $leaveData) && (int)$leaveData['approver_id'] === $currentEmployeeId) {
-        return true;
-    }
-
-    if (array_key_exists('manager_id', $leaveData) && (int)$leaveData['manager_id'] === $currentEmployeeId) {
-        return true;
-    }
-
-    // Old reporting-manager workflow fallback.
-    if (array_key_exists('reporting_to', $leaveData) && (int)$leaveData['reporting_to'] === $currentEmployeeId) {
-        return true;
-    }
-
-    // Project hierarchy fallback using leave_requests.site_id.
-    // This fixes old rows where approver_id/manager_id was not saved.
-    $siteId = (int)($leaveData['site_id'] ?? 0);
-
-    if ($siteId > 0 && tableExists($conn, 'sites')) {
-        $hasTeamLeadCol = columnExists($conn, 'sites', 'team_lead_employee_id');
-
-        $teamLeadSelect = $hasTeamLeadCol
-            ? "s.team_lead_employee_id"
-            : "NULL AS team_lead_employee_id";
-
-        $stmt = mysqli_prepare($conn, "
-            SELECT
-                s.manager_employee_id,
-                $teamLeadSelect
-            FROM sites s
-            WHERE s.id = ?
-            LIMIT 1
-        ");
-
-        if ($stmt) {
-            mysqli_stmt_bind_param($stmt, "i", $siteId);
-            mysqli_stmt_execute($stmt);
-            $res = mysqli_stmt_get_result($stmt);
-            $site = $res ? mysqli_fetch_assoc($res) : null;
-            mysqli_stmt_close($stmt);
-
-            if ($site) {
-                // TL applies leave -> Project Manager can process.
-                if ($roleKey === 'manager' && (int)($site['manager_employee_id'] ?? 0) === $currentEmployeeId) {
-                    return true;
-                }
-
-                // Project Engineer applies leave -> Project TL can process.
-                if ($roleKey === 'tl' && (int)($site['team_lead_employee_id'] ?? 0) === $currentEmployeeId) {
-                    return true;
-                }
-            }
-        }
-
-        // Fallback TL stored through site_project_engineers + employee designation.
-        if ($roleKey === 'tl' && tableExists($conn, 'site_project_engineers')) {
-            $tlStmt = mysqli_prepare($conn, "
-                SELECT spe.employee_id
-                FROM site_project_engineers spe
-                JOIN employees e ON e.id = spe.employee_id
-                WHERE spe.site_id = ?
-                  AND spe.employee_id = ?
-                  AND (
-                    LOWER(COALESCE(e.designation,'')) LIKE '%team lead%'
-                    OR LOWER(COALESCE(e.designation,'')) LIKE '%tl%'
-                    OR LOWER(COALESCE(e.designation,'')) LIKE '%lead%'
-                  )
-                LIMIT 1
-            ");
-
-            if ($tlStmt) {
-                mysqli_stmt_bind_param($tlStmt, "ii", $siteId, $currentEmployeeId);
-                mysqli_stmt_execute($tlStmt);
-                $tlRes = mysqli_stmt_get_result($tlStmt);
-                $ok = $tlRes && mysqli_fetch_assoc($tlRes);
-                mysqli_stmt_close($tlStmt);
-
-                if ($ok) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
-}
-
-
 // ---------------- AUTH (Multiple Roles) ----------------
 if (empty($_SESSION['employee_id'])) {
     header("Location: ../login.php");
@@ -263,40 +32,182 @@ if (!$current_employee) {
     die("Employee not found.");
 }
 
-// Define role-based permissions for hierarchy approval
+// ---------------- SCHEMA / ROLE HELPERS ----------------
+function tableExists($conn, string $table): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function columnExists($conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $columnEsc = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function roleKeyFromEmployee(array $emp): string {
+    $designation = strtolower(trim((string)($emp['designation'] ?? '')));
+    $department  = strtolower(trim((string)($emp['department'] ?? '')));
+
+    if (
+        str_contains($designation, 'director') ||
+        str_contains($designation, 'admin') ||
+        str_contains($designation, 'administrator') ||
+        str_contains($designation, 'vice president') ||
+        str_contains($designation, 'general manager')
+    ) return 'admin';
+
+    if (
+        str_contains($designation, 'hr') ||
+        str_contains($department, 'hr') ||
+        str_contains($department, 'human resource')
+    ) return 'hr';
+
+    if (str_contains($designation, 'manager')) return 'manager';
+
+    if (
+        str_contains($designation, 'team lead') ||
+        str_contains($designation, 'tl') ||
+        str_contains($designation, 'lead')
+    ) return 'tl';
+
+    return 'employee';
+}
+
+function sendNotification($conn, int $employeeId, string $title, string $message, string $module, int $referenceId, string $link = ''): bool {
+    if ($employeeId <= 0 || !tableExists($conn, 'notifications')) return false;
+
+    $cols = [];
+    $vals = [];
+    $types = '';
+
+    $map = [
+        'employee_id'  => ['i', $employeeId],
+        'title'        => ['s', $title],
+        'message'      => ['s', $message],
+        'type'         => ['s', 'leave'],
+        'module'       => ['s', $module],
+        'reference_id' => ['i', $referenceId],
+        'link'         => ['s', $link],
+        'is_read'      => ['i', 0],
+    ];
+
+    foreach ($map as $col => $pair) {
+        if (columnExists($conn, 'notifications', $col)) {
+            $cols[] = "`$col`";
+            $types .= $pair[0];
+            $vals[] = $pair[1];
+        }
+    }
+
+    if (!$cols) return false;
+
+    $placeholders = implode(',', array_fill(0, count($cols), '?'));
+    $stmt = mysqli_prepare($conn, "INSERT INTO notifications (" . implode(',', $cols) . ") VALUES ($placeholders)");
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$vals);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    return $ok;
+}
+
+function logActivitySafe($conn, string $activityType, string $module, string $description, $referenceId = null, $referenceName = null, $oldData = null, $newData = null): bool {
+    if (!$conn || !tableExists($conn, 'activity_logs')) return false;
+
+    if (is_array($oldData) || is_object($oldData)) $oldData = json_encode($oldData, JSON_UNESCAPED_UNICODE);
+    if (is_array($newData) || is_object($newData)) $newData = json_encode($newData, JSON_UNESCAPED_UNICODE);
+
+    $employeeId   = $_SESSION['employee_id'] ?? $_SESSION['user_id'] ?? null;
+    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['user_name'] ?? $_SESSION['name'] ?? 'System';
+    $username     = $_SESSION['username'] ?? $_SESSION['user_name'] ?? '';
+    $designation  = $_SESSION['designation'] ?? $_SESSION['user_role'] ?? '';
+    $department   = $_SESSION['department'] ?? '';
+    $ipAddress    = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+    $cols = [];
+    $vals = [];
+    $types = '';
+
+    $map = [
+        'employee_id'    => ['i', $employeeId],
+        'employee_name'  => ['s', $employeeName],
+        'username'       => ['s', $username],
+        'designation'    => ['s', $designation],
+        'department'     => ['s', $department],
+        'activity_type'  => ['s', $activityType],
+        'action_type'    => ['s', $activityType],
+        'module'         => ['s', $module],
+        'description'    => ['s', $description],
+        'reference_id'   => ['i', $referenceId],
+        'reference_name' => ['s', $referenceName],
+        'module_id'      => ['i', $referenceId],
+        'module_name'    => ['s', $referenceName],
+        'old_data'       => ['s', $oldData],
+        'new_data'       => ['s', $newData],
+        'ip_address'     => ['s', $ipAddress],
+    ];
+
+    foreach ($map as $col => $pair) {
+        if (columnExists($conn, 'activity_logs', $col)) {
+            $cols[] = "`$col`";
+            $types .= $pair[0];
+            $vals[] = $pair[1];
+        }
+    }
+
+    if (!$cols) return false;
+
+    $placeholders = implode(',', array_fill(0, count($cols), '?'));
+    $stmt = mysqli_prepare($conn, "INSERT INTO activity_logs (" . implode(',', $cols) . ") VALUES ($placeholders)");
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$vals);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    return $ok;
+}
+
+function canProcessLeave(array $leave, int $currentEmployeeId, string $roleKey): bool {
+    if ($currentEmployeeId <= 0) return false;
+
+    // Current DB workflow: leave_requests.approver_id is the assigned approver.
+    if (isset($leave['approver_id']) && (int)$leave['approver_id'] === $currentEmployeeId) {
+        return true;
+    }
+
+    // HR/Admin can process all as final fallback.
+    if (in_array($roleKey, ['admin', 'hr'], true)) {
+        return true;
+    }
+
+    return false;
+}
+
+// Define role-based permissions using current employee table.
 $designation = strtolower(trim($current_employee['designation'] ?? ''));
 $department = strtolower(trim($current_employee['department'] ?? ''));
-$currentRoleKey = employeeRoleKey($current_employee ?: []);
+$currentRoleKey = roleKeyFromEmployee($current_employee ?: []);
 
 $isAdmin = ($currentRoleKey === 'admin');
 $isHr = ($currentRoleKey === 'hr');
-$isTl = ($currentRoleKey === 'tl');
 $isManager = ($currentRoleKey === 'manager');
+$isTl = ($currentRoleKey === 'tl');
 
-// Get reporting employees for fallback / old records
-$reporting_employees = [];
-if (($isManager || $isTl) && !$isHr && !$isAdmin) {
-    $reporting_stmt = mysqli_prepare($conn, "SELECT id FROM employees WHERE reporting_to = ?");
-    mysqli_stmt_bind_param($reporting_stmt, "i", $current_employee_id);
-    mysqli_stmt_execute($reporting_stmt);
-    $reporting_res = mysqli_stmt_get_result($reporting_stmt);
-    while ($row = mysqli_fetch_assoc($reporting_res)) {
-        $reporting_employees[] = (int)$row['id'];
-    }
-    mysqli_stmt_close($reporting_stmt);
-}
-
-// TL, Manager, HR, Admin can access this approval page.
-$canApprove = ($isAdmin || $isHr || $isTl || $isManager);
+$canApprove = ($isAdmin || $isHr || $isManager || $isTl);
 
 if (!$canApprove) {
     $_SESSION['flash_error'] = "You don't have permission to access this page.";
     header("Location: ../dashboard.php");
     exit;
 }
-
-$hasApproverIdCol = columnExists($conn, 'leave_requests', 'approver_id');
-$hasSiteIdCol = columnExists($conn, 'leave_requests', 'site_id');
 
 // ---------------- HANDLE APPROVAL/REJECTION ----------------
 $action_message = '';
@@ -327,24 +238,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['leave_action'])) {
             
             if ($leave_data) {
                 // Check if user has permission to approve/reject this specific leave
-                $hasPermission = false;
-                
-                if ($isAdmin || $isHr) {
-                    // Admin/HR can approve any leave
-                    $hasPermission = true;
-                } elseif ($isManager) {
-                    // Manager can only approve leaves of their reporting employees
-                    if ($leave_data['reporting_to'] == $current_employee_id) {
-                        $hasPermission = true;
-                    } else {
-                        // Check if employee is in reporting list
-                        $reporting_check = in_array($leave_data['employee_id'], $reporting_employees);
-                        if ($reporting_check) {
-                            $hasPermission = true;
-                        }
-                    }
-                }
-                
+                $hasPermission = canProcessLeave($leave_data, (int)$current_employee_id, $currentRoleKey);
+
                 if (!$hasPermission) {
                     $action_message = "You don't have permission to process this leave request.";
                     $action_message_type = "danger";
@@ -443,8 +338,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action'])) {
                 continue;
             }
             
-            $hasPermission = userCanProcessLeave($conn, $row, (int)$current_employee_id, $currentRoleKey);
-            
+            $hasPermission = canProcessLeave($row, (int)$current_employee_id, $currentRoleKey);
+
             if ($hasPermission) {
                 $valid_ids[] = $row['id'];
             } else {
@@ -544,29 +439,9 @@ $query = "
 ";
 
 // Add permission restrictions based on role.
-// TL / Manager should see hierarchy-routed requests assigned to them.
-// HR / Admin can see all.
+// Current DB: leave_requests.approver_id stores assigned approver.
 if (!$isAdmin && !$isHr) {
-    $permissionParts = [];
-
-    if ($hasApproverIdCol) {
-        $permissionParts[] = "lr.approver_id = {$current_employee_id}";
-    }
-
-    if (columnExists($conn, 'leave_requests', 'manager_id')) {
-        $permissionParts[] = "lr.manager_id = {$current_employee_id}";
-    }
-
-    // Backward compatibility for old reporting_to based records.
-    $permissionParts[] = "e.reporting_to = {$current_employee_id}";
-
-    if (!empty($reporting_employees)) {
-        $reporting_ids = implode(',', array_map('intval', $reporting_employees));
-        $permissionParts[] = "e.id IN ({$reporting_ids})";
-        $permissionParts[] = "lr.employee_id IN ({$reporting_ids})";
-    }
-
-    $query .= " AND (" . implode(" OR ", $permissionParts) . ")";
+    $query .= " AND lr.approver_id = " . (int)$current_employee_id;
 }
 
 // Apply filters
@@ -622,24 +497,7 @@ if ($result) {
 // Get statistics with permission restrictions
 $stats_condition = "";
 if (!$isAdmin && !$isHr) {
-    $statsParts = [];
-
-    if ($hasApproverIdCol) {
-        $statsParts[] = "lr.approver_id = {$current_employee_id}";
-    }
-
-    if (columnExists($conn, 'leave_requests', 'manager_id')) {
-        $statsParts[] = "lr.manager_id = {$current_employee_id}";
-    }
-
-    $statsParts[] = "e.reporting_to = {$current_employee_id}";
-
-    if (!empty($reporting_employees)) {
-        $reporting_ids = implode(',', array_map('intval', $reporting_employees));
-        $statsParts[] = "e.id IN ({$reporting_ids})";
-    }
-
-    $stats_condition = " AND (" . implode(" OR ", $statsParts) . ")";
+    $stats_condition = " AND lr.approver_id = " . (int)$current_employee_id;
 }
 
 $stats_query = "
@@ -675,13 +533,12 @@ $employees_query = "
     WHERE employee_status = 'active'
 ";
 
-if (!$isAdmin && !$isHr && ($isManager || $isTl)) {
-    if (!empty($reporting_employees)) {
-        $reporting_ids = implode(',', array_map('intval', $reporting_employees));
-        $employees_query .= " AND (reporting_to = {$current_employee_id} OR id IN ({$reporting_ids}))";
-    } else {
-        $employees_query .= " AND reporting_to = {$current_employee_id}";
-    }
+if (!$isAdmin && !$isHr) {
+    $employees_query .= " AND id IN (
+        SELECT DISTINCT employee_id
+        FROM leave_requests
+        WHERE approver_id = " . (int)$current_employee_id . "
+    )";
 }
 
 $employees_query .= " ORDER BY full_name";
@@ -722,15 +579,15 @@ function safeDateTime($v, $dash='—'){
 function getStatusBadge($status) {
     switch($status) {
         case 'Approved':
-            return '<span class="badge bg-success px-3 py-2"><i class="bi bi-check-circle"></i> Approved</span>';
+            return '<span class="badge-pill ontrack"><span class="mini-dot"></span> Approved</span>';
         case 'Rejected':
-            return '<span class="badge bg-danger px-3 py-2"><i class="bi bi-x-circle"></i> Rejected</span>';
+            return '<span class="badge-pill atrisk"><span class="mini-dot"></span> Rejected</span>';
         case 'Pending':
-            return '<span class="badge bg-warning text-dark px-3 py-2"><i class="bi bi-clock"></i> Pending</span>';
+            return '<span class="badge-pill pending"><span class="mini-dot"></span> Pending</span>';
         case 'Cancelled':
-            return '<span class="badge bg-secondary px-3 py-2"><i class="bi bi-x"></i> Cancelled</span>';
+            return '<span class="badge-pill neutral"><span class="mini-dot"></span> Cancelled</span>';
         default:
-            return '<span class="badge bg-light text-dark px-3 py-2">' . e($status) . '</span>';
+            return '<span class="badge-pill neutral">' . e($status) . '</span>';
     }
 }
 
@@ -808,19 +665,37 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
             gap:7px;
             text-decoration:none;
             white-space:nowrap;
+            border:0;
         }
 
-        .primary-btn{ border:0; background:#111827; color:#fff; }
+        .primary-btn{ background:#111827; color:#fff; }
         .primary-btn:hover{ background:#020617; color:#fff; }
-
         .secondary-btn{ border:1px solid var(--border); background:#fff; color:#334155; }
         .secondary-btn:hover{ border-color:#cbd5e1; background:#f8fafc; color:#111827; }
-
-        .success-btn{ border:0; background:#16a34a; color:#fff; }
+        .success-btn{ background:#16a34a; color:#fff; }
         .success-btn:hover{ background:#15803d; color:#fff; }
-
-        .danger-btn{ border:0; background:#dc2626; color:#fff; }
+        .danger-btn{ background:#dc2626; color:#fff; }
         .danger-btn:hover{ background:#b91c1c; color:#fff; }
+
+        .panel,.filter-card{
+            background:var(--card-bg);
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:13px;
+            margin-bottom:14px;
+        }
+
+        .panel-header{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:12px;
+        }
+
+        .panel-title{ font-weight:900; font-size:14px; margin:0; color:var(--text); }
+        .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
 
         .stat-card{
             background:var(--card-bg);
@@ -855,39 +730,9 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
         .green{background:#27ae60;}
         .red{background:#eb5757;}
         .purple{background:#8b5cf6;}
-        .gray{background:#64748b;}
 
         .stat-label{ color:var(--muted); font-weight:800; font-size:10.5px; text-transform:uppercase; }
         .stat-value{ font-size:24px; font-weight:950; color:var(--text); line-height:1; }
-
-        .panel{
-            background:var(--card-bg);
-            border:1px solid var(--border);
-            border-radius:var(--radius);
-            box-shadow:var(--shadow);
-            padding:13px;
-            margin-bottom:14px;
-        }
-
-        .panel-header{
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap:12px;
-            margin-bottom:12px;
-        }
-
-        .panel-title{ font-weight:900; font-size:14px; margin:0; color:var(--text); }
-        .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
-
-        .filter-card{
-            background:#fff;
-            border:1px solid var(--border);
-            border-radius:var(--radius);
-            box-shadow:var(--shadow);
-            padding:13px;
-            margin-bottom:14px;
-        }
 
         .form-label{
             font-size:11px;
@@ -1111,8 +956,15 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                 <!-- Page Header -->
                 <div class="page-heading">
                     <div>
-                        <h1>Leave Requests Management</h1>
-                        <p>Review and manage leave requests using hierarchy workflow: PE → TL, TL → Manager, Manager/HR → Admin.</p>
+                        <h1>
+                            Leave Requests Management
+                            <?php if ($pending_count > 0): ?>
+                                <span class="badge-pill pending ms-2">
+                                    <span class="mini-dot"></span><?= $pending_count ?> Pending
+                                </span>
+                            <?php endif; ?>
+                        </h1>
+                        <p>Review and manage leave requests using current DB workflow: approver_id based approval.</p>
                     </div>
 
                     <div class="d-flex gap-2 flex-wrap">
@@ -1131,17 +983,6 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                         <button class="primary-btn" onclick="window.print()">
                             <i class="bi bi-printer"></i>
                             Print
-                        </button>
-                    </div>
-                </div>
-                    <div class="d-flex gap-2">
-                        <?php if ($isAdmin || $isHr): ?>
-                        <button class="btn btn-outline-primary" onclick="exportToExcel()">
-                            <i class="bi bi-file-excel"></i> Export
-                        </button>
-                        <?php endif; ?>
-                        <button class="secondary-btn" onclick="window.print()">
-                            <i class="bi bi-printer"></i> Print
                         </button>
                     </div>
                 </div>
@@ -1270,11 +1111,9 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                                 <i class="bi bi-list-ul me-2"></i>
                                 Leave Requests
                             </h5>
-                            <div class="panel-subtitle">Filtered requests based on your approval permission</div>
+                            <div class="panel-subtitle">Filtered requests assigned by approver_id</div>
                         </div>
-                        <span class="badge-pill neutral">
-                            <?= count($leave_requests) ?> Records
-                        </span>
+                        <span class="badge-pill neutral"><?= count($leave_requests) ?> Records</span>
                     </div>
 
                     <!-- Desktop Table View -->
@@ -1322,8 +1161,8 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                                                         <?php endif; ?>
                                                     </div>
                                                     <div>
-                                                        <div class="fw-bold"><?= e($request['full_name']) ?></div>
-                                                        <small class="text-muted"><?= e($request['employee_code']) ?></small>
+                                                        <div class="table-primary-text"><?= e($request['full_name']) ?></div>
+                                                        <div class="table-secondary-text"><?= e($request['employee_code']) ?></div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -1364,7 +1203,7 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                                                     
                                                     <?php 
                                                     // Check if user can approve this specific request
-                                                    $canApproveThis = userCanProcessLeave($conn, $request, (int)$current_employee_id, $currentRoleKey);
+                                                    $canApproveThis = canProcessLeave($request, (int)$current_employee_id, $currentRoleKey);
                                                     
                                                     if ($canApproveThis): 
                                                     ?>
@@ -1385,82 +1224,7 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                         </table>
                     </div>
 
-                    <!-- Mobile Card View -->
-                    <div class="d-block d-lg-none">
-                        <?php if (empty($leave_requests)): ?>
-                            <div class="text-center text-muted py-4">
-                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                                No leave requests found.
-                            </div>
-                        <?php else: ?>
-                            <?php foreach ($leave_requests as $request): ?>
-                                <div class="leave-card">
-                                    <div class="d-flex justify-content-between align-items-start mb-2">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="employee-avatar" style="width:32px;height:32px;">
-                                                <?php if (!empty($request['employee_photo'])): ?>
-                                                    <img src="<?= e($request['employee_photo']) ?>" alt="<?= e($request['full_name']) ?>" style="width:32px;height:32px;">
-                                                <?php else: ?>
-                                                    <?= getInitials($request['full_name']) ?>
-                                                <?php endif; ?>
-                                            </div>
-                                            <div>
-                                                <div class="fw-bold"><?= e($request['full_name']) ?></div>
-                                                <small class="text-muted"><?= e($request['employee_code']) ?></small>
-                                            </div>
-                                        </div>
-                                        <?= getStatusBadge($request['status']) ?>
                                     </div>
-                                    
-                                    <div class="row g-2 mb-2">
-                                        <div class="col-6">
-                                            <small class="text-muted">Type:</small>
-                                            <div><?= e($request['leave_type']) ?></div>
-                                        </div>
-                                        <div class="col-6">
-                                            <small class="text-muted">Days:</small>
-                                            <div><span class="days-badge"><?= $request['total_days'] ?> days</span></div>
-                                        </div>
-                                        <div class="col-12">
-                                            <small class="text-muted">Period:</small>
-                                            <div><?= safeDate($request['from_date']) ?> - <?= safeDate($request['to_date']) ?></div>
-                                        </div>
-                                        <div class="col-12">
-                                            <small class="text-muted">Reason:</small>
-                                            <div><?= e(substr($request['reason'], 0, 50)) ?>...</div>
-                                        </div>
-                                        <?php if ($request['status'] !== 'Pending'): ?>
-                                        <div class="col-12">
-                                            <small class="text-muted">Approver:</small>
-                                            <div><?= getApproverInfo($request) ?></div>
-                                        </div>
-                                        <?php endif; ?>
-                                    </div>
-                                    
-                                    <?php if ($status_filter === 'pending'): ?>
-                                    <div class="d-flex gap-2 justify-content-end mt-2">
-                                        <button class="btn btn-sm btn-outline-secondary" onclick="viewDetails(<?= $request['id'] ?>)">
-                                            <i class="bi bi-eye"></i> View
-                                        </button>
-                                        <?php 
-                                        $canApproveThis = userCanProcessLeave($conn, $request, (int)$current_employee_id, $currentRoleKey);
-                                        
-                                        if ($canApproveThis): 
-                                        ?>
-                                            <button class="btn btn-sm btn-success" onclick="openApproveModal(<?= $request['id'] ?>, '<?= e($request['full_name']) ?>')">
-                                                <i class="bi bi-check-lg"></i> Approve
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" onclick="openRejectModal(<?= $request['id'] ?>, '<?= e($request['full_name']) ?>')">
-                                                <i class="bi bi-x-lg"></i> Reject
-                                            </button>
-                                        <?php endif; ?>
-                                    </div>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
 
             </div>
         </div>
@@ -1591,7 +1355,6 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize tooltips
     if (window.bootstrap) {
         document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
             new bootstrap.Tooltip(el);
@@ -1654,26 +1417,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// View Details
 function viewDetails(id) {
     window.location.href = 'leave-details.php?id=' + id;
 }
 
-// Open Approve Modal
 function openApproveModal(id, employeeName) {
     document.getElementById('approve_leave_id').value = id;
     document.getElementById('approve_employee_name').textContent = employeeName;
     new bootstrap.Modal(document.getElementById('approveModal')).show();
 }
 
-// Open Reject Modal
 function openRejectModal(id, employeeName) {
     document.getElementById('reject_leave_id').value = id;
     document.getElementById('reject_employee_name').textContent = employeeName;
     new bootstrap.Modal(document.getElementById('rejectModal')).show();
 }
 
-// Bulk Approve
 function bulkApprove() {
     const selected = document.querySelectorAll('.row-select:checked');
     if (selected.length === 0) {
@@ -1705,7 +1464,6 @@ function bulkApprove() {
     }
 }
 
-// Bulk Reject
 function bulkReject() {
     const selected = document.querySelectorAll('.row-select:checked');
     if (selected.length === 0) {
@@ -1728,17 +1486,14 @@ function bulkReject() {
     new bootstrap.Modal(document.getElementById('bulkRejectModal')).show();
 }
 
-// Clear Selection
 function clearSelection() {
     document.querySelectorAll('.row-select').forEach(cb => cb.checked = false);
     if (typeof updateBulkSelection === 'function') updateBulkSelection();
 }
 
-// Export to Excel
 function exportToExcel() {
     const rows = document.querySelectorAll('#leaveTable tbody tr');
     const csv = [];
-
     const headers = ['Employee', 'Leave Type', 'From Date', 'To Date', 'Days', 'Reason', 'Applied On', 'Status'];
     csv.push(headers.join(','));
 
@@ -1756,7 +1511,7 @@ function exportToExcel() {
             const fromDate = period.split('to')[0]?.trim() || '';
             const toDate = period.split('to')[1]?.trim() || '';
 
-            const rowData = [
+            csv.push([
                 '"' + employee.replace(/"/g, '""') + '"',
                 '"' + leaveType.replace(/"/g, '""') + '"',
                 '"' + fromDate.replace(/"/g, '""') + '"',
@@ -1765,13 +1520,11 @@ function exportToExcel() {
                 '"' + reason.replace(/"/g, '""') + '"',
                 '"' + appliedOn.replace(/"/g, '""') + '"',
                 '"' + status.replace(/"/g, '""') + '"'
-            ];
-            csv.push(rowData.join(','));
+            ].join(','));
         }
     });
 
-    const csvString = csv.join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(["\uFEFF" + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
