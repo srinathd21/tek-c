@@ -1,10 +1,10 @@
 <?php
-// project-engineer/includes/topbar.php
-// Updated UI/template to match working manager-panel topbar.
+// admin/includes/topbar.php
 // IMPORTANT: Do NOT call session_start() here.
 // session_start() must be in the main page before any output.
 
 require_once __DIR__ . '/db-config.php';
+require_once __DIR__ . '/notification-helper.php';
 
 if (!function_exists('e')) {
   function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
@@ -48,6 +48,7 @@ if ($employeeId > 0 && (trim($loggedEmail) === '' || trim($loggedPhoto) === '' |
       $res = mysqli_stmt_get_result($st);
 
       if ($row = mysqli_fetch_assoc($res)) {
+
         if (trim($loggedName) === '' || $loggedName === 'User') {
           $loggedName = $row['full_name'] ?: $loggedName;
           $_SESSION['employee_name'] = $loggedName;
@@ -100,10 +101,24 @@ if (trim($loggedPhoto) !== '') {
 
 $avatarText = initials($loggedName);
 
-// Project engineer panel routes.
-// Keep these inside current folder unless your project-engineer panel is nested differently.
-$logoutUrl = 'logout.php';
-$profileUrl = 'my-profile.php';
+// ---- Notifications for logged employee ----
+$topbarNotifications = [];
+$topbarUnreadCount = 0;
+
+if ($employeeId > 0) {
+  $conn = get_db_connection();
+
+  if ($conn) {
+    $topbarUnreadCount = getUnreadNotificationCount($conn, $employeeId);
+    $topbarNotifications = getEmployeeNotifications($conn, $employeeId, 5);
+    mysqli_close($conn);
+  }
+}
+
+// logout for pages under admin folder:
+$logoutUrl = '../logout.php';
+// If logout.php is inside admin folder, use:
+// $logoutUrl = 'logout.php';
 ?>
 
 <!-- Topbar -->
@@ -112,6 +127,7 @@ $profileUrl = 'my-profile.php';
     <button id="menuBtn" class="hamburger" aria-label="Toggle sidebar" title="Toggle sidebar">
       <i class="bi bi-list"></i>
     </button>
+
   </div>
 
   <div class="top-right">
@@ -120,51 +136,56 @@ $profileUrl = 'my-profile.php';
     <div class="topbar-dropdown-wrap">
       <button id="notificationBtn" class="icon-btn notification-btn" aria-label="Notifications" title="Notifications" type="button">
         <i class="bi bi-bell"></i>
-        <span class="notify-dot"></span>
+        <?php if ($topbarUnreadCount > 0): ?>
+          <span class="notify-dot"></span>
+        <?php endif; ?>
       </button>
 
       <div id="notificationDropdown" class="topbar-dropdown notification-dropdown">
         <div class="dropdown-head">
           <div>
             <div class="dropdown-title">Notifications</div>
-            <div class="dropdown-subtitle">Latest updates</div>
+            <div class="dropdown-subtitle">Latest messages for you</div>
           </div>
-          <span class="dropdown-count">3</span>
+          <span class="dropdown-count"><?php echo (int)$topbarUnreadCount; ?></span>
         </div>
 
         <div class="notification-list">
-          <a href="my-sites.php" class="notification-item">
-            <div class="notification-icon blue">
-              <i class="bi bi-kanban"></i>
+          <?php if (!empty($topbarNotifications)): ?>
+            <?php foreach ($topbarNotifications as $notification): ?>
+              <?php
+                [$iconColor, $iconName] = notificationIconClass($notification['module'] ?? '', $notification['type'] ?? '');
+                $notificationLink = trim((string)($notification['link'] ?? ''));
+                if ($notificationLink === '') {
+                  $notificationLink = 'notifications.php';
+                }
+                $isUnread = isset($notification['is_read']) && (int)$notification['is_read'] === 0;
+              ?>
+              <a href="<?php echo e($notificationLink); ?>"
+                 class="notification-item <?php echo $isUnread ? 'unread' : ''; ?>">
+                <div class="notification-icon <?php echo e($iconColor); ?>">
+                  <i class="bi <?php echo e($iconName); ?>"></i>
+                </div>
+                <div class="notification-content">
+                  <div class="notification-title">
+                    <?php echo e($notification['title'] ?? 'Notification'); ?>
+                  </div>
+                  <div class="notification-text">
+                    <?php echo e($notification['message'] ?? ''); ?>
+                  </div>
+                  <div class="notification-time">
+                    <?php echo e(notificationTimeAgo($notification['created_at'] ?? '')); ?>
+                  </div>
+                </div>
+              </a>
+            <?php endforeach; ?>
+          <?php else: ?>
+            <div class="notification-empty">
+              <i class="bi bi-bell"></i>
+              <div>No notifications</div>
+              <small>New messages will appear here.</small>
             </div>
-            <div class="notification-content">
-              <div class="notification-title">Project update</div>
-              <div class="notification-text">A project update is available for your assigned site.</div>
-              <div class="notification-time">2 min ago</div>
-            </div>
-          </a>
-
-          <a href="today-tasks.php" class="notification-item">
-            <div class="notification-icon green">
-              <i class="bi bi-check2-square"></i>
-            </div>
-            <div class="notification-content">
-              <div class="notification-title">Today report reminder</div>
-              <div class="notification-text">Please update today’s task/report status.</div>
-              <div class="notification-time">15 min ago</div>
-            </div>
-          </a>
-
-          <a href="apply-leave.php" class="notification-item">
-            <div class="notification-icon orange">
-              <i class="bi bi-calendar2-x"></i>
-            </div>
-            <div class="notification-content">
-              <div class="notification-title">HR update</div>
-              <div class="notification-text">Leave and attendance updates are available.</div>
-              <div class="notification-time">1 hour ago</div>
-            </div>
-          </a>
+          <?php endif; ?>
         </div>
 
         <div class="dropdown-footer">
@@ -214,7 +235,7 @@ $profileUrl = 'my-profile.php';
         </div>
 
         <div class="profile-menu">
-          <a href="<?php echo e($profileUrl); ?>" class="profile-menu-item">
+          <a href="my-profile.php" class="profile-menu-item">
             <i class="bi bi-person"></i>
             <span>My Profile</span>
           </a>
@@ -229,12 +250,12 @@ $profileUrl = 'my-profile.php';
             <span>Apply Leave</span>
           </a>
 
-          <a href="settings.php" class="profile-menu-item">
+          <!-- <a href="settings.php" class="profile-menu-item">
             <i class="bi bi-gear"></i>
             <span>Settings</span>
-          </a>
+          </a> -->
 
-          <a href="<?php echo e($logoutUrl); ?>"
+          <a href="logout.php"
              class="profile-menu-item logout-item"
              onclick="return confirm('Do you want to logout?');">
             <i class="bi bi-box-arrow-right"></i>
@@ -357,6 +378,44 @@ $profileUrl = 'my-profile.php';
 
   .notification-item:hover {
     background: #f8fafc;
+  }
+
+  .notification-item.unread {
+    background: #f8fbff;
+  }
+
+  .notification-item.unread .notification-title::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    background: #2563eb;
+    border-radius: 999px;
+    display: inline-block;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .notification-empty {
+    padding: 24px 14px;
+    text-align: center;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 850;
+  }
+
+  .notification-empty i {
+    display: block;
+    font-size: 28px;
+    opacity: .45;
+    margin-bottom: 7px;
+  }
+
+  .notification-empty small {
+    display: block;
+    margin-top: 2px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #94a3b8;
   }
 
   .notification-icon {
