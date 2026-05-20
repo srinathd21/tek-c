@@ -128,6 +128,178 @@ if (!function_exists('logActivityCurrentDb')) {
     }
 }
 
+
+if (!function_exists('qrTableExists')) {
+    function qrTableExists($conn, string $table): bool {
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+        $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+        if (!$res) return false;
+        $ok = mysqli_num_rows($res) > 0;
+        mysqli_free_result($res);
+        return $ok;
+    }
+}
+
+if (!function_exists('qrColumnExists')) {
+    function qrColumnExists($conn, string $table, string $column): bool {
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+        $columnEsc = mysqli_real_escape_string($conn, $column);
+        $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
+        if (!$res) return false;
+        $ok = mysqli_num_rows($res) > 0;
+        mysqli_free_result($res);
+        return $ok;
+    }
+}
+
+if (!function_exists('createQuotationNotification')) {
+    function createQuotationNotification(
+        $conn,
+        int $employeeId,
+        string $title,
+        string $message,
+        int $requestId,
+        string $link = 'assigned-quotations.php'
+    ): bool {
+        if ($employeeId <= 0 || !$conn || !qrTableExists($conn, 'notifications')) {
+            return false;
+        }
+
+        $columns = [];
+        $placeholders = [];
+        $types = '';
+        $values = [];
+
+        $map = [
+            'employee_id'  => ['i', $employeeId],
+            'title'        => ['s', $title],
+            'message'      => ['s', $message],
+            'type'         => ['s', 'quotation'],
+            'module'       => ['s', 'quotation_requests'],
+            'reference_id' => ['i', $requestId],
+            'link'         => ['s', $link],
+            'priority'     => ['s', 'normal'],
+            'is_read'      => ['i', 0],
+            'created_at'   => ['raw', 'NOW()'],
+        ];
+
+        foreach ($map as $column => $pair) {
+            if (qrColumnExists($conn, 'notifications', $column)) {
+                $columns[] = "`$column`";
+
+                if ($pair[0] === 'raw') {
+                    $placeholders[] = $pair[1];
+                } else {
+                    $placeholders[] = '?';
+                    $types .= $pair[0];
+                    $values[] = $pair[1];
+                }
+            }
+        }
+
+        if (!$columns) {
+            return false;
+        }
+
+        $sql = "INSERT INTO notifications (" . implode(',', $columns) . ") VALUES (" . implode(',', $placeholders) . ")";
+        $stmt = mysqli_prepare($conn, $sql);
+
+        if (!$stmt) {
+            error_log("Quotation notification prepare failed: " . mysqli_error($conn));
+            return false;
+        }
+
+        if (!empty($values)) {
+            mysqli_stmt_bind_param($stmt, $types, ...$values);
+        }
+
+        $ok = mysqli_stmt_execute($stmt);
+
+        if (!$ok) {
+            error_log("Quotation notification execute failed: " . mysqli_stmt_error($stmt));
+        }
+
+        mysqli_stmt_close($stmt);
+        return $ok;
+    }
+}
+
+if (!function_exists('getQuotationProjectApprovers')) {
+    function getQuotationProjectApprovers($conn, int $siteId): array {
+        if ($siteId <= 0 || !$conn || !qrTableExists($conn, 'sites')) {
+            return [];
+        }
+
+        $approvers = [];
+
+        $hasTeamLeadCol = qrColumnExists($conn, 'sites', 'team_lead_employee_id');
+        $teamLeadSelect = $hasTeamLeadCol ? "team_lead_employee_id" : "NULL AS team_lead_employee_id";
+
+        $stmt = mysqli_prepare($conn, "
+            SELECT
+                manager_employee_id,
+                $teamLeadSelect
+            FROM sites
+            WHERE id = ?
+              AND deleted_at IS NULL
+            LIMIT 1
+        ");
+
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "i", $siteId);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $site = $res ? mysqli_fetch_assoc($res) : null;
+            mysqli_stmt_close($stmt);
+
+            if ($site) {
+                $tlId = (int)($site['team_lead_employee_id'] ?? 0);
+                $managerId = (int)($site['manager_employee_id'] ?? 0);
+
+                if ($tlId > 0) {
+                    $approvers[$tlId] = 'TL';
+                }
+
+                if ($managerId > 0) {
+                    $approvers[$managerId] = 'Manager';
+                }
+            }
+        }
+
+        // Fallback: if sites.team_lead_employee_id is empty/missing, find TL from site_project_engineers by designation.
+        if (!in_array('TL', $approvers, true) && qrTableExists($conn, 'site_project_engineers') && qrTableExists($conn, 'employees')) {
+            $tlStmt = mysqli_prepare($conn, "
+                SELECT spe.employee_id
+                FROM site_project_engineers spe
+                JOIN employees e ON e.id = spe.employee_id
+                WHERE spe.site_id = ?
+                  AND e.employee_status = 'active'
+                  AND (
+                    LOWER(COALESCE(e.designation,'')) LIKE '%team lead%'
+                    OR LOWER(COALESCE(e.designation,'')) LIKE '%tl%'
+                    OR LOWER(COALESCE(e.designation,'')) LIKE '%lead%'
+                  )
+                LIMIT 1
+            ");
+
+            if ($tlStmt) {
+                mysqli_stmt_bind_param($tlStmt, "i", $siteId);
+                mysqli_stmt_execute($tlStmt);
+                $tlRes = mysqli_stmt_get_result($tlStmt);
+                $tlRow = $tlRes ? mysqli_fetch_assoc($tlRes) : null;
+                mysqli_stmt_close($tlStmt);
+
+                $tlId = (int)($tlRow['employee_id'] ?? 0);
+                if ($tlId > 0) {
+                    $approvers[$tlId] = 'TL';
+                }
+            }
+        }
+
+        return $approvers;
+    }
+}
+
 // Generate unique request number
 function generateRequestNo($conn) {
     $prefix = 'QR';
@@ -392,7 +564,38 @@ try {
 
     
     // Commit transaction
-    mysqli_commit($conn);
+    // Send notification to project based TL and Manager.
+// Current DB project approvers:
+// - TL: sites.team_lead_employee_id
+// - Manager: sites.manager_employee_id
+// Fallback TL: site_project_engineers + employee designation
+$projectApprovers = getQuotationProjectApprovers($conn, (int)$site_id);
+$notifiedEmployees = [];
+
+foreach ($projectApprovers as $toEmployeeId => $approverRole) {
+    $toEmployeeId = (int)$toEmployeeId;
+
+    // Do not notify the creator themselves, and avoid duplicate notification if TL and Manager are same employee.
+    if ($toEmployeeId <= 0 || $toEmployeeId === (int)$user_id || isset($notifiedEmployees[$toEmployeeId])) {
+        continue;
+    }
+
+    $notificationTitle = 'New quotation request';
+    $notificationMessage = "New quotation request {$request_no} for {$site_name}: {$title}";
+
+    createQuotationNotification(
+        $conn,
+        $toEmployeeId,
+        $notificationTitle,
+        $notificationMessage,
+        (int)$request_id,
+        'assigned-quotations.php'
+    );
+
+    $notifiedEmployees[$toEmployeeId] = true;
+}
+
+mysqli_commit($conn);
     
     // Set success message and redirect
     $message = $is_draft ? 'Quotation request saved as draft successfully!' : 'Quotation request submitted successfully!';

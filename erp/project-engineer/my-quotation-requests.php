@@ -29,10 +29,184 @@ $user_name = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? '';
 // ============================================================
 $editable_statuses = ['Draft', 'Pending Assignment'];
 
+// ============================================================
+// Direct delete permission:
+// User can delete ONLY their own Draft or Pending Assignment request.
+// No delete for Assigned / With QS / QS Finalized / Approved / Rejected / Cancelled.
+// ============================================================
+$deletable_statuses = ['Draft', 'Pending Assignment'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_request') {
+    $delete_id = (int)($_POST['request_id'] ?? 0);
+
+    if ($delete_id <= 0) {
+        $error = 'Invalid quotation request selected.';
+    } else {
+        mysqli_begin_transaction($conn);
+
+        try {
+            $check_sql = "
+                SELECT id, request_no, title, status, requested_by
+                FROM quotation_requests
+                WHERE id = ?
+                  AND requested_by = ?
+                LIMIT 1
+            ";
+            $check_stmt = mysqli_prepare($conn, $check_sql);
+
+            if (!$check_stmt) {
+                throw new Exception('Unable to validate request.');
+            }
+
+            mysqli_stmt_bind_param($check_stmt, "ii", $delete_id, $empId);
+            mysqli_stmt_execute($check_stmt);
+            $check_res = mysqli_stmt_get_result($check_stmt);
+            $delete_req = $check_res ? mysqli_fetch_assoc($check_res) : null;
+            mysqli_stmt_close($check_stmt);
+
+            if (!$delete_req) {
+                throw new Exception('Request not found or you do not have permission to delete it.');
+            }
+
+            if (!in_array($delete_req['status'], $deletable_statuses, true)) {
+                throw new Exception('Only Draft and Pending Assignment requests can be deleted.');
+            }
+
+            // Delete child rows if they exist. Most Pending Assignment requests will not have these,
+            // but this keeps the delete safe if drafts have uploaded request documents.
+            if (tableExists($conn, 'quotation_request_files')) {
+                $child_stmt = mysqli_prepare($conn, "DELETE FROM quotation_request_files WHERE quotation_request_id = ?");
+                if ($child_stmt) {
+                    mysqli_stmt_bind_param($child_stmt, "i", $delete_id);
+                    mysqli_stmt_execute($child_stmt);
+                    mysqli_stmt_close($child_stmt);
+                }
+            }
+
+            if (tableExists($conn, 'quotation_request_documents')) {
+                $child_stmt = mysqli_prepare($conn, "DELETE FROM quotation_request_documents WHERE quotation_request_id = ?");
+                if ($child_stmt) {
+                    mysqli_stmt_bind_param($child_stmt, "i", $delete_id);
+                    mysqli_stmt_execute($child_stmt);
+                    mysqli_stmt_close($child_stmt);
+                }
+            }
+
+            $delete_stmt = mysqli_prepare($conn, "
+                DELETE FROM quotation_requests
+                WHERE id = ?
+                  AND requested_by = ?
+                  AND status IN ('Draft', 'Pending Assignment')
+            ");
+
+            if (!$delete_stmt) {
+                throw new Exception('Unable to delete request.');
+            }
+
+            mysqli_stmt_bind_param($delete_stmt, "ii", $delete_id, $empId);
+            mysqli_stmt_execute($delete_stmt);
+            $affected = mysqli_stmt_affected_rows($delete_stmt);
+            mysqli_stmt_close($delete_stmt);
+
+            if ($affected <= 0) {
+                throw new Exception('Request was not deleted. It may have already moved to the next workflow stage.');
+            }
+
+            logQuotationActivity(
+                $conn,
+                $empId,
+                'DELETE',
+                'Deleted quotation request: ' . ($delete_req['request_no'] ?? ''),
+                $delete_id,
+                $delete_req
+            );
+
+            mysqli_commit($conn);
+
+            header('Location: my-quotation-requests.php?status=success&message=' . urlencode('Quotation request deleted successfully.'));
+            exit;
+        } catch (Exception $ex) {
+            mysqli_rollback($conn);
+            $error = $ex->getMessage();
+        }
+    }
+}
+
+
 // Allow all authenticated users to view their requests
 
 // ---------- Helpers ----------
 function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+
+function tableExists($conn, string $table): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function columnExists($conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $col = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$col'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function logQuotationActivity($conn, int $employeeId, string $activityType, string $description, $referenceId = null, array $oldData = []): bool {
+    if (!$conn || !tableExists($conn, 'activity_logs')) return false;
+
+    $oldDataJson = $oldData ? json_encode($oldData, JSON_UNESCAPED_UNICODE) : null;
+
+    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? 'System';
+    $username = $_SESSION['username'] ?? '';
+    $designation = $_SESSION['designation'] ?? '';
+    $department = $_SESSION['department'] ?? '';
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+    $map = [
+        'employee_id'   => ['i', $employeeId],
+        'employee_name' => ['s', $employeeName],
+        'username'      => ['s', $username],
+        'designation'   => ['s', $designation],
+        'department'    => ['s', $department],
+        'activity_type' => ['s', $activityType],
+        'module'        => ['s', 'quotation_requests'],
+        'description'   => ['s', $description],
+        'reference_id'  => ['i', $referenceId],
+        'old_data'      => ['s', $oldDataJson],
+        'ip_address'    => ['s', $ipAddress],
+    ];
+
+    $cols = [];
+    $types = '';
+    $values = [];
+
+    foreach ($map as $column => $pair) {
+        if (columnExists($conn, 'activity_logs', $column)) {
+            $cols[] = "`$column`";
+            $types .= $pair[0];
+            $values[] = $pair[1];
+        }
+    }
+
+    if (!$cols) return false;
+
+    $sql = "INSERT INTO activity_logs (" . implode(',', $cols) . ") VALUES (" . implode(',', array_fill(0, count($cols), '?')) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$values);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return $ok;
+}
+
 
 function safeDate($v, $dash='—'){
   $v = trim((string)$v);
@@ -505,6 +679,8 @@ $editable_statuses_js = json_encode($editable_statuses);
         border: 1px solid transparent;
         white-space: nowrap;
         text-decoration: none;
+        cursor: pointer;
+        padding: 0;
     }
 
     .mini-dot {
@@ -580,6 +756,15 @@ $editable_statuses_js = json_encode($editable_statuses);
     .delete-btn {
         color: #dc2626;
         background: #fef2f2;
+    }
+
+    button.action-btn {
+        appearance: none;
+        -webkit-appearance: none;
+    }
+
+    .action-btn i {
+        pointer-events: none;
     }
 
     .file-btn {
@@ -756,7 +941,7 @@ $editable_statuses_js = json_encode($editable_statuses);
                                     <i class="bi bi-pencil-square"></i>
                                     <?php echo e(getRoleDisplay($designation)); ?>
                                 </span>
-                                <span class="ms-1">Edit and delete available for draft / pending assignment only.</span>
+                                <span class="ms-1">Edit and direct delete available only for Draft and Pending Assignment requests.</span>
                             </p>
                         </div>
 
@@ -928,6 +1113,7 @@ $editable_statuses_js = json_encode($editable_statuses);
                                     <?php foreach ($requests as $req): ?>
                                     <?php
               $is_editable = in_array($req['status'], $editable_statuses, true);
+              $is_deletable = in_array($req['status'], $deletable_statuses, true);
               $statusKey = strtolower(trim((string)($req['status'] ?? '')));
               $priorityKey = strtolower(trim((string)($req['priority'] ?? '')));
               $budget = (!empty($req['estimated_budget']) && (float)$req['estimated_budget'] > 0)
@@ -1002,12 +1188,14 @@ $editable_statuses_js = json_encode($editable_statuses);
                                                     class="action-btn edit-btn" title="Edit">
                                                     <i class="bi bi-pencil-square"></i>
                                                 </a>
+                                                <?php endif; ?>
 
-                                                <a href="javascript:void(0);"
+                                                <?php if ($is_deletable): ?>
+                                                <button type="button"
                                                     onclick="deleteRequest(<?php echo (int)$req['id']; ?>, '<?php echo e(addslashes($req['title'] ?? '')); ?>')"
                                                     class="action-btn delete-btn" title="Delete">
                                                     <i class="bi bi-trash"></i>
-                                                </a>
+                                                </button>
                                                 <?php endif; ?>
                                             </div>
                                         </td>
@@ -1020,7 +1208,7 @@ $editable_statuses_js = json_encode($editable_statuses);
 
                         <div class="table-secondary-text mt-2">
                             <i class="bi bi-info-circle"></i>
-                            Draft and Pending Assignment requests can be edited or deleted.
+                            Draft and Pending Assignment requests can be edited or directly deleted. Once assigned, delete is locked.
                         </div>
                     </div>
 
@@ -1044,13 +1232,19 @@ $editable_statuses_js = json_encode($editable_statuses);
                         <div class="table-primary-text" id="deleteRequestTitle"></div>
                     </div>
                     <p class="text-danger small mt-3 mb-0">This action cannot be undone.</p>
+                    <p class="text-muted small mt-1 mb-0">Only Draft and Pending Assignment requests are allowed for direct delete.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
-                    <a href="#" id="confirmDeleteBtn" class="primary-btn" style="background:#dc2626;">
-                        <i class="bi bi-trash"></i>
-                        Delete
-                    </a>
+                    <form method="POST" class="m-0">
+                        <input type="hidden" name="action" value="delete_request">
+                        <input type="hidden" name="request_id" id="deleteRequestId" value="">
+                        <button type="submit" id="confirmDeleteBtn" class="primary-btn" style="background:#dc2626;"
+                            onclick="return confirm('Confirm direct delete? This cannot be undone.');">
+                            <i class="bi bi-trash"></i>
+                            Delete
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -1062,10 +1256,10 @@ $editable_statuses_js = json_encode($editable_statuses);
     <script>
     function deleteRequest(id, title) {
         const titleEl = document.getElementById('deleteRequestTitle');
-        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        const deleteIdInput = document.getElementById('deleteRequestId');
 
         if (titleEl) titleEl.innerText = title || 'Selected request';
-        if (confirmBtn) confirmBtn.href = 'delete-quotation-request.php?id=' + encodeURIComponent(id);
+        if (deleteIdInput) deleteIdInput.value = id;
 
         const modalEl = document.getElementById('deleteModal');
         if (modalEl) {

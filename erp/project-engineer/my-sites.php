@@ -648,7 +648,26 @@ foreach ($sites as $p) {
         }
     }
 
+    /*
+      Mobile / tablet card layout fix
+      The old responsive table used flex rows, so fields with multiple lines
+      (client, management, dates) were spreading across the row and misaligning.
+      This grid layout keeps every row as: LABEL | VALUE.
+    */
     @media(max-width:1199px) {
+        .compact-table-wrap {
+            border: 0;
+            border-radius: 0;
+            overflow: visible;
+            background: transparent;
+        }
+
+        .compact-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 0;
+        }
+
         .compact-table thead {
             display: none;
         }
@@ -662,42 +681,140 @@ foreach ($sites as $p) {
         }
 
         .compact-table tbody tr {
-            border-bottom: 1px solid var(--border);
-            padding: 10px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, .045);
+            padding: 12px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .compact-table tbody tr:hover {
+            background: #fff;
         }
 
         .compact-table tbody td {
-            border: 0;
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
+            border: 0 !important;
+            display: grid !important;
+            grid-template-columns: 92px minmax(0, 1fr);
+            column-gap: 10px;
+            align-items: flex-start;
+            padding: 8px 0 !important;
+            color: #334155;
+            text-align: left !important;
+            min-width: 0;
         }
 
         .compact-table tbody td::before {
             content: attr(data-label);
-            font-size: 10px;
-            font-weight: 900;
+            grid-column: 1;
             color: #64748b;
+            font-size: 10px;
+            font-weight: 950;
+            letter-spacing: .02em;
             text-transform: uppercase;
-            flex: 0 0 95px;
+            line-height: 1.25;
+            padding-top: 2px;
+            min-width: 0;
+        }
+
+        .compact-table tbody td>* {
+            grid-column: 2;
+            min-width: 0;
         }
 
         .compact-table tbody td:first-child {
-            display: block;
+            display: grid !important;
+            padding-top: 0 !important;
         }
 
         .compact-table tbody td:first-child::before {
-            display: none;
+            display: block;
+        }
+
+        .compact-table tbody td:last-child {
+            padding-bottom: 0 !important;
+        }
+
+        .table-title-cell {
+            align-items: flex-start;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .table-title-cell>div:last-child {
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .table-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 8px;
+            font-size: 12px;
+            flex: 0 0 24px;
+            margin-top: 1px;
+        }
+
+        .table-primary-text,
+        .table-secondary-text,
+        .team-text,
+        .team-text div {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+
+        .table-primary-text {
+            font-size: 11.5px;
+            line-height: 1.35;
+        }
+
+        .table-secondary-text {
+            font-size: 10.5px;
+            line-height: 1.45;
+        }
+
+        .team-text {
+            font-size: 10.5px;
+            line-height: 1.45;
+        }
+
+        .team-text div {
+            margin-bottom: 3px;
+        }
+
+        .reason-cell {
+            max-width: 100%;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: unset;
+            text-align: left;
+        }
+
+        .badge-pill {
+            justify-self: flex-start;
+            max-width: 100%;
+            white-space: normal;
+            line-height: 1.25;
+            padding: 5px 9px;
         }
 
         .action-group {
             justify-content: flex-start;
+            flex-wrap: wrap;
+            gap: 7px;
         }
 
-        .reason-cell {
-            max-width: none;
-            white-space: normal;
-            text-align: right;
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+        }
+
+        .pagination-wrap {
+            align-items: flex-start;
         }
     }
 
@@ -709,6 +826,10 @@ foreach ($sites as $p) {
         .page-heading {
             align-items: flex-start;
             flex-direction: column;
+        }
+
+        .page-heading .d-flex {
+            width: 100%;
         }
 
         .filter-bar {
@@ -730,10 +851,48 @@ foreach ($sites as $p) {
 
         .panel {
             padding: 12px;
+            border-radius: 14px;
         }
 
         .compact-table tbody td {
-            align-items: flex-start;
+            grid-template-columns: 84px minmax(0, 1fr);
+            column-gap: 9px;
+            padding: 7px 0 !important;
+        }
+
+        .compact-table tbody td::before {
+            font-size: 9.8px;
+        }
+
+        .compact-table tbody tr {
+            padding: 11px;
+            border-radius: 13px;
+        }
+
+        .pagination-info {
+            width: 100%;
+            line-height: 1.45;
+        }
+    }
+
+    @media(max-width:420px) {
+        .compact-table tbody td {
+            grid-template-columns: 76px minmax(0, 1fr);
+            column-gap: 8px;
+        }
+
+        .table-primary-text {
+            font-size: 11px;
+        }
+
+        .table-secondary-text,
+        .team-text {
+            font-size: 10px;
+        }
+
+        .action-btn {
+            width: 31px;
+            height: 31px;
         }
     }
     </style>
