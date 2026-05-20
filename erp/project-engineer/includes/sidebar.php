@@ -1,5 +1,6 @@
-<!-- Sidebar (MANAGER MENU) — UPDATED WITH TIME MANAGEMENT + HR -->
+<!-- Sidebar (PROJECT ENGINEER MENU) — MANAGER PANEL TEMPLATE -->
 <aside id="sidebar" class="sidebar" aria-label="Sidebar">
+
   <div class="brand">
     <div class="brand-badge p-0">
       <img src="assets/tek-c.png" alt="TEK-C" />
@@ -11,21 +12,29 @@
 
     <!-- Dashboard -->
     <a class="side-link" href="index.php">
-      <i class="bi bi-grid-1x2"></i><span class="label">Dashboard</span>
+      <i class="bi bi-grid-1x2"></i>
+      <span class="label">Dashboard</span>
     </a>
 
     <!-- Attendance -->
     <a class="side-link" href="punchin.php">
-      <i class="bi bi-fingerprint"></i><span class="label">Attendance</span>
+      <i class="bi bi-fingerprint"></i>
+      <span class="label">Attendance</span>
     </a>
 
     <!-- Projects -->
     <a class="side-link" href="my-sites.php">
-      <i class="bi bi-geo-alt"></i><span class="label">My Projects</span>
+      <i class="bi bi-geo-alt"></i>
+      <span class="label">My Projects</span>
     </a>
 
-    <!-- QUOTATION MANAGEMENT -->
-    <a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#quotationMenu">
+    <!-- Quotation Management -->
+    <a class="side-link collapse-toggle"
+       data-bs-toggle="collapse"
+       href="#quotationMenu"
+       role="button"
+       aria-expanded="false"
+       aria-controls="quotationMenu">
       <i class="bi bi-file-text"></i>
       <span class="label">Quotations</span>
       <span class="ms-auto label chevron-wrap">
@@ -38,6 +47,7 @@
         <i class="bi bi-plus-circle"></i>
         <span class="label">New Request</span>
       </a>
+
       <a class="side-link sub-link" href="my-quotation-requests.php">
         <i class="bi bi-list-check"></i>
         <span class="label">My Requests</span>
@@ -46,178 +56,253 @@
 
     <!-- Today's Reports -->
     <a class="side-link" href="today-tasks.php">
-      <i class="bi bi-journal-text"></i><span class="label">Today's Reports</span>
+      <i class="bi bi-journal-text"></i>
+      <span class="label">Today's Reports</span>
     </a>
 
     <!-- Mail -->
-    <button class="side-link side-toggle" type="button"
-            id="mailToggle"
-            aria-expanded="false"
-            aria-controls="mailMenu"
-            title="Mail">
+    <a class="side-link collapse-toggle"
+       data-bs-toggle="collapse"
+       href="#mailMenu"
+       role="button"
+       aria-expanded="false"
+       aria-controls="mailMenu">
       <i class="bi bi-envelope"></i>
       <span class="label">Mail</span>
-      <i class="bi bi-chevron-down chevron ms-auto"></i>
-    </button>
+      <span class="ms-auto label chevron-wrap">
+        <i class="bi bi-chevron-down chevron"></i>
+      </span>
+    </a>
 
-    <div class="side-submenu" id="mailMenu" hidden>
-      <a class="side-sublink" href="mail-inbox.php">
-        <i class="bi bi-inbox"></i><span class="label">Inbox</span>
+    <div class="collapse ps-2 side-submenu-collapse" id="mailMenu">
+      <a class="side-link sub-link" href="mail-inbox.php">
+        <i class="bi bi-inbox"></i>
+        <span class="label">Inbox</span>
       </a>
-      <a class="side-sublink" href="mail-compose.php">
-        <i class="bi bi-pencil-square"></i><span class="label">Compose</span>
+
+      <a class="side-link sub-link" href="mail-compose.php">
+        <i class="bi bi-pencil-square"></i>
+        <span class="label">Compose</span>
       </a>
-      <a class="side-sublink" href="mail-sent.php">
-        <i class="bi bi-send"></i><span class="label">Sent</span>
+
+      <a class="side-link sub-link" href="mail-sent.php">
+        <i class="bi bi-send"></i>
+        <span class="label">Sent</span>
       </a>
-      <a class="side-sublink" href="mail-trash.php">
-        <i class="bi bi-trash"></i><span class="label">Trash</span>
+
+      <a class="side-link sub-link" href="mail-trash.php">
+        <i class="bi bi-trash"></i>
+        <span class="label">Trash</span>
       </a>
     </div>
 
     <!-- Time Management -->
-    <button class="side-link side-toggle" type="button"
-            id="tmToggle"
-            aria-expanded="false"
-            aria-controls="tmMenu"
-            title="Time Management">
+    <a class="side-link collapse-toggle"
+       data-bs-toggle="collapse"
+       href="#tmMenu"
+       role="button"
+       aria-expanded="false"
+       aria-controls="tmMenu">
       <i class="bi bi-clock-history"></i>
       <span class="label">Time Management</span>
-      <i class="bi bi-chevron-down chevron ms-auto"></i>
-    </button>
+      <span class="ms-auto label chevron-wrap">
+        <i class="bi bi-chevron-down chevron"></i>
+      </span>
+    </a>
 
-    <div class="side-submenu" id="tmMenu" hidden>
-      <a class="side-sublink" href="dpr.php">
-        <i class="bi bi-journal-text"></i><span class="label">DPR</span>
+    <div class="collapse ps-2 side-submenu-collapse" id="tmMenu">
+      <a class="side-link sub-link" href="dpr.php">
+        <i class="bi bi-journal-text"></i>
+        <span class="label">DPR</span>
       </a>
-      <a class="side-sublink" href="dar.php">
-        <i class="bi bi-check2-square"></i><span class="label">DAR</span>
+
+      <a class="side-link sub-link" href="dar.php">
+        <i class="bi bi-check2-square"></i>
+        <span class="label">DAR</span>
       </a>
-      <a class="side-sublink" href="ma.php">
-        <i class="bi bi-calendar2-week"></i><span class="label">MA</span>
+
+      <a class="side-link sub-link" href="ma.php">
+        <i class="bi bi-calendar2-week"></i>
+        <span class="label">MA</span>
       </a>
-      <a class="side-sublink" href="mpt.php">
-        <i class="bi bi-list-task"></i><span class="label">MPT</span>
+
+      <a class="side-link sub-link" href="mpt.php">
+        <i class="bi bi-list-task"></i>
+        <span class="label">MPT</span>
       </a>
-      <a class="side-sublink" href="mom.php">
-        <i class="bi bi-chat-left-text"></i><span class="label">MOM</span>
+
+      <a class="side-link sub-link" href="mom.php">
+        <i class="bi bi-chat-left-text"></i>
+        <span class="label">MOM</span>
       </a>
-      <a class="side-sublink" href="mom-short.php">
-        <i class="bi bi-chat-left-quote"></i><span class="label">MOM (Short-term)</span>
+
+      <a class="side-link sub-link" href="mom-short.php">
+        <i class="bi bi-chat-left-quote"></i>
+        <span class="label">MOM (Short-term)</span>
       </a>
-      <a class="side-sublink" href="rfi.php">
-        <i class="bi bi-question-circle"></i><span class="label">RFI</span>
+
+      <a class="side-link sub-link" href="rfi.php">
+        <i class="bi bi-question-circle"></i>
+        <span class="label">RFI</span>
       </a>
-      <a class="side-sublink" href="checklist.php">
-        <i class="bi bi-card-checklist"></i><span class="label">Checklist</span>
+
+      <a class="side-link sub-link" href="checklist.php">
+        <i class="bi bi-card-checklist"></i>
+        <span class="label">Checklist</span>
       </a>
-      <a class="side-sublink" href="sat.php">
-        <i class="bi bi-bar-chart-steps"></i><span class="label">SAT</span>
+
+      <a class="side-link sub-link" href="sat.php">
+        <i class="bi bi-bar-chart-steps"></i>
+        <span class="label">SAT</span>
       </a>
-      <a class="side-sublink" href="dlar.php">
-        <i class="bi bi-file-earmark-spreadsheet"></i><span class="label">DLAR</span>
+
+      <a class="side-link sub-link" href="dlar.php">
+        <i class="bi bi-file-earmark-spreadsheet"></i>
+        <span class="label">DLAR</span>
       </a>
-      <a class="side-sublink" href="ait.php">
-        <i class="bi bi-cpu"></i><span class="label">AIT</span>
+
+      <a class="side-link sub-link" href="ait.php">
+        <i class="bi bi-cpu"></i>
+        <span class="label">AIT</span>
       </a>
-      <a class="side-sublink" href="mas.php">
-        <i class="bi bi-diagram-3"></i><span class="label">MAS</span>
+
+      <a class="side-link sub-link" href="mas.php">
+        <i class="bi bi-diagram-3"></i>
+        <span class="label">MAS</span>
       </a>
-      <a class="side-sublink" href="pd.php">
-        <i class="bi bi-graph-up"></i><span class="label">PD</span>
+
+      <a class="side-link sub-link" href="pd.php">
+        <i class="bi bi-graph-up"></i>
+        <span class="label">PD</span>
       </a>
-      <a class="side-sublink" href="pms.php">
-        <i class="bi bi-tools"></i><span class="label">PMS</span>
+
+      <a class="side-link sub-link" href="pms.php">
+        <i class="bi bi-tools"></i>
+        <span class="label">PMS</span>
       </a>
-      <a class="side-sublink" href="vfs.php">
-        <i class="bi bi-eye"></i><span class="label">VFS</span>
+
+      <a class="side-link sub-link" href="vfs.php">
+        <i class="bi bi-eye"></i>
+        <span class="label">VFS</span>
       </a>
-      <a class="side-sublink" href="vft.php">
-        <i class="bi bi-eye-fill"></i><span class="label">VFT</span>
+
+      <a class="side-link sub-link" href="vft.php">
+        <i class="bi bi-eye-fill"></i>
+        <span class="label">VFT</span>
       </a>
-      <a class="side-sublink" href="wpt.php">
-        <i class="bi bi-database"></i><span class="label">WPT</span>
+
+      <a class="side-link sub-link" href="wpt.php">
+        <i class="bi bi-database"></i>
+        <span class="label">WPT</span>
       </a>
-      <a class="side-sublink" href="dds.php">
-        <i class="bi bi-database"></i><span class="label">DDS</span>
+
+      <a class="side-link sub-link" href="dds.php">
+        <i class="bi bi-database"></i>
+        <span class="label">DDS</span>
       </a>
-      <a class="side-sublink" href="ddt.php">
-        <i class="bi bi-table"></i><span class="label">DDT</span>
+
+      <a class="side-link sub-link" href="ddt.php">
+        <i class="bi bi-table"></i>
+        <span class="label">DDT</span>
       </a>
-      <a class="side-sublink" href="dpt.php">
-        <i class="bi bi-pie-chart"></i><span class="label">DPT</span>
+
+      <a class="side-link sub-link" href="dpt.php">
+        <i class="bi bi-pie-chart"></i>
+        <span class="label">DPT</span>
       </a>
     </div>
 
     <!-- Reports -->
     <a class="side-link" href="report.php">
-      <i class="bi bi-file-earmark-text"></i><span class="label">Reports</span>
+      <i class="bi bi-file-earmark-text"></i>
+      <span class="label">Reports</span>
     </a>
 
     <!-- HR -->
-    <button class="side-link side-toggle" type="button"
-            id="hrToggle"
-            aria-expanded="false"
-            aria-controls="hrMenu"
-            title="HR">
+    <a class="side-link collapse-toggle"
+       data-bs-toggle="collapse"
+       href="#hrMenu"
+       role="button"
+       aria-expanded="false"
+       aria-controls="hrMenu">
       <i class="bi bi-people"></i>
       <span class="label">HR</span>
-      <i class="bi bi-chevron-down chevron ms-auto"></i>
-    </button>
+      <span class="ms-auto label chevron-wrap">
+        <i class="bi bi-chevron-down chevron"></i>
+      </span>
+    </a>
 
-    <div class="side-submenu" id="hrMenu" hidden>
-      <a class="side-sublink" href="my-profile.php">
-        <i class="bi bi-person-circle"></i><span class="label">Profile</span>
+    <div class="collapse ps-2 side-submenu-collapse" id="hrMenu">
+      <a class="side-link sub-link" href="my-profile.php">
+        <i class="bi bi-person-circle"></i>
+        <span class="label">Profile</span>
       </a>
-      <a class="side-sublink" href="my-attendance.php">
-        <i class="bi bi-fingerprint"></i><span class="label">My Attendance</span>
+
+      <a class="side-link sub-link" href="my-attendance.php">
+        <i class="bi bi-fingerprint"></i>
+        <span class="label">My Attendance</span>
       </a>
-      <a class="side-sublink" href="leave-ledger.php">
-        <i class="bi bi-clock-history"></i><span class="label">Leave Ledger</span>
+
+      <a class="side-link sub-link" href="leave-ledger.php">
+        <i class="bi bi-clock-history"></i>
+        <span class="label">Leave Ledger</span>
       </a>
-      <a class="side-sublink" href="payslips.php">
-        <i class="bi bi-receipt"></i><span class="label">Payslips</span>
+
+      <a class="side-link sub-link" href="payslips.php">
+        <i class="bi bi-receipt"></i>
+        <span class="label">Payslips</span>
       </a>
-      <!--<a class="side-sublink" href="hr-policy.php">-->
-      <!--  <i class="bi bi-file-earmark-text"></i><span class="label">HR Policy</span>-->
+
+      <!--<a class="side-link sub-link" href="hr-policy.php">-->
+      <!--  <i class="bi bi-file-earmark-text"></i>-->
+      <!--  <span class="label">HR Policy</span>-->
       <!--</a>-->
-      <!--<a class="side-sublink" href="salary-loan.php">-->
-      <!--  <i class="bi bi-cash-stack"></i><span class="label">Salary Loan Eligibility</span>-->
+
+      <!--<a class="side-link sub-link" href="salary-loan.php">-->
+      <!--  <i class="bi bi-cash-stack"></i>-->
+      <!--  <span class="label">Salary Loan Eligibility</span>-->
       <!--</a>-->
-      <a class="side-sublink" href="attendance-regularization.php">
-        <i class="bi bi-pencil-square"></i><span class="label">Attendance Regularization</span>
+
+      <a class="side-link sub-link" href="attendance-regularization.php">
+        <i class="bi bi-pencil-square"></i>
+        <span class="label">Attendance Regularization</span>
       </a>
-      <a class="side-sublink" href="apply-leave.php">
-        <i class="bi bi-calendar-plus"></i><span class="label">Apply Leave</span>
+
+      <a class="side-link sub-link" href="apply-leave.php">
+        <i class="bi bi-calendar-plus"></i>
+        <span class="label">Apply Leave</span>
       </a>
-      <a class="side-sublink" href="my-leave-history.php">
-        <i class="bi bi-clock-history"></i><span class="label">My Leave History</span>
+
+      <a class="side-link sub-link" href="my-leave-history.php">
+        <i class="bi bi-clock-history"></i>
+        <span class="label">My Leave History</span>
       </a>
     </div>
 
-    <!-- ========== HR MASTER SECTION (NEW) ========== -->
-    <!--<button class="side-link side-toggle" type="button"-->
-    <!--        id="hrMasterToggle"-->
-    <!--        aria-expanded="false"-->
-    <!--        aria-controls="hrMasterMenu"-->
-    <!--        title="HR Master">-->
+    <!-- HR Master kept commented as in the original project-engineer sidebar -->
+    <!--<a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#hrMasterMenu" role="button" aria-expanded="false" aria-controls="hrMasterMenu">-->
     <!--  <i class="bi bi-database-gear"></i>-->
     <!--  <span class="label">HR Master</span>-->
-    <!--  <i class="bi bi-chevron-down chevron ms-auto"></i>-->
-    <!--</button>-->
+    <!--  <span class="ms-auto label chevron-wrap">-->
+    <!--    <i class="bi bi-chevron-down chevron"></i>-->
+    <!--  </span>-->
+    <!--</a>-->
 
-    <!--<div class="side-submenu" id="hrMasterMenu" hidden>-->
-    <!--  <a class="side-sublink" href="manage-stakeholder-types.php">-->
-    <!--    <i class="bi bi-people-fill"></i><span class="label">Manage Stakeholder Types</span>-->
+    <!--<div class="collapse ps-2 side-submenu-collapse" id="hrMasterMenu">-->
+    <!--  <a class="side-link sub-link" href="manage-stakeholder-types.php">-->
+    <!--    <i class="bi bi-people-fill"></i>-->
+    <!--    <span class="label">Manage Stakeholder Types</span>-->
     <!--  </a>-->
-    <!--  <a class="side-sublink" href="vfs_packages.php">-->
-    <!--    <i class="bi bi-box-seam"></i><span class="label">VFS Packages</span>-->
+    <!--  <a class="side-link sub-link" href="vfs_packages.php">-->
+    <!--    <i class="bi bi-box-seam"></i>-->
+    <!--    <span class="label">VFS Packages</span>-->
     <!--  </a>-->
     <!--</div>-->
 
     <!-- Logout -->
     <a class="side-link" href="logout.php" id="logoutLink">
-      <i class="bi bi-box-arrow-right"></i><span class="label">Logout</span>
+      <i class="bi bi-box-arrow-right"></i>
+      <span class="label">Logout</span>
     </a>
 
   </div>
@@ -230,310 +315,93 @@
 <div id="overlay" class="overlay" aria-hidden="true"></div>
 
 <style>
-  /* ---------- Shared submenu styles ---------- */
+  #sidebar {
+    position: relative;
+    overflow-y: auto;
+    overflow-x: hidden;
 
-  .side-toggle{
-    width:100%;
-    background:transparent;
-    border:none;
-    text-align:left;
-    display:flex;
-    align-items:center;
-    gap:.6rem;
-    cursor:pointer;
+    /* Hide scrollbar but keep scrolling */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
-  .side-toggle .chevron{
+  #sidebar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  #sidebar .nav-section {
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    /* Hide scrollbar but keep scrolling */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  #sidebar .nav-section::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  #sidebar .side-submenu-collapse .side-link {
+    padding-left: 1.9rem;
+    border-radius: 10px;
+    margin-top: 4px;
+  }
+
+  #sidebar .collapse-toggle .chevron,
+  #sidebar [data-bs-toggle="collapse"] .chevron {
     transition: transform .2s ease;
-    margin-left: auto;
   }
 
-  .side-toggle[aria-expanded="true"] .chevron{
+  #sidebar .collapse-toggle[aria-expanded="true"] .chevron,
+  #sidebar [data-bs-toggle="collapse"][aria-expanded="true"] .chevron {
     transform: rotate(180deg);
   }
 
-  .side-submenu{
-    margin: 6px 0 10px;
-    padding-left: 38px;
-    display:flex;
-    flex-direction:column;
-    gap:6px;
-  }
-
-  .side-sublink{
-    display:flex;
-    align-items:center;
-    gap:.6rem;
-    padding: 8px 10px;
+  #sidebar .badge {
+    margin-left: auto;
+    margin-right: 5px;
+    padding: 3px 6px;
     border-radius: 10px;
-    text-decoration:none;
-    color: inherit;
-    font-weight: 800;
-    opacity:.95;
+    font-weight: normal;
   }
 
-  .side-sublink:hover{
-    background: rgba(0,0,0,.05);
-  }
-
-  .side-sublink.active{
-    background: rgba(45,156,219,.12);
-    color: var(--blue, #2d9cdb);
-  }
-
-  /* Sidebar positioning for flyouts */
-  #sidebar{
-    position: relative;
-  }
-
-  /* Collapsed flyout for ANY submenu */
-  #sidebar.collapsed .side-submenu{
+  #sidebar.collapsed .side-submenu-collapse {
     position: absolute;
     left: calc(100% + 10px);
-    width: 245px;
+    top: var(--flyout-top, 80px);
+    width: 220px;
     padding: 10px;
     margin: 0;
     background: #fff;
     border: 1px solid var(--border, #e5e7eb);
     border-radius: 14px;
-    box-shadow: 0 18px 40px rgba(17,24,39,.15);
+    box-shadow: 0 18px 40px rgba(17, 24, 39, .15);
     z-index: 9999;
   }
 
-  /* Individual flyout top positions */
-  #sidebar.collapsed #mailMenu{ top: var(--mail-top, 60px); }
-  #sidebar.collapsed #tmMenu{ top: var(--tm-top, 120px); }
-  #sidebar.collapsed #hrMenu{ top: var(--hr-top, 180px); }
-  #sidebar.collapsed #hrMasterMenu{ top: var(--hrmaster-top, 240px); }
-
-  #sidebar.collapsed .side-submenu .label{
+  #sidebar.collapsed .side-submenu-collapse .label {
     display: inline !important;
   }
 
-  #sidebar.collapsed .side-sublink{
+  #sidebar.collapsed .side-submenu-collapse .side-link {
     padding: 10px 10px;
+    margin-top: 0;
     border-radius: 12px;
   }
 
-  /* Optional: hide chevron when sidebar is collapsed */
-  #sidebar.collapsed .side-toggle .chevron{
-    display: none;
+  @media (max-width: 991.98px) {
+    #sidebar.collapsed .side-submenu-collapse {
+      position: static;
+      width: auto;
+      padding: 0 0 0 .5rem;
+      border: 0;
+      box-shadow: none;
+      background: transparent;
+    }
   }
 </style>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const currentPage = window.location.pathname.split('/').pop() || 'index.php';
-  const sidebar = document.getElementById('sidebar');
-
-  const mailToggle = document.getElementById('mailToggle');
-  const mailMenu   = document.getElementById('mailMenu');
-
-  const tmToggle   = document.getElementById('tmToggle');
-  const tmMenu     = document.getElementById('tmMenu');
-
-  const hrToggle   = document.getElementById('hrToggle');
-  const hrMenu     = document.getElementById('hrMenu');
-
-  // NEW: HR Master Toggle
-  const hrMasterToggle = document.getElementById('hrMasterToggle');
-  const hrMasterMenu   = document.getElementById('hrMasterMenu');
-
-  // Pages list for auto-open / active highlight
-  const mailPages = ['mail-inbox.php','mail-compose.php','mail-sent.php','mail-trash.php'];
-
-  const tmPages = [
-    'dpr.php', 'dar.php', 'ma.php', 'mpt.php', 'mom.php', 'mom-short.php',
-    'rfi.php', 'checklist.php', 'sat.php', 'dlar.php', 'ait.php', 'mas.php',
-    'pd.php', 'pms.php', 'vfs.php', 'vft.php', 'wpt.php', 'dds.php', 'ddt.php', 'dpt.php'
-  ];
-
-  const hrPages = [
-    'my-profile.php', 'my-attendance.php', 'leave-ledger.php', 'payslips.php',
-    'hr-policy.php', 'salary-loan.php', 'attendance-regularization.php',
-    'apply-leave.php', 'my-leave-history.php'
-  ];
-
-  // NEW: HR Master pages
-  const hrMasterPages = [
-    'manage-stakeholder-types.php',
-    'vfs_packages.php'
-  ];
-
-  function isCollapsed(){
-    return sidebar && sidebar.classList.contains('collapsed');
-  }
-
-  function setFlyoutTop(toggleEl, cssVarName){
-    if (!sidebar || !toggleEl) return;
-    sidebar.style.setProperty(cssVarName, toggleEl.offsetTop + 'px');
-  }
-
-  function setMenu(toggleEl, menuEl, storageKey, open, cssVarName){
-    if (!toggleEl || !menuEl) return;
-
-    if (open && isCollapsed() && cssVarName) {
-      setFlyoutTop(toggleEl, cssVarName);
-    }
-
-    toggleEl.setAttribute('aria-expanded', open ? 'true' : 'false');
-    menuEl.hidden = !open;
-
-    try {
-      localStorage.setItem(storageKey, open ? '1' : '0');
-    } catch(e){}
-  }
-
-  function getMenuOpen(toggleEl){
-    return toggleEl && toggleEl.getAttribute('aria-expanded') === 'true';
-  }
-
-  // Accordion behavior - added HR Master
-  const menuDefs = [
-    { key:'mail_open', toggle: mailToggle, menu: mailMenu, cssVar:'--mail-top' },
-    { key:'tm_open',   toggle: tmToggle,   menu: tmMenu,   cssVar:'--tm-top' },
-    { key:'hr_open',   toggle: hrToggle,   menu: hrMenu,   cssVar:'--hr-top' },
-    { key:'hrmaster_open', toggle: hrMasterToggle, menu: hrMasterMenu, cssVar:'--hrmaster-top' }
-  ];
-
-  function closeAllExcept(exceptKey){
-    menuDefs.forEach(def => {
-      if (!def.toggle || !def.menu) return;
-      if (def.key === exceptKey) return;
-      setMenu(def.toggle, def.menu, def.key, false, def.cssVar);
-    });
-  }
-
-  function openExclusive(def){
-    if (!def.toggle || !def.menu) return;
-    closeAllExcept(def.key);
-    setMenu(def.toggle, def.menu, def.key, true, def.cssVar);
-  }
-
-  // Highlight top-level links (excluding toggle buttons)
-  const topLinks = document.querySelectorAll('.side-link:not(.side-toggle)');
-  topLinks.forEach(link => link.classList.remove('active'));
-
-  topLinks.forEach(link => {
-    const href = link.getAttribute('href');
-    if (href && href === currentPage) {
-      link.classList.add('active');
-    }
-  });
-
-  // Highlight submenu links
-  const subLinks = document.querySelectorAll('.side-sublink');
-  subLinks.forEach(a => a.classList.remove('active'));
-
-  let hasActiveMail = false;
-  let hasActiveTm   = false;
-  let hasActiveHr   = false;
-  let hasActiveHrMaster = false;
-
-  subLinks.forEach(a => {
-    const href = a.getAttribute('href');
-    if (!href) return;
-
-    if (href === currentPage) {
-      a.classList.add('active');
-
-      if (mailPages.includes(href)) hasActiveMail = true;
-      if (tmPages.includes(href)) hasActiveTm = true;
-      if (hrPages.includes(href)) hasActiveHr = true;
-      if (hrMasterPages.includes(href)) hasActiveHrMaster = true;
-    }
-  });
-
-  // Initial open state
-  let openKey = null;
-
-  if (hasActiveMail) openKey = 'mail_open';
-  else if (hasActiveTm) openKey = 'tm_open';
-  else if (hasActiveHr) openKey = 'hr_open';
-  else if (hasActiveHrMaster) openKey = 'hrmaster_open';
-
-  if (!openKey) {
-    try {
-      if (localStorage.getItem('mail_open') === '1') openKey = 'mail_open';
-      else if (localStorage.getItem('tm_open') === '1') openKey = 'tm_open';
-      else if (localStorage.getItem('hr_open') === '1') openKey = 'hr_open';
-      else if (localStorage.getItem('hrmaster_open') === '1') openKey = 'hrmaster_open';
-    } catch(e){}
-  }
-
-  // Apply initial accordion state
-  menuDefs.forEach(def => {
-    const shouldOpen = (def.key === openKey);
-    setMenu(def.toggle, def.menu, def.key, shouldOpen, def.cssVar);
-  });
-
-  // Toggle click handlers
-  menuDefs.forEach(def => {
-    if (!def.toggle) return;
-
-    def.toggle.addEventListener('click', function(e){
-      e.preventDefault();
-
-      const nextOpen = !getMenuOpen(def.toggle);
-
-      if (nextOpen) {
-        openExclusive(def);
-      } else {
-        setMenu(def.toggle, def.menu, def.key, false, def.cssVar);
-      }
-    });
-  });
-
-  // Close flyouts on outside click (collapsed mode only)
-  document.addEventListener('click', function(e){
-    if (!isCollapsed()) return;
-
-    menuDefs.forEach(def => {
-      if (!def.toggle || !def.menu) return;
-      if (!getMenuOpen(def.toggle)) return;
-
-      const inside = def.toggle.contains(e.target) || def.menu.contains(e.target);
-      if (!inside) {
-        setMenu(def.toggle, def.menu, def.key, false, def.cssVar);
-      }
-    });
-  });
-
-  // Update flyout position on resize
-  window.addEventListener('resize', function(){
-    if (!isCollapsed()) return;
-
-    menuDefs.forEach(def => {
-      if (!def.toggle) return;
-      if (getMenuOpen(def.toggle)) {
-        setFlyoutTop(def.toggle, def.cssVar);
-      }
-    });
-  });
-
-  // Update flyout position when sidebar collapsed state changes
-  const observer = new MutationObserver(function() {
-    if (!isCollapsed()) return;
-
-    menuDefs.forEach(def => {
-      if (!def.toggle) return;
-      if (getMenuOpen(def.toggle)) {
-        setFlyoutTop(def.toggle, def.cssVar);
-      }
-    });
-  });
-
-  if (sidebar) {
-    observer.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
-  }
-
-  // Confirm before logout
-  const logoutLink = document.getElementById('logoutLink');
-  if (logoutLink) {
-    logoutLink.addEventListener('click', function(e) {
-      const ok = confirm('Are you sure you want to sign out of TEK-C?');
-      if (!ok) e.preventDefault();
-    });
-  }
-});
-</script>

@@ -1,8 +1,6 @@
 <?php
-// admin/includes/topbar.php
-// ✅ UPDATED:
-// 1) Routes fixed for pages INSIDE admin folder (no "../" for view/profile/logout)
-// 2) Removed "Change Password" option from dropdown
+// project-engineer/includes/topbar.php
+// Updated UI/template to match working manager-panel topbar.
 // IMPORTANT: Do NOT call session_start() here.
 // session_start() must be in the main page before any output.
 
@@ -26,27 +24,30 @@ if (!function_exists('initials')) {
 // ---- Get logged employee id ----
 $employeeId = isset($_SESSION['employee_id']) ? (int)$_SESSION['employee_id'] : 0;
 
-// ---- Session values (may be empty) ----
+// ---- Session values ----
 $loggedName  = $_SESSION['employee_name']  ?? ($_SESSION['name'] ?? 'User');
 $loggedEmail = $_SESSION['employee_email'] ?? ($_SESSION['email'] ?? '');
 $loggedUser  = $_SESSION['username']       ?? '';
 $loggedPhoto = $_SESSION['employee_photo'] ?? '';
 
-// ✅ If email/photo/name missing in session, fetch from DB (employees table)
+// ---- If email/photo missing in session, fetch from DB ----
 if ($employeeId > 0 && (trim($loggedEmail) === '' || trim($loggedPhoto) === '' || trim($loggedName) === '' || $loggedName === 'User')) {
   $conn = get_db_connection();
+
   if ($conn) {
     $sql = "SELECT full_name, email, username, mobile_number, photo
             FROM employees
             WHERE id = ?
             LIMIT 1";
+
     $st = mysqli_prepare($conn, $sql);
+
     if ($st) {
       mysqli_stmt_bind_param($st, "i", $employeeId);
       mysqli_stmt_execute($st);
       $res = mysqli_stmt_get_result($st);
-      if ($row = mysqli_fetch_assoc($res)) {
 
+      if ($row = mysqli_fetch_assoc($res)) {
         if (trim($loggedName) === '' || $loggedName === 'User') {
           $loggedName = $row['full_name'] ?: $loggedName;
           $_SESSION['employee_name'] = $loggedName;
@@ -67,151 +68,136 @@ if ($employeeId > 0 && (trim($loggedEmail) === '' || trim($loggedPhoto) === '' |
           $_SESSION['employee_photo'] = $loggedPhoto;
         }
 
-        // fallback under name if email empty
         if (trim($loggedEmail) === '' && !empty($row['mobile_number'])) {
           $loggedEmail = $row['mobile_number'];
         }
       }
+
       mysqli_stmt_close($st);
     }
+
+    mysqli_close($conn);
   }
 }
 
-// ✅ Display under name: EMAIL only (fallback if missing)
 $displayMail = trim($loggedEmail) !== '' ? $loggedEmail : ($loggedUser !== '' ? $loggedUser : '—');
 
-// ---- Photo URL FIX ----
+// ---- Photo URL ----
 $showPhoto = false;
 $photoSrc  = '';
 
 if (trim($loggedPhoto) !== '') {
-  $stored = ltrim($loggedPhoto, '/'); // "uploads/employees/photos/xxx.png"
-  // When topbar is used inside /admin, best is "/admin/..."
-  if (strpos($stored, 'admin/') === 0) $photoSrc = '/' . $stored;
-  else $photoSrc = '/admin/' . $stored;
+  $stored = ltrim($loggedPhoto, '/');
+
+  if (strpos($stored, 'admin/') === 0) {
+    $photoSrc = '/' . $stored;
+  } else {
+    $photoSrc = '/admin/' . $stored;
+  }
 
   $showPhoto = true;
 }
 
 $avatarText = initials($loggedName);
 
-// ✅ ROUTES (inside admin folder)
-$logoutUrl  = 'logout.php';
-$profileUrl = 'view-employee.php?id=' . (int)$employeeId;
-
-// ✅ Welcome message
-$welcomeText = 'Welcome, ' . trim((string)$loggedName);
+// Project engineer panel routes.
+// Keep these inside current folder unless your project-engineer panel is nested differently.
+$logoutUrl = 'logout.php';
+$profileUrl = 'my-profile.php';
 ?>
 
 <!-- Topbar -->
-<style>
-  /* dropdown styles */
-  .user-dropdown{
-    position: absolute;
-    top: calc(100% + 10px);
-    right: 0;
-    width: 280px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    box-shadow: var(--shadow);
-    padding: 12px;
-    z-index: 2000;
-    display: none;
-  }
-  .user-dropdown.show{ display:block; }
-
-  .ud-top{
-    display:flex;
-    gap:10px;
-    align-items:center;
-    padding-bottom:10px;
-    border-bottom:1px solid var(--border);
-    margin-bottom:10px;
-  }
-  .ud-avatar{
-    width:42px;height:42px;border-radius:12px;overflow:hidden;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    display:flex;align-items:center;justify-content:center;
-    color:#fff;font-weight:900;
-    flex:0 0 auto;
-  }
-  .ud-avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .ud-name{ font-weight:1000; color:#111827; line-height:1.1; }
-  .ud-mail{ font-weight:800; color:#6b7280; font-size:12px; margin-top:2px; }
-
-  .ud-actions{ display:grid; gap:8px; }
-
-  .ud-btn{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    text-decoration:none;
-    border:1px solid var(--border);
-    background:#fff;
-    border-radius:12px;
-    padding:10px 12px;
-    font-weight:900;
-    color:#374151;
-  }
-  .ud-btn:hover{ background: var(--bg); color: var(--blue); }
-  .ud-btn .left{ display:flex; align-items:center; gap:10px; }
-
-  .ud-btn.danger{
-    border-color: rgba(235,87,87,.25);
-    color:#ef4444;
-  }
-  .ud-btn.danger:hover{
-    background: rgba(239,68,68,.08);
-    color:#dc2626;
-  }
-
-  /* Make pill clickable on mobile (and desktop) */
-  .pill.user-pill{ cursor:pointer; position:relative; user-select:none; }
-</style>
-
 <div class="topbar">
   <div class="top-left">
     <button id="menuBtn" class="hamburger" aria-label="Toggle sidebar" title="Toggle sidebar">
       <i class="bi bi-list"></i>
     </button>
-
-    <div class="d-none d-md-flex align-items-center ms-2"
-         style="font-weight:900; color:#111827; font-size:14px;">
-      <?php echo e($welcomeText); ?>
-    </div>
   </div>
 
   <div class="top-right">
-    <button class="icon-btn" aria-label="Notifications" title="Notifications">
-      <i class="bi bi-bell"></i>
-    </button>
 
-    <!-- ✅ Click/Tap this pill to open dropdown -->
-    <div class="pill user-pill" id="userPill" title="<?php echo e($loggedName); ?>" aria-haspopup="true" aria-expanded="false">
-      <div class="avatar" style="overflow:hidden; display:flex; align-items:center; justify-content:center;">
-        <?php if ($showPhoto): ?>
-          <img src="<?php echo e($photoSrc); ?>"
-               alt="<?php echo e($loggedName); ?>"
-               style="width:100%;height:100%;object-fit:cover;display:block;"
-               onerror="this.style.display='none'; this.parentElement.textContent='<?php echo e($avatarText); ?>';">
-        <?php else: ?>
-          <?php echo e($avatarText); ?>
-        <?php endif; ?>
+    <!-- Notifications -->
+    <div class="topbar-dropdown-wrap">
+      <button id="notificationBtn" class="icon-btn notification-btn" aria-label="Notifications" title="Notifications" type="button">
+        <i class="bi bi-bell"></i>
+        <span class="notify-dot"></span>
+      </button>
+
+      <div id="notificationDropdown" class="topbar-dropdown notification-dropdown">
+        <div class="dropdown-head">
+          <div>
+            <div class="dropdown-title">Notifications</div>
+            <div class="dropdown-subtitle">Latest updates</div>
+          </div>
+          <span class="dropdown-count">3</span>
+        </div>
+
+        <div class="notification-list">
+          <a href="my-sites.php" class="notification-item">
+            <div class="notification-icon blue">
+              <i class="bi bi-kanban"></i>
+            </div>
+            <div class="notification-content">
+              <div class="notification-title">Project update</div>
+              <div class="notification-text">A project update is available for your assigned site.</div>
+              <div class="notification-time">2 min ago</div>
+            </div>
+          </a>
+
+          <a href="today-tasks.php" class="notification-item">
+            <div class="notification-icon green">
+              <i class="bi bi-check2-square"></i>
+            </div>
+            <div class="notification-content">
+              <div class="notification-title">Today report reminder</div>
+              <div class="notification-text">Please update today’s task/report status.</div>
+              <div class="notification-time">15 min ago</div>
+            </div>
+          </a>
+
+          <a href="apply-leave.php" class="notification-item">
+            <div class="notification-icon orange">
+              <i class="bi bi-calendar2-x"></i>
+            </div>
+            <div class="notification-content">
+              <div class="notification-title">HR update</div>
+              <div class="notification-text">Leave and attendance updates are available.</div>
+              <div class="notification-time">1 hour ago</div>
+            </div>
+          </a>
+        </div>
+
+        <div class="dropdown-footer">
+          <a href="notifications.php" class="see-more-btn">See more</a>
+        </div>
       </div>
+    </div>
 
-      <div class="user-meta d-none d-sm-block">
-        <div class="name"><?php echo e($loggedName); ?></div>
-        <div class="mail"><?php echo e($displayMail); ?></div>
-      </div>
+    <!-- Profile Dropdown -->
+    <div class="topbar-dropdown-wrap">
+      <button id="profileBtn" class="pill profile-btn" title="<?php echo e($loggedName); ?>" type="button">
+        <div class="avatar" style="overflow:hidden; display:flex; align-items:center; justify-content:center;">
+          <?php if ($showPhoto): ?>
+            <img src="<?php echo e($photoSrc); ?>"
+                 alt="<?php echo e($loggedName); ?>"
+                 style="width:100%;height:100%;object-fit:cover;display:block;"
+                 onerror="this.style.display='none'; this.parentElement.textContent='<?php echo e($avatarText); ?>';">
+          <?php else: ?>
+            <?php echo e($avatarText); ?>
+          <?php endif; ?>
+        </div>
 
-      <i class="bi bi-chevron-down" style="color:#6b7280"></i>
+        <div class="user-meta d-none d-sm-block">
+          <div class="name"><?php echo e($loggedName); ?></div>
+          <div class="mail"><?php echo e($displayMail); ?></div>
+        </div>
 
-      <!-- ✅ DROPDOWN -->
-      <div class="user-dropdown" id="userDropdown" role="menu" aria-label="User menu">
-        <div class="ud-top">
-          <div class="ud-avatar">
+        <i class="bi bi-chevron-down profile-chevron"></i>
+      </button>
+
+      <div id="profileDropdown" class="topbar-dropdown profile-dropdown">
+        <div class="profile-card-head">
+          <div class="profile-big-avatar">
             <?php if ($showPhoto): ?>
               <img src="<?php echo e($photoSrc); ?>"
                    alt="<?php echo e($loggedName); ?>"
@@ -220,76 +206,410 @@ $welcomeText = 'Welcome, ' . trim((string)$loggedName);
               <?php echo e($avatarText); ?>
             <?php endif; ?>
           </div>
-          <div style="min-width:0;">
-            <div class="ud-name"><?php echo e($loggedName); ?></div>
-            <div class="ud-mail"><?php echo e($displayMail); ?></div>
+
+          <div>
+            <div class="profile-name"><?php echo e($loggedName); ?></div>
+            <div class="profile-email"><?php echo e($displayMail); ?></div>
           </div>
         </div>
 
-        <div class="ud-actions">
-          <a class="ud-btn" href="<?php echo e($profileUrl); ?>">
-            <span class="left"><i class="bi bi-person"></i> My Profile</span>
-            <i class="bi bi-chevron-right"></i>
+        <div class="profile-menu">
+          <a href="<?php echo e($profileUrl); ?>" class="profile-menu-item">
+            <i class="bi bi-person"></i>
+            <span>My Profile</span>
           </a>
 
-          <a class="ud-btn danger"
-             href="<?php echo e($logoutUrl); ?>"
+          <a href="my-attendance.php" class="profile-menu-item">
+            <i class="bi bi-calendar2-check"></i>
+            <span>My Attendance</span>
+          </a>
+
+          <a href="apply-leave.php" class="profile-menu-item">
+            <i class="bi bi-calendar-plus"></i>
+            <span>Apply Leave</span>
+          </a>
+
+          <a href="settings.php" class="profile-menu-item">
+            <i class="bi bi-gear"></i>
+            <span>Settings</span>
+          </a>
+
+          <a href="<?php echo e($logoutUrl); ?>"
+             class="profile-menu-item logout-item"
              onclick="return confirm('Do you want to logout?');">
-            <span class="left"><i class="bi bi-box-arrow-right"></i> Logout</span>
-            <i class="bi bi-chevron-right"></i>
+            <i class="bi bi-box-arrow-right"></i>
+            <span>Logout</span>
           </a>
         </div>
       </div>
     </div>
 
-    <!-- Optional logout icon (desktop only) -->
-    <a class="icon-btn text-danger d-none d-sm-inline-flex"
-       href="<?php echo e($logoutUrl); ?>"
-       aria-label="Logout"
-       title="Logout"
-       onclick="return confirm('Do you want to logout?');">
-      <i class="bi bi-box-arrow-right"></i>
-    </a>
   </div>
 </div>
 
-<script>
-(function(){
-  const pill = document.getElementById('userPill');
-  const dd = document.getElementById('userDropdown');
-
-  if (!pill || !dd) return;
-
-  function closeDropdown(){
-    dd.classList.remove('show');
-    pill.setAttribute('aria-expanded', 'false');
+<style>
+  .topbar-dropdown-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
   }
 
-  function toggleDropdown(){
-    const open = dd.classList.contains('show');
-    if (open) closeDropdown();
-    else {
-      dd.classList.add('show');
-      pill.setAttribute('aria-expanded', 'true');
+  .notification-btn {
+    position: relative;
+  }
+
+  .notify-dot {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    width: 8px;
+    height: 8px;
+    background: #ef4444;
+    border: 2px solid #fff;
+    border-radius: 50%;
+  }
+
+  .profile-btn {
+    border: 0;
+    cursor: pointer;
+  }
+
+  .profile-chevron {
+    color: #6b7280;
+    transition: transform .2s ease;
+  }
+
+  .profile-btn.active .profile-chevron {
+    transform: rotate(180deg);
+  }
+
+  .topbar-dropdown {
+    position: absolute;
+    top: calc(100% + 12px);
+    right: 0;
+    width: 320px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, .14);
+    z-index: 99999;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(8px);
+    transition: .18s ease;
+    overflow: hidden;
+  }
+
+  .topbar-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .dropdown-head {
+    padding: 14px 15px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .dropdown-title {
+    font-size: 14px;
+    font-weight: 900;
+    color: #111827;
+    line-height: 1.2;
+  }
+
+  .dropdown-subtitle {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  .dropdown-count {
+    min-width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #2563eb;
+    font-size: 11px;
+    font-weight: 900;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .notification-list {
+    max-height: 310px;
+    overflow-y: auto;
+  }
+
+  .notification-item {
+    display: flex;
+    gap: 10px;
+    padding: 12px 15px;
+    text-decoration: none;
+    border-bottom: 1px solid #f8fafc;
+    transition: .15s ease;
+  }
+
+  .notification-item:hover {
+    background: #f8fafc;
+  }
+
+  .notification-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    font-size: 15px;
+  }
+
+  .notification-icon.blue {
+    background: #eff6ff;
+    color: #2563eb;
+  }
+
+  .notification-icon.green {
+    background: #ecfdf5;
+    color: #16a34a;
+  }
+
+  .notification-icon.orange {
+    background: #fff7ed;
+    color: #ea580c;
+  }
+
+  .notification-content {
+    min-width: 0;
+  }
+
+  .notification-title {
+    font-size: 12px;
+    font-weight: 900;
+    color: #111827;
+    line-height: 1.25;
+  }
+
+  .notification-text {
+    font-size: 11px;
+    font-weight: 650;
+    color: #64748b;
+    margin-top: 2px;
+    line-height: 1.35;
+  }
+
+  .notification-time {
+    font-size: 10px;
+    font-weight: 800;
+    color: #94a3b8;
+    margin-top: 4px;
+  }
+
+  .dropdown-footer {
+    padding: 10px;
+    border-top: 1px solid #f1f5f9;
+    background: #fff;
+  }
+
+  .see-more-btn {
+    width: 100%;
+    height: 34px;
+    border-radius: 11px;
+    background: #111827;
+    color: #fff;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: .15s ease;
+  }
+
+  .see-more-btn:hover {
+    background: #020617;
+    color: #fff;
+  }
+
+  .profile-dropdown {
+    width: 280px;
+  }
+
+  .profile-card-head {
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    border-bottom: 1px solid #f1f5f9;
+    background: #fbfdff;
+  }
+
+  .profile-big-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 15px;
+    background: #111827;
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-size: 15px;
+    font-weight: 900;
+    overflow: hidden;
+    flex: 0 0 auto;
+  }
+
+  .profile-big-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .profile-name {
+    font-size: 13px;
+    font-weight: 900;
+    color: #111827;
+    line-height: 1.2;
+  }
+
+  .profile-email {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    margin-top: 2px;
+    max-width: 185px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .profile-menu {
+    padding: 8px;
+  }
+
+  .profile-menu-item {
+    min-height: 38px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    text-decoration: none;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 850;
+    transition: .15s ease;
+  }
+
+  .profile-menu-item i {
+    font-size: 15px;
+    width: 18px;
+    text-align: center;
+    color: #64748b;
+  }
+
+  .profile-menu-item:hover {
+    background: #f8fafc;
+    color: #111827;
+  }
+
+  .logout-item {
+    color: #dc2626;
+  }
+
+  .logout-item i {
+    color: #dc2626;
+  }
+
+  .logout-item:hover {
+    background: #fef2f2;
+    color: #b91c1c;
+  }
+
+  @media (max-width: 575.98px) {
+    .topbar-dropdown {
+      position: fixed;
+      top: 70px;
+      right: 12px;
+      left: 12px;
+      width: auto;
+    }
+
+    .profile-dropdown,
+    .notification-dropdown {
+      width: auto;
     }
   }
+</style>
 
-  // Toggle on click/tap
-  pill.addEventListener('click', function(e){
-    const target = e.target;
-    // if click is on a link inside dropdown, allow navigation
-    if (target && dd.contains(target) && target.closest('a')) return;
-    toggleDropdown();
-  });
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const notificationBtn = document.getElementById("notificationBtn");
+    const notificationDropdown = document.getElementById("notificationDropdown");
 
-  // Close on outside click
-  document.addEventListener('click', function(e){
-    if (!pill.contains(e.target)) closeDropdown();
-  });
+    const profileBtn = document.getElementById("profileBtn");
+    const profileDropdown = document.getElementById("profileDropdown");
 
-  // Close on ESC
-  document.addEventListener('keydown', function(e){
-    if (e.key === 'Escape') closeDropdown();
+    function closeTopbarDropdowns() {
+      if (notificationDropdown) notificationDropdown.classList.remove("show");
+      if (profileDropdown) profileDropdown.classList.remove("show");
+      if (profileBtn) profileBtn.classList.remove("active");
+    }
+
+    if (notificationBtn && notificationDropdown) {
+      notificationBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+
+        const isOpen = notificationDropdown.classList.contains("show");
+
+        closeTopbarDropdowns();
+
+        if (!isOpen) {
+          notificationDropdown.classList.add("show");
+        }
+      });
+    }
+
+    if (profileBtn && profileDropdown) {
+      profileBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+
+        const isOpen = profileDropdown.classList.contains("show");
+
+        closeTopbarDropdowns();
+
+        if (!isOpen) {
+          profileDropdown.classList.add("show");
+          profileBtn.classList.add("active");
+        }
+      });
+    }
+
+    document.addEventListener("click", function () {
+      closeTopbarDropdowns();
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        closeTopbarDropdowns();
+      }
+    });
+
+    if (notificationDropdown) {
+      notificationDropdown.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+    }
+
+    if (profileDropdown) {
+      profileDropdown.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+    }
   });
-})();
 </script>

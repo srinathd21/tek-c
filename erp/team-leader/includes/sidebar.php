@@ -111,7 +111,32 @@
     <!--<a class="side-link" href="reports-hub.php">-->
     <!--  <i class="bi bi-bar-chart-line"></i><span class="label">Reports Hub</span>-->
     <!--</a>-->
+    <!-- Manage Attendance -->
+<a class="side-link collapse-toggle"
+   data-bs-toggle="collapse"
+   href="#attendanceMenu"
+   role="button"
+   aria-expanded="false"
+   aria-controls="attendanceMenu">
+  <i class="bi bi-fingerprint"></i>
+  <span class="label">Manage Attendance</span>
+  <span class="ms-auto label chevron-wrap">
+    <i class="bi bi-chevron-down chevron"></i>
+  </span>
+</a>
 
+<div class="collapse ps-2 side-submenu-collapse" id="attendanceMenu">
+
+  <a class="side-link sub-link" href="emp-regulation.php">
+    <i class="bi bi-pencil-square"></i>
+    <span class="label">Emp Regulations</span>
+  </a>
+
+  <a class="side-link sub-link" href="leave-requests.php">
+    <i class="bi bi-calendar2-x"></i>
+    <span class="label">Leave Requests</span>
+  </a>
+</div>
     <!-- HR -->
     <a class="side-link" data-bs-toggle="collapse" href="#hrMenu">
       <i class="bi bi-people"></i><span class="label">HR</span>
@@ -124,7 +149,10 @@
       <!--<a class="side-link" href="payslips.php"><i class="bi bi-receipt"></i><span class="label">Payslips</span></a>-->
       <!--<a class="side-link" href="hr-policy.php"><i class="bi bi-file-earmark-medical"></i><span class="label">HR Policy</span></a>-->
       <!--<a class="side-link" href="salary-loan.php"><i class="bi bi-cash-stack"></i><span class="label">Salary Loan</span></a>-->
-      <!--<a class="side-link" href="attendance-regularization.php"><i class="bi bi-calendar2-check"></i><span class="label">Attendance Regularization</span></a>-->
+      <a class="side-link sub-link" href="attendance-regularization.php">
+        <i class="bi bi-pencil-square"></i>
+        <span class="label">Attendance Regularization</span>
+      </a>
       <a class="side-link" href="apply-leave.php"><i class="bi bi-calendar-plus"></i><span class="label">Apply Leave</span></a>
       <a class="side-link" href="my-leave-history.php"><i class="bi bi-clock-history"></i><span class="label">My Leave History</span></a>
     </div>

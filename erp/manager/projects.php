@@ -766,7 +766,7 @@ foreach ($projects as $p) {
 
             <div class="d-flex gap-2">
 
-            
+
 
               <button class="primary-btn export-btn" data-bs-toggle="modal" data-bs-target="#exportModal">
                 <i class="bi bi-download"></i>

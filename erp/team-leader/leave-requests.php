@@ -9,237 +9,6 @@ date_default_timezone_set('Asia/Kolkata');
 $conn = get_db_connection();
 if (!$conn) { die("Database connection failed."); }
 
-
-function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-
-function tableExists($conn, string $table): bool {
-    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
-    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
-    if (!$res) return false;
-    $ok = mysqli_num_rows($res) > 0;
-    mysqli_free_result($res);
-    return $ok;
-}
-
-function columnExists($conn, string $table, string $column): bool {
-    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
-    $columnEsc = mysqli_real_escape_string($conn, $column);
-    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
-    if (!$res) return false;
-    $ok = mysqli_num_rows($res) > 0;
-    mysqli_free_result($res);
-    return $ok;
-}
-
-function employeeRoleKey(array $empRow): string {
-    $designation = strtolower(trim((string)($empRow['designation'] ?? '')));
-    $department  = strtolower(trim((string)($empRow['department'] ?? '')));
-    $userRole    = strtolower(trim((string)($_SESSION['user_role'] ?? '')));
-
-    if (str_contains($designation, 'admin') || str_contains($designation, 'administrator') || str_contains($department, 'admin') || str_contains($userRole, 'admin')) return 'admin';
-    if (str_contains($designation, 'hr') || str_contains($designation, 'human resource') || str_contains($department, 'hr') || str_contains($department, 'human resource') || str_contains($userRole, 'hr')) return 'hr';
-    if (str_contains($designation, 'manager') || str_contains($designation, 'project manager') || str_contains($userRole, 'manager')) return 'manager';
-    if (str_contains($designation, 'team lead') || str_contains($designation, 'tl') || str_contains($designation, 'lead') || str_contains($userRole, 'team lead') || str_contains($userRole, 'tl')) return 'tl';
-    if (str_contains($designation, 'project engineer') || str_contains($designation, 'engineer')) return 'project_engineer';
-    return 'employee';
-}
-
-function sendNotification($conn, int $toEmployeeId, string $title, string $message, string $module = 'leave_requests', ?int $referenceId = null, string $link = ''): bool {
-    if ($toEmployeeId <= 0 || !tableExists($conn, 'notifications')) return false;
-
-    $cols = [];
-    $vals = [];
-    $types = '';
-
-    $map = [
-        'employee_id'  => ['i', $toEmployeeId],
-        'title'        => ['s', $title],
-        'message'      => ['s', $message],
-        'type'         => ['s', 'leave'],
-        'module'       => ['s', $module],
-        'reference_id' => ['i', $referenceId],
-        'link'         => ['s', $link],
-        'is_read'      => ['i', 0],
-    ];
-
-    foreach ($map as $col => $pair) {
-        if (columnExists($conn, 'notifications', $col)) {
-            $cols[] = "`$col`";
-            $types .= $pair[0];
-            $vals[] = $pair[1];
-        }
-    }
-
-    if (!$cols) return false;
-
-    $placeholders = implode(',', array_fill(0, count($cols), '?'));
-    $sql = "INSERT INTO notifications (" . implode(',', $cols) . ") VALUES ($placeholders)";
-    $stmt = mysqli_prepare($conn, $sql);
-    if (!$stmt) return false;
-
-    mysqli_stmt_bind_param($stmt, $types, ...$vals);
-    $ok = mysqli_stmt_execute($stmt);
-    mysqli_stmt_close($stmt);
-    return $ok;
-}
-
-function logActivitySafe($conn, string $activityType, string $module, string $description, $referenceId = null, $referenceName = null, $oldData = null, $newData = null): bool {
-    if (!$conn || !tableExists($conn, 'activity_logs')) return false;
-
-    if (is_array($oldData) || is_object($oldData)) $oldData = json_encode($oldData, JSON_UNESCAPED_UNICODE);
-    if (is_array($newData) || is_object($newData)) $newData = json_encode($newData, JSON_UNESCAPED_UNICODE);
-
-    $employeeId   = $_SESSION['employee_id'] ?? $_SESSION['user_id'] ?? null;
-    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['user_name'] ?? $_SESSION['name'] ?? 'System';
-    $username     = $_SESSION['username'] ?? $_SESSION['user_name'] ?? '';
-    $designation  = $_SESSION['designation'] ?? $_SESSION['user_role'] ?? '';
-    $department   = $_SESSION['department'] ?? '';
-    $ipAddress    = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
-    $userAgent    = $_SERVER['HTTP_USER_AGENT'] ?? 'UNKNOWN';
-
-    $columns = [];
-    $values  = [];
-    $types   = '';
-
-    $map = [
-        'employee_id'    => ['i', $employeeId],
-        'employee_name'  => ['s', $employeeName],
-        'username'       => ['s', $username],
-        'designation'    => ['s', $designation],
-        'department'     => ['s', $department],
-        'activity_type'  => ['s', $activityType],
-        'action_type'    => ['s', $activityType],
-        'module'         => ['s', $module],
-        'description'    => ['s', $description],
-        'reference_id'   => ['i', $referenceId],
-        'reference_name' => ['s', $referenceName],
-        'module_id'      => ['i', $referenceId],
-        'module_name'    => ['s', $referenceName],
-        'old_data'       => ['s', $oldData],
-        'new_data'       => ['s', $newData],
-        'ip_address'     => ['s', $ipAddress],
-        'user_agent'     => ['s', $userAgent],
-        'user_id'        => ['i', $employeeId],
-        'user_name'      => ['s', $employeeName],
-        'user_role'      => ['s', $designation],
-    ];
-
-    foreach ($map as $col => $pair) {
-        if (columnExists($conn, 'activity_logs', $col)) {
-            $columns[] = "`$col`";
-            $types .= $pair[0];
-            $values[] = $pair[1];
-        }
-    }
-
-    if (!$columns) return false;
-
-    $placeholders = implode(',', array_fill(0, count($columns), '?'));
-    $stmt = mysqli_prepare($conn, "INSERT INTO activity_logs (" . implode(',', $columns) . ") VALUES ($placeholders)");
-    if (!$stmt) return false;
-
-    mysqli_stmt_bind_param($stmt, $types, ...$values);
-    $ok = mysqli_stmt_execute($stmt);
-    mysqli_stmt_close($stmt);
-    return $ok;
-}
-
-function userCanProcessLeave($conn, array $leaveData, int $currentEmployeeId, string $roleKey): bool {
-    if ($currentEmployeeId <= 0) return false;
-
-    // Admin / HR can process all leave requests.
-    if (in_array($roleKey, ['admin', 'hr'], true)) {
-        return true;
-    }
-
-    // New hierarchy columns from apply-leave.php.
-    if (array_key_exists('approver_id', $leaveData) && (int)$leaveData['approver_id'] === $currentEmployeeId) {
-        return true;
-    }
-
-    if (array_key_exists('manager_id', $leaveData) && (int)$leaveData['manager_id'] === $currentEmployeeId) {
-        return true;
-    }
-
-    // Old reporting-manager workflow fallback.
-    if (array_key_exists('reporting_to', $leaveData) && (int)$leaveData['reporting_to'] === $currentEmployeeId) {
-        return true;
-    }
-
-    // Project hierarchy fallback using leave_requests.site_id.
-    // This fixes old rows where approver_id/manager_id was not saved.
-    $siteId = (int)($leaveData['site_id'] ?? 0);
-
-    if ($siteId > 0 && tableExists($conn, 'sites')) {
-        $hasTeamLeadCol = columnExists($conn, 'sites', 'team_lead_employee_id');
-
-        $teamLeadSelect = $hasTeamLeadCol
-            ? "s.team_lead_employee_id"
-            : "NULL AS team_lead_employee_id";
-
-        $stmt = mysqli_prepare($conn, "
-            SELECT
-                s.manager_employee_id,
-                $teamLeadSelect
-            FROM sites s
-            WHERE s.id = ?
-            LIMIT 1
-        ");
-
-        if ($stmt) {
-            mysqli_stmt_bind_param($stmt, "i", $siteId);
-            mysqli_stmt_execute($stmt);
-            $res = mysqli_stmt_get_result($stmt);
-            $site = $res ? mysqli_fetch_assoc($res) : null;
-            mysqli_stmt_close($stmt);
-
-            if ($site) {
-                // TL applies leave -> Project Manager can process.
-                if ($roleKey === 'manager' && (int)($site['manager_employee_id'] ?? 0) === $currentEmployeeId) {
-                    return true;
-                }
-
-                // Project Engineer applies leave -> Project TL can process.
-                if ($roleKey === 'tl' && (int)($site['team_lead_employee_id'] ?? 0) === $currentEmployeeId) {
-                    return true;
-                }
-            }
-        }
-
-        // Fallback TL stored through site_project_engineers + employee designation.
-        if ($roleKey === 'tl' && tableExists($conn, 'site_project_engineers')) {
-            $tlStmt = mysqli_prepare($conn, "
-                SELECT spe.employee_id
-                FROM site_project_engineers spe
-                JOIN employees e ON e.id = spe.employee_id
-                WHERE spe.site_id = ?
-                  AND spe.employee_id = ?
-                  AND (
-                    LOWER(COALESCE(e.designation,'')) LIKE '%team lead%'
-                    OR LOWER(COALESCE(e.designation,'')) LIKE '%tl%'
-                    OR LOWER(COALESCE(e.designation,'')) LIKE '%lead%'
-                  )
-                LIMIT 1
-            ");
-
-            if ($tlStmt) {
-                mysqli_stmt_bind_param($tlStmt, "ii", $siteId, $currentEmployeeId);
-                mysqli_stmt_execute($tlStmt);
-                $tlRes = mysqli_stmt_get_result($tlStmt);
-                $ok = $tlRes && mysqli_fetch_assoc($tlRes);
-                mysqli_stmt_close($tlStmt);
-
-                if ($ok) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
-}
-
-
 // ---------------- AUTH (Multiple Roles) ----------------
 if (empty($_SESSION['employee_id'])) {
     header("Location: ../login.php");
@@ -263,40 +32,35 @@ if (!$current_employee) {
     die("Employee not found.");
 }
 
-// Define role-based permissions for hierarchy approval
+// Define role-based permissions
 $designation = strtolower(trim($current_employee['designation'] ?? ''));
 $department = strtolower(trim($current_employee['department'] ?? ''));
-$currentRoleKey = employeeRoleKey($current_employee ?: []);
 
-$isAdmin = ($currentRoleKey === 'admin');
-$isHr = ($currentRoleKey === 'hr');
-$isTl = ($currentRoleKey === 'tl');
-$isManager = ($currentRoleKey === 'manager');
+// Check user roles
+$isAdmin = ($designation === 'administrator' || $designation === 'admin' || $designation === 'director');
+$isHr = ($designation === 'hr' || $department === 'hr');
+$isManager = in_array($designation, ['manager', 'team lead', 'project manager', 'project engineer grade 1', 'project engineer grade 2']);
 
-// Get reporting employees for fallback / old records
+// Get reporting employees if manager
 $reporting_employees = [];
-if (($isManager || $isTl) && !$isHr && !$isAdmin) {
+if ($isManager && !$isHr && !$isAdmin) {
     $reporting_stmt = mysqli_prepare($conn, "SELECT id FROM employees WHERE reporting_to = ?");
     mysqli_stmt_bind_param($reporting_stmt, "i", $current_employee_id);
     mysqli_stmt_execute($reporting_stmt);
     $reporting_res = mysqli_stmt_get_result($reporting_stmt);
     while ($row = mysqli_fetch_assoc($reporting_res)) {
-        $reporting_employees[] = (int)$row['id'];
+        $reporting_employees[] = $row['id'];
     }
-    mysqli_stmt_close($reporting_stmt);
 }
 
-// TL, Manager, HR, Admin can access this approval page.
-$canApprove = ($isAdmin || $isHr || $isTl || $isManager);
+// Check if user has any approval permission
+$canApprove = ($isAdmin || $isHr || $isManager);
 
 if (!$canApprove) {
     $_SESSION['flash_error'] = "You don't have permission to access this page.";
     header("Location: ../dashboard.php");
     exit;
 }
-
-$hasApproverIdCol = columnExists($conn, 'leave_requests', 'approver_id');
-$hasSiteIdCol = columnExists($conn, 'leave_requests', 'site_id');
 
 // ---------------- HANDLE APPROVAL/REJECTION ----------------
 $action_message = '';
@@ -388,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['leave_action'])) {
                     
                     if (isset($update_stmt) && $update_stmt) {
                         if (mysqli_stmt_execute($update_stmt)) {
-                            logActivitySafe(
+                            logActivity(
                                 $conn,
                                 $log_action,
                                 'leave',
@@ -427,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action'])) {
         
         // Get all selected leaves with their reporting info
         $verify_query = "
-            SELECT lr.*, e.reporting_to
+            SELECT lr.id, lr.employee_id, lr.status, e.reporting_to
             FROM leave_requests lr
             JOIN employees e ON lr.employee_id = e.id
             WHERE lr.id IN ({$ids_string})
@@ -443,7 +207,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action'])) {
                 continue;
             }
             
-            $hasPermission = userCanProcessLeave($conn, $row, (int)$current_employee_id, $currentRoleKey);
+            $hasPermission = false;
+            if ($isAdmin || $isHr) {
+                $hasPermission = true;
+            } elseif ($isManager) {
+                if ($row['reporting_to'] == $current_employee_id || in_array($row['employee_id'], $reporting_employees)) {
+                    $hasPermission = true;
+                }
+            }
             
             if ($hasPermission) {
                 $valid_ids[] = $row['id'];
@@ -485,7 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action'])) {
                 if (mysqli_query($conn, $update_query)) {
                     $affected = mysqli_affected_rows($conn);
                     
-                    logActivitySafe(
+                    logActivity(
                         $conn,
                         $log_action,
                         'leave',
@@ -543,30 +314,17 @@ $query = "
     WHERE 1=1
 ";
 
-// Add permission restrictions based on role.
-// TL / Manager should see hierarchy-routed requests assigned to them.
-// HR / Admin can see all.
+// Add permission restrictions based on role
 if (!$isAdmin && !$isHr) {
-    $permissionParts = [];
-
-    if ($hasApproverIdCol) {
-        $permissionParts[] = "lr.approver_id = {$current_employee_id}";
+    if ($isManager) {
+        // Managers can see leaves of their reporting employees
+        if (!empty($reporting_employees)) {
+            $reporting_ids = implode(',', $reporting_employees);
+            $query .= " AND (e.reporting_to = {$current_employee_id} OR e.id IN ({$reporting_ids}) OR lr.employee_id IN ({$reporting_ids}))";
+        } else {
+            $query .= " AND e.reporting_to = {$current_employee_id}";
+        }
     }
-
-    if (columnExists($conn, 'leave_requests', 'manager_id')) {
-        $permissionParts[] = "lr.manager_id = {$current_employee_id}";
-    }
-
-    // Backward compatibility for old reporting_to based records.
-    $permissionParts[] = "e.reporting_to = {$current_employee_id}";
-
-    if (!empty($reporting_employees)) {
-        $reporting_ids = implode(',', array_map('intval', $reporting_employees));
-        $permissionParts[] = "e.id IN ({$reporting_ids})";
-        $permissionParts[] = "lr.employee_id IN ({$reporting_ids})";
-    }
-
-    $query .= " AND (" . implode(" OR ", $permissionParts) . ")";
 }
 
 // Apply filters
@@ -622,24 +380,14 @@ if ($result) {
 // Get statistics with permission restrictions
 $stats_condition = "";
 if (!$isAdmin && !$isHr) {
-    $statsParts = [];
-
-    if ($hasApproverIdCol) {
-        $statsParts[] = "lr.approver_id = {$current_employee_id}";
+    if ($isManager) {
+        if (!empty($reporting_employees)) {
+            $reporting_ids = implode(',', $reporting_employees);
+            $stats_condition = " AND (e.reporting_to = {$current_employee_id} OR e.id IN ({$reporting_ids}))";
+        } else {
+            $stats_condition = " AND e.reporting_to = {$current_employee_id}";
+        }
     }
-
-    if (columnExists($conn, 'leave_requests', 'manager_id')) {
-        $statsParts[] = "lr.manager_id = {$current_employee_id}";
-    }
-
-    $statsParts[] = "e.reporting_to = {$current_employee_id}";
-
-    if (!empty($reporting_employees)) {
-        $reporting_ids = implode(',', array_map('intval', $reporting_employees));
-        $statsParts[] = "e.id IN ({$reporting_ids})";
-    }
-
-    $stats_condition = " AND (" . implode(" OR ", $statsParts) . ")";
 }
 
 $stats_query = "
@@ -675,9 +423,9 @@ $employees_query = "
     WHERE employee_status = 'active'
 ";
 
-if (!$isAdmin && !$isHr && ($isManager || $isTl)) {
+if (!$isAdmin && !$isHr && $isManager) {
     if (!empty($reporting_employees)) {
-        $reporting_ids = implode(',', array_map('intval', $reporting_employees));
+        $reporting_ids = implode(',', $reporting_employees);
         $employees_query .= " AND (reporting_to = {$current_employee_id} OR id IN ({$reporting_ids}))";
     } else {
         $employees_query .= " AND reporting_to = {$current_employee_id}";
@@ -700,10 +448,10 @@ $pending_count = $stats['pending_count'] ?? 0;
 $user_role = 'User';
 if ($isAdmin) $user_role = 'Administrator';
 elseif ($isHr) $user_role = 'HR';
-elseif ($isTl) $user_role = 'Team Lead';
 elseif ($isManager) $user_role = 'Manager';
 
 // ---------------- HELPERS ----------------
+function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
 function safeDate($v, $dash='—'){
     $v = trim((string)$v);
@@ -753,7 +501,7 @@ function getApproverInfo($request) {
 }
 
 $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
-$userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pending' : 'neutral'));
+$userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
 ?>
 <!doctype html>
 <html lang="en">
@@ -767,334 +515,63 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
     <link href="assets/css/layout-styles.css" rel="stylesheet" />
     <link href="assets/css/topbar.css" rel="stylesheet" />
     <link href="assets/css/footer.css" rel="stylesheet" />
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 
     <style>
-        :root{
-            --page-bg:#f5f7fb;
-            --card-bg:#ffffff;
-            --border:#e5e7eb;
-            --text:#111827;
-            --muted:#6b7280;
-            --soft:#f8fafc;
-            --shadow:0 10px 26px rgba(15,23,42,.055);
-            --radius:15px;
-        }
+        .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px; }
+        .panel{ background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 8px 24px rgba(17,24,39,.06); padding:20px; }
+        .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+        .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
 
-        body{ background:var(--page-bg); }
+        .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+            padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; cursor:pointer; transition: all 0.2s; }
+        .stat-card:hover{ transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,0.1); }
+        .stat-card.active{ border:2px solid #3b82f6; background:#eff6ff; }
+        .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
+        .stat-ic.blue{ background: var(--blue); }
+        .stat-ic.green{ background: var(--green); }
+        .stat-ic.orange{ background: var(--orange); }
+        .stat-ic.purple{ background: #8e44ad; }
+        .stat-ic.red{ background: #e74c3c; }
+        .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
+        .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
 
-        .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px; }
-        .projects-wrapper{ width:100%; }
+        .filter-card{ background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:20px; }
 
-        .page-heading{
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap:12px;
-            margin-bottom:14px;
-        }
+        .table thead th{ font-size:12px; letter-spacing:.2px; color:#6b7280; font-weight:800; border-bottom:1px solid #e5e7eb!important; }
+        .table td{ vertical-align:middle; border-color:#e5e7eb; font-weight:600; color:#374151; padding:14px 8px; }
 
-        .page-heading h1{ font-size:19px; font-weight:900; color:var(--text); margin:0; }
-        .page-heading p{ margin:3px 0 0; color:var(--muted); font-size:12px; font-weight:600; }
+        .action-btn{ width:32px; height:32px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; 
+            display:inline-flex; align-items:center; justify-content:center; color:#6b7280; text-decoration:none; margin:0 2px; }
+        .action-btn:hover{ background:#f3f4f6; color:#374151; }
+        .action-btn.approve:hover{ background:#d1fae5; color:#065f46; border-color:#065f46; }
+        .action-btn.reject:hover{ background:#fee2e2; color:#991b1b; border-color:#991b1b; }
 
-        .primary-btn,.secondary-btn,.success-btn,.danger-btn{
-            min-height:36px;
-            padding:0 14px;
-            border-radius:11px;
-            font-size:12px;
-            font-weight:900;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            gap:7px;
-            text-decoration:none;
-            white-space:nowrap;
-        }
+        .employee-avatar{ width:40px; height:40px; border-radius:50%; background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-weight:800; color:#4b5563; }
+        .employee-avatar img{ width:40px; height:40px; border-radius:50%; object-fit:cover; }
 
-        .primary-btn{ border:0; background:#111827; color:#fff; }
-        .primary-btn:hover{ background:#020617; color:#fff; }
+        .days-badge{ background:#e6f7ff; color:#0050b3; padding:4px 8px; border-radius:20px; font-weight:700; font-size:12px; }
 
-        .secondary-btn{ border:1px solid var(--border); background:#fff; color:#334155; }
-        .secondary-btn:hover{ border-color:#cbd5e1; background:#f8fafc; color:#111827; }
-
-        .success-btn{ border:0; background:#16a34a; color:#fff; }
-        .success-btn:hover{ background:#15803d; color:#fff; }
-
-        .danger-btn{ border:0; background:#dc2626; color:#fff; }
-        .danger-btn:hover{ background:#b91c1c; color:#fff; }
-
-        .stat-card{
-            background:var(--card-bg);
-            border:1px solid var(--border);
-            border-radius:var(--radius);
-            box-shadow:var(--shadow);
-            padding:12px 13px;
-            min-height:78px;
-            display:flex;
-            align-items:center;
-            gap:11px;
-            cursor:pointer;
-            transition:.15s ease;
-        }
-
-        .stat-card:hover{ transform:translateY(-1px); box-shadow:0 14px 32px rgba(15,23,42,.09); }
-        .stat-card.active{ border-color:#93c5fd; background:#eff6ff; }
-
-        .stat-ic{
-            width:38px;
-            height:38px;
-            border-radius:12px;
-            display:grid;
-            place-items:center;
-            color:#fff;
-            font-size:17px;
-            flex:0 0 auto;
-        }
-
-        .blue{background:#2f80ed;}
-        .orange{background:#f2994a;}
-        .green{background:#27ae60;}
-        .red{background:#eb5757;}
-        .purple{background:#8b5cf6;}
-        .gray{background:#64748b;}
-
-        .stat-label{ color:var(--muted); font-weight:800; font-size:10.5px; text-transform:uppercase; }
-        .stat-value{ font-size:24px; font-weight:950; color:var(--text); line-height:1; }
-
-        .panel{
-            background:var(--card-bg);
-            border:1px solid var(--border);
-            border-radius:var(--radius);
-            box-shadow:var(--shadow);
-            padding:13px;
-            margin-bottom:14px;
-        }
-
-        .panel-header{
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap:12px;
-            margin-bottom:12px;
-        }
-
-        .panel-title{ font-weight:900; font-size:14px; margin:0; color:var(--text); }
-        .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
-
-        .filter-card{
-            background:#fff;
-            border:1px solid var(--border);
-            border-radius:var(--radius);
-            box-shadow:var(--shadow);
-            padding:13px;
-            margin-bottom:14px;
-        }
-
-        .form-label{
-            font-size:11px;
-            font-weight:900;
-            color:#475569;
-            text-transform:uppercase;
-            margin-bottom:6px;
-        }
-
-        .form-control,.form-select{
-            min-height:38px;
-            border:1px solid var(--border);
-            border-radius:11px;
-            font-size:12px;
-            font-weight:800;
-            color:#111827;
-            padding:8px 11px;
-        }
-
-        .form-control:focus,.form-select:focus{
-            border-color:#bfdbfe;
-            box-shadow:0 0 0 3px rgba(59,130,246,.10);
-        }
-
-        .badge-pill{
-            border-radius:999px;
-            padding:5px 8px;
-            font-weight:900;
-            font-size:10px;
-            display:inline-flex;
-            align-items:center;
-            gap:6px;
-            border:1px solid transparent;
-            text-decoration:none;
-            white-space:nowrap;
-        }
-
-        .mini-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
-        .ontrack{color:#15803d;background:#dcfce7;border-color:#bbf7d0;}
-        .progressing{color:#2563eb;background:#dbeafe;border-color:#bfdbfe;}
-        .pending{color:#6d28d9;background:#ede9fe;border-color:#ddd6fe;}
-        .atrisk{color:#b91c1c;background:#fee2e2;border-color:#fecaca;}
-        .neutral{color:#475569;background:#f1f5f9;border-color:#e2e8f0;}
-
-        .compact-table-wrap{
-            width:100%;
-            border:1px solid var(--border);
-            border-radius:13px;
-            overflow:hidden;
-            background:#fff;
-        }
-
-        .compact-table{ width:100%; margin:0; table-layout:auto; }
-
-        .compact-table thead th{
-            background:var(--soft);
-            color:#64748b;
-            font-size:10px;
-            text-transform:uppercase;
-            font-weight:900;
-            border-bottom:1px solid var(--border)!important;
-            padding:8px 9px;
-        }
-
-        .compact-table tbody td{
-            padding:8px 9px;
-            vertical-align:middle;
-            border-color:#eef2f7;
-            color:#334155;
-            font-weight:700;
-            font-size:11.5px;
-        }
-
-        .compact-table tbody tr:hover{ background:#fbfdff; }
-
-        .employee-cell{ display:flex; align-items:center; gap:8px; min-width:190px; }
-        .employee-avatar{
-            width:34px;
-            height:34px;
-            border-radius:12px;
-            background:#111827;
-            display:grid;
-            place-items:center;
-            font-weight:950;
-            font-size:12px;
-            color:#fff;
-            overflow:hidden;
-            flex:0 0 auto;
-        }
-
-        .employee-avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
-
-        .table-primary-text{ color:#111827; font-size:11.5px; font-weight:900; }
-        .table-secondary-text{ color:#64748b; font-size:10px; font-weight:700; margin-top:1px; }
-
-        .days-badge{
-            background:#eff6ff;
-            color:#2563eb;
-            border:1px solid #bfdbfe;
-            padding:4px 8px;
-            border-radius:999px;
-            font-weight:900;
-            font-size:10px;
-            display:inline-flex;
-            gap:5px;
-            align-items:center;
-        }
-
-        .action-btn{
-            width:32px;
-            height:32px;
-            border-radius:10px;
-            border:1px solid var(--border);
-            background:#fff;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            color:#64748b;
-            text-decoration:none;
-            transition:.15s ease;
-        }
-
-        .action-btn:hover{ background:#f8fafc; color:#111827; }
-        .action-btn.approve:hover{ background:#dcfce7; color:#15803d; border-color:#86efac; }
-        .action-btn.reject:hover{ background:#fee2e2; color:#b91c1c; border-color:#fecaca; }
-
-        .bulk-action-bar{
-            background:#fff;
-            border:1px solid var(--border);
-            border-radius:13px;
-            box-shadow:var(--shadow);
-            padding:10px 12px;
-            margin-bottom:14px;
-            display:none;
-            align-items:center;
-            gap:12px;
-        }
-
+        .bulk-action-bar{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin-bottom:16px; display:none; align-items:center; gap:12px; }
         .bulk-action-bar.show{ display:flex; }
 
-        .leave-card{
-            background:#fff;
-            border:1px solid var(--border);
-            border-radius:14px;
-            box-shadow:var(--shadow);
-            padding:12px;
-            margin-bottom:12px;
-        }
+        .nav-tabs .nav-link{ font-weight:700; color:#6b7280; border:none; padding:10px 20px; }
+        .nav-tabs .nav-link.active{ color:#3b82f6; border-bottom:3px solid #3b82f6; background:none; }
+        .nav-tabs .nav-link .badge{ margin-left:6px; }
 
-        .empty-state{
-            text-align:center;
-            padding:30px 12px;
-            color:#64748b;
-            font-size:12px;
-            font-weight:900;
-        }
+        .leave-card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:12px; }
+        .leave-card:hover{ box-shadow:0 4px 12px rgba(0,0,0,0.05); }
 
-        .empty-state i{
-            display:block;
-            font-size:34px;
-            opacity:.45;
-            margin-bottom:8px;
-        }
+        .role-badge{ font-size:11px; padding:4px 8px; border-radius:20px; font-weight:700; }
+        .role-admin{ background:#fee2e2; color:#991b1b; }
+        .role-hr{ background:#dbeafe; color:#1e40af; }
+        .role-manager{ background:#fef3c7; color:#92400e; }
 
-        .modal-content{
-            border:1px solid var(--border);
-            border-radius:16px;
-            box-shadow:0 24px 55px rgba(15,23,42,.18);
-        }
-
-        .modal-header{ border-bottom:1px solid #eef2f7; }
-        .modal-title{ font-size:15px; font-weight:950; color:#111827; }
-
-        @media(max-width:991.98px){
-            .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
-            .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
-            .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
-        }
-
-        @media(max-width:1199px){
-            .compact-table thead{ display:none; }
-            .compact-table,.compact-table tbody,.compact-table tr,.compact-table td{ display:block; width:100%; }
-            .compact-table tbody tr{ border-bottom:1px solid var(--border); padding:10px; }
-            .compact-table tbody td{
-                border:0;
-                display:flex;
-                justify-content:space-between;
-                gap:12px;
-            }
-            .compact-table tbody td::before{
-                content:attr(data-label);
-                font-size:10px;
-                font-weight:900;
-                color:#64748b;
-                text-transform:uppercase;
-                flex:0 0 105px;
-            }
-            .compact-table tbody td:first-child{ display:block; }
-            .compact-table tbody td:first-child::before{ display:none; }
-        }
-
-        @media(max-width:768px){
-            .content-scroll{ padding:12px 10px!important; }
-            .page-heading{ align-items:flex-start; flex-direction:column; }
-            .panel,.filter-card{ padding:12px; }
+        @media (max-width: 768px) {
+            .content-scroll{ padding:12px; }
             .bulk-action-bar{ flex-wrap:wrap; }
-            .primary-btn,.secondary-btn,.success-btn,.danger-btn{ width:100%; }
         }
     </style>
 </head>
@@ -1106,41 +583,31 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
         <?php include 'includes/topbar.php'; ?>
 
         <div class="content-scroll">
-            <div class="container-fluid projects-wrapper px-0">
+            <div class="container-fluid maxw">
 
-                <!-- Page Header -->
-                <div class="page-heading">
+                <!-- Page Header with Role Badge -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
-                        <h1>Leave Requests Management</h1>
-                        <p>Review and manage leave requests using hierarchy workflow: PE → TL, TL → Manager, Manager/HR → Admin.</p>
+                        <h1 class="h3 fw-bold mb-1">
+                            Leave Requests Management
+                            <?php if ($pending_count > 0): ?>
+                                <span class="badge bg-warning text-dark ms-2"><?= $pending_count ?> Pending</span>
+                            <?php endif; ?>
+                        </h1>
+                        <div class="d-flex align-items-center gap-2">
+                            <p class="text-muted mb-0">Review and manage employee leave requests</p>
+                            <span class="role-badge <?= $userRoleBadge ?>">
+                                <i class="bi bi-shield-check me-1"></i> <?= $user_role ?>
+                            </span>
+                        </div>
                     </div>
-
-                    <div class="d-flex gap-2 flex-wrap">
-                        <span class="badge-pill <?= $userRoleBadge ?>">
-                            <i class="bi bi-shield-check"></i>
-                            <?= e($user_role) ?>
-                        </span>
-
-                        <?php if ($isAdmin || $isHr): ?>
-                        <button class="secondary-btn" onclick="exportToExcel()">
-                            <i class="bi bi-file-excel"></i>
-                            Export
-                        </button>
-                        <?php endif; ?>
-
-                        <button class="primary-btn" onclick="window.print()">
-                            <i class="bi bi-printer"></i>
-                            Print
-                        </button>
-                    </div>
-                </div>
                     <div class="d-flex gap-2">
                         <?php if ($isAdmin || $isHr): ?>
                         <button class="btn btn-outline-primary" onclick="exportToExcel()">
                             <i class="bi bi-file-excel"></i> Export
                         </button>
                         <?php endif; ?>
-                        <button class="secondary-btn" onclick="window.print()">
+                        <button class="btn btn-outline-secondary" onclick="window.print()">
                             <i class="bi bi-printer"></i> Print
                         </button>
                     </div>
@@ -1204,7 +671,7 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                     <form method="GET" action="" id="filterForm">
                         <div class="row g-3">
                             <div class="col-md-2">
-                                <label class="form-label">Status</label>
+                                <label class="form-label fw-bold">Status</label>
                                 <select name="status" class="form-select" onchange="this.form.submit()">
                                     <option value="pending" <?= $status_filter === 'pending' ? 'selected' : '' ?>>Pending</option>
                                     <option value="approved" <?= $status_filter === 'approved' ? 'selected' : '' ?>>Approved</option>
@@ -1213,8 +680,8 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label">Employee</label>
-                                <select name="employee_id" class="form-select" onchange="this.form.submit()">
+                                <label class="form-label fw-bold">Employee</label>
+                                <select name="employee_id" class="form-select select2" onchange="this.form.submit()">
                                     <option value="0">All Employees</option>
                                     <?php foreach ($employees as $emp): ?>
                                         <option value="<?= $emp['id'] ?>" <?= $employee_filter == $emp['id'] ? 'selected' : '' ?>>
@@ -1224,15 +691,15 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label">From Date</label>
+                                <label class="form-label fw-bold">From Date</label>
                                 <input type="date" name="date_from" class="form-control" value="<?= e($date_from) ?>" onchange="this.form.submit()">
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label">To Date</label>
+                                <label class="form-label fw-bold">To Date</label>
                                 <input type="date" name="date_to" class="form-control" value="<?= e($date_to) ?>" onchange="this.form.submit()">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label">Search</label>
+                                <label class="form-label fw-bold">Search</label>
                                 <input type="text" name="search" class="form-control" placeholder="Name, Code, Reason..." value="<?= e($search) ?>">
                             </div>
                         </div>
@@ -1249,13 +716,13 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                         </label>
                     </div>
                     <div class="ms-auto d-flex gap-2">
-                        <button class="success-btn" onclick="bulkApprove()">
+                        <button class="btn btn-success" onclick="bulkApprove()">
                             <i class="bi bi-check-all"></i> Approve Selected
                         </button>
-                        <button class="danger-btn" onclick="bulkReject()">
+                        <button class="btn btn-danger" onclick="bulkReject()">
                             <i class="bi bi-x-circle"></i> Reject Selected
                         </button>
-                        <button class="secondary-btn" onclick="clearSelection()">
+                        <button class="btn btn-outline-secondary" onclick="clearSelection()">
                             <i class="bi bi-x"></i> Clear
                         </button>
                     </div>
@@ -1265,21 +732,16 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                 <!-- Leave Requests Table/Cards -->
                 <div class="panel">
                     <div class="panel-header">
-                        <div>
-                            <h5 class="panel-title">
-                                <i class="bi bi-list-ul me-2"></i>
-                                Leave Requests
-                            </h5>
-                            <div class="panel-subtitle">Filtered requests based on your approval permission</div>
-                        </div>
-                        <span class="badge-pill neutral">
-                            <?= count($leave_requests) ?> Records
-                        </span>
+                        <h5 class="panel-title">
+                            <i class="bi bi-list-ul me-2"></i>
+                            Leave Requests
+                            <span class="badge bg-secondary ms-2"><?= count($leave_requests) ?></span>
+                        </h5>
                     </div>
 
                     <!-- Desktop Table View -->
-                    <div class="compact-table-wrap">
-                        <table class="table compact-table align-middle mb-0" id="leaveTable">
+                    <div class="table-responsive d-none d-lg-block">
+                        <table class="table align-middle" id="leaveTable">
                             <thead>
                                 <tr>
                                     <?php if ($status_filter === 'pending'): ?>
@@ -1302,18 +764,21 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                             <tbody>
                                 <?php if (empty($leave_requests)): ?>
                                     <tr>
-                                        <td colspan="<?= $status_filter === 'pending' ? '9' : '8' ?>"><div class="empty-state"><i class="bi bi-inbox"></i>No leave requests found.</div></td>
+                                        <td colspan="<?= $status_filter === 'pending' ? '9' : '8' ?>" class="text-center text-muted py-4">
+                                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                            No leave requests found.
+                                        </td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($leave_requests as $request): ?>
                                         <tr>
                                             <?php if ($status_filter === 'pending'): ?>
-                                                <td data-label="Select">
+                                                <td>
                                                     <input class="form-check-input row-select" type="checkbox" value="<?= $request['id'] ?>">
                                                 </td>
                                             <?php endif; ?>
-                                            <td data-label="Employee">
-                                                <div class="employee-cell">
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
                                                     <div class="employee-avatar">
                                                         <?php if (!empty($request['employee_photo'])): ?>
                                                             <img src="<?= e($request['employee_photo']) ?>" alt="<?= e($request['full_name']) ?>">
@@ -1327,27 +792,27 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td data-label="Leave Type">
-                                                <span class="badge-pill neutral"><?= e($request['leave_type']) ?></span>
+                                            <td>
+                                                <span class="badge bg-light text-dark"><?= e($request['leave_type']) ?></span>
                                             </td>
-                                            <td data-label="Period">
+                                            <td>
                                                 <?= safeDate($request['from_date']) ?><br>
                                                 <small class="text-muted">to <?= safeDate($request['to_date']) ?></small>
                                             </td>
-                                            <td data-label="Days">
+                                            <td>
                                                 <span class="days-badge">
                                                     <i class="bi bi-calendar"></i> <?= $request['total_days'] ?> days
                                                 </span>
                                             </td>
-                                            <td data-label="Reason">
-                                                <div class="table-secondary-text" data-bs-toggle="tooltip" title="<?= e($request['reason']) ?>">
+                                            <td>
+                                                <div data-bs-toggle="tooltip" title="<?= e($request['reason']) ?>">
                                                     <?= e(substr($request['reason'], 0, 30)) ?>...
                                                 </div>
                                             </td>
-                                            <td data-label="Applied On">
+                                            <td>
                                                 <?= safeDateTime($request['applied_at'] ?? $request['created_at']) ?>
                                             </td>
-                                            <td data-label="Status / Approver">
+                                            <td>
                                                 <?= getStatusBadge($request['status']) ?>
                                                 <?php if ($request['status'] !== 'Pending'): ?>
                                                     <div class="small text-muted mt-1">
@@ -1356,7 +821,7 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                                                 <?php endif; ?>
                                             </td>
                                             <?php if ($status_filter === 'pending'): ?>
-                                            <td data-label="Actions">
+                                            <td>
                                                 <div class="d-flex gap-1">
                                                     <button class="action-btn" onclick="viewDetails(<?= $request['id'] ?>)" title="View Details">
                                                         <i class="bi bi-eye"></i>
@@ -1364,7 +829,14 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                                                     
                                                     <?php 
                                                     // Check if user can approve this specific request
-                                                    $canApproveThis = userCanProcessLeave($conn, $request, (int)$current_employee_id, $currentRoleKey);
+                                                    $canApproveThis = false;
+                                                    if ($isAdmin || $isHr) {
+                                                        $canApproveThis = true;
+                                                    } elseif ($isManager) {
+                                                        if ($request['reporting_to'] == $current_employee_id) {
+                                                            $canApproveThis = true;
+                                                        }
+                                                    }
                                                     
                                                     if ($canApproveThis): 
                                                     ?>
@@ -1443,7 +915,14 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                                             <i class="bi bi-eye"></i> View
                                         </button>
                                         <?php 
-                                        $canApproveThis = userCanProcessLeave($conn, $request, (int)$current_employee_id, $currentRoleKey);
+                                        $canApproveThis = false;
+                                        if ($isAdmin || $isHr) {
+                                            $canApproveThis = true;
+                                        } elseif ($isManager) {
+                                            if ($request['reporting_to'] == $current_employee_id) {
+                                                $canApproveThis = true;
+                                            }
+                                        }
                                         
                                         if ($canApproveThis): 
                                         ?>
@@ -1488,7 +967,7 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                     <p>Are you sure you want to approve leave request for <strong id="approve_employee_name"></strong>?</p>
                     
                     <div class="mb-3">
-                        <label class="form-label">Remarks (Optional)</label>
+                        <label class="form-label fw-bold">Remarks (Optional)</label>
                         <textarea name="remarks" class="form-control" rows="2" placeholder="Add any remarks..."></textarea>
                     </div>
                     
@@ -1498,8 +977,8 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="success-btn">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
                         <i class="bi bi-check-lg"></i> Confirm Approval
                     </button>
                 </div>
@@ -1537,8 +1016,8 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="danger-btn">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
                         <i class="bi bi-x-lg"></i> Confirm Rejection
                     </button>
                 </div>
@@ -1576,8 +1055,8 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="danger-btn">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
                         <i class="bi bi-x-lg"></i> Confirm Bulk Rejection
                     </button>
                 </div>
@@ -1587,17 +1066,43 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize tooltips
-    if (window.bootstrap) {
-        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
-            new bootstrap.Tooltip(el);
-        });
-    }
+$(document).ready(function() {
+    // Initialize DataTable
+    <?php if (!empty($leave_requests)): ?>
+    $('#leaveTable').DataTable({
+        pageLength: 25,
+        ordering: true,
+        searching: false,
+        info: true,
+        paging: true,
+        language: {
+            info: "Showing _START_ to _END_ of _TOTAL_ requests",
+            infoEmpty: "No requests to show",
+            infoFiltered: "(filtered from _MAX_ total requests)"
+        }
+    });
+    <?php endif; ?>
 
+    // Initialize Select2
+    $('.select2').select2({
+        theme: 'bootstrap-5',
+        width: '100%'
+    });
+
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Bulk selection functionality
     <?php if ($status_filter === 'pending' && !empty($leave_requests)): ?>
     const selectAllHeader = document.getElementById('selectAllHeader');
     const selectAllCheckbox = document.getElementById('selectAllCheckbox');
@@ -1605,43 +1110,55 @@ document.addEventListener('DOMContentLoaded', function() {
     const bulkActionBar = document.getElementById('bulkActionBar');
     const selectedCountSpan = document.getElementById('selectedCount');
 
-    window.updateBulkSelection = function() {
+    function updateBulkSelection() {
         const checked = document.querySelectorAll('.row-select:checked');
-        if (selectedCountSpan) selectedCountSpan.textContent = checked.length;
-
-        if (bulkActionBar) {
-            if (checked.length > 0) bulkActionBar.classList.add('show');
-            else bulkActionBar.classList.remove('show');
+        selectedCountSpan.textContent = checked.length;
+        
+        if (checked.length > 0) {
+            bulkActionBar.classList.add('show');
+        } else {
+            bulkActionBar.classList.remove('show');
         }
 
+        // Update select all checkbox
         if (selectAllHeader) {
-            selectAllHeader.checked = checked.length === rowCheckboxes.length && rowCheckboxes.length > 0;
+            selectAllHeader.checked = checked.length === rowCheckboxes.length;
             selectAllHeader.indeterminate = checked.length > 0 && checked.length < rowCheckboxes.length;
         }
-
         if (selectAllCheckbox) {
-            selectAllCheckbox.checked = checked.length === rowCheckboxes.length && rowCheckboxes.length > 0;
+            selectAllCheckbox.checked = checked.length === rowCheckboxes.length;
             selectAllCheckbox.indeterminate = checked.length > 0 && checked.length < rowCheckboxes.length;
         }
-    };
+    }
 
+    // Select all functionality
     if (selectAllHeader) {
         selectAllHeader.addEventListener('change', function() {
-            rowCheckboxes.forEach(cb => cb.checked = selectAllHeader.checked);
+            rowCheckboxes.forEach(cb => {
+                cb.checked = selectAllHeader.checked;
+            });
             updateBulkSelection();
         });
     }
 
     if (selectAllCheckbox) {
         selectAllCheckbox.addEventListener('change', function() {
-            rowCheckboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+            rowCheckboxes.forEach(cb => {
+                cb.checked = selectAllCheckbox.checked;
+            });
             updateBulkSelection();
         });
     }
 
-    rowCheckboxes.forEach(cb => cb.addEventListener('change', updateBulkSelection));
+    // Individual checkbox changes
+    if (rowCheckboxes.length > 0) {
+        rowCheckboxes.forEach(cb => {
+            cb.addEventListener('change', updateBulkSelection);
+        });
+    }
     <?php endif; ?>
 
+    // Auto-submit filter form on search input change with debounce
     let searchTimeout;
     const searchInput = document.querySelector('input[name="search"]');
     if (searchInput) {
@@ -1713,9 +1230,10 @@ function bulkReject() {
         return;
     }
 
+    // Populate bulk reject modal
     const idsContainer = document.getElementById('bulkSelectedIds');
     idsContainer.innerHTML = '';
-
+    
     selected.forEach(cb => {
         const input = document.createElement('input');
         input.type = 'hidden';
@@ -1730,18 +1248,22 @@ function bulkReject() {
 
 // Clear Selection
 function clearSelection() {
-    document.querySelectorAll('.row-select').forEach(cb => cb.checked = false);
-    if (typeof updateBulkSelection === 'function') updateBulkSelection();
+    document.querySelectorAll('.row-select').forEach(cb => {
+        cb.checked = false;
+    });
+    updateBulkSelection();
 }
 
 // Export to Excel
 function exportToExcel() {
     const rows = document.querySelectorAll('#leaveTable tbody tr');
     const csv = [];
-
+    
+    // Headers
     const headers = ['Employee', 'Leave Type', 'From Date', 'To Date', 'Days', 'Reason', 'Applied On', 'Status'];
     csv.push(headers.join(','));
-
+    
+    // Data rows
     rows.forEach(row => {
         if (row.cells.length >= 8) {
             const startIdx = <?= $status_filter === 'pending' ? '1' : '0' ?>;
@@ -1769,7 +1291,7 @@ function exportToExcel() {
             csv.push(rowData.join(','));
         }
     });
-
+    
     const csvString = csv.join('\n');
     const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
