@@ -158,9 +158,28 @@ $logoutUrl = '../logout.php';
               <?php
                 [$iconColor, $iconName] = notificationIconClass($notification['module'] ?? '', $notification['type'] ?? '');
                 $notificationLink = trim((string)($notification['link'] ?? ''));
-                if ($notificationLink === '') {
+                $notificationModule = strtolower(trim((string)($notification['module'] ?? '')));
+                $notificationType = strtolower(trim((string)($notification['type'] ?? '')));
+
+                /*
+                 * Current DB workflow:
+                 * Leave approvals must open leave-requests.php, not old leave-approval.php?id=...
+                 * This also fixes old notification rows that still have old links saved.
+                 */
+                if (
+                  str_contains($notificationModule, 'leave') ||
+                  str_contains($notificationType, 'leave') ||
+                  str_contains($notificationLink, 'leave-approval.php') ||
+                  str_contains($notificationLink, '/leave-approval.php')
+                ) {
+                  $notificationLink = 'leave-requests.php?status=pending';
+                } elseif ($notificationLink === '') {
                   $notificationLink = 'notifications.php';
+                } else {
+                  // Avoid root-based URL like /leave-requests.php inside panel folders.
+                  $notificationLink = ltrim($notificationLink, '/');
                 }
+
                 $isUnread = isset($notification['is_read']) && (int)$notification['is_read'] === 0;
               ?>
               <a href="<?php echo e($notificationLink); ?>"
