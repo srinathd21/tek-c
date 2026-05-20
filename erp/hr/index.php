@@ -395,7 +395,7 @@ $loggedName = $_SESSION['employee_name'] ?? 'HR';
                             </td>
                             <td><?php echo e(safeDate($join)); ?></td>
                             <td class="text-end">
-                              <a class="muted-link" href="../view-employee.php?id=<?php echo (int)$id; ?>" title="View">
+                              <a class="muted-link" href="./view-employee.php?id=<?php echo (int)$id; ?>" title="View">
                                 <i class="bi bi-box-arrow-up-right"></i>
                               </a>
                             </td>

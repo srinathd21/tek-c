@@ -1,617 +1,2091 @@
 <?php
-// hr/employee-regulations.php
+// attendance-regulations.php
+// TEK-C table section page reference UI style
+// Mobile responsive alignment fixed
+
 session_start();
+
 require_once 'includes/db-config.php';
 
 date_default_timezone_set('Asia/Kolkata');
 
 $conn = get_db_connection();
-if (!$conn) { die("Database connection failed."); }
 
-// ---------------- AUTH (HR) ----------------
-if (empty($_SESSION['employee_id'])) {
-  header("Location: ../login.php");
-  exit;
+if (!$conn) {
+    die("Database connection failed.");
 }
 
-$designation = trim((string)($_SESSION['designation'] ?? ''));
-$department  = trim((string)($_SESSION['department'] ?? ''));
+/* ---------------- AUTH / CURRENT USER ---------------- */
 
-$isHr = (strtolower($designation) === 'hr') || (strtolower($department) === 'hr');
-if (!$isHr) {
-  $fallback = $_SESSION['role_redirect'] ?? '../login.php';
-  header("Location: " . $fallback);
-  exit;
+$current_employee_id = (int)($_SESSION['employee_id'] ?? 1);
+$current_employee_name = $_SESSION['employee_name'] ?? 'Admin';
+
+$employee = null;
+
+$emp_stmt = mysqli_prepare(
+    $conn,
+    "SELECT id, full_name, designation, department
+     FROM employees
+     WHERE id = ?
+     AND employee_status = 'active'
+     LIMIT 1"
+);
+
+if ($emp_stmt) {
+    mysqli_stmt_bind_param($emp_stmt, "i", $current_employee_id);
+    mysqli_stmt_execute($emp_stmt);
+
+    $emp_res = mysqli_stmt_get_result($emp_stmt);
+    $employee = mysqli_fetch_assoc($emp_res);
+
+    mysqli_stmt_close($emp_stmt);
 }
 
-// ---------------- HANDLE FORM SUBMISSIONS ----------------
-$message = '';
-$messageType = '';
+$current_designation = trim((string)($employee['designation'] ?? ''));
+$current_department = trim((string)($employee['department'] ?? ''));
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  if (isset($_POST['action'])) {
-    $action = $_POST['action'];
-    
-    // Add new employee regulation
-    if ($action === 'add_regulation' && isset($_POST['employee_id'])) {
-      $employee_id = (int)$_POST['employee_id'];
-      $regulation_type = mysqli_real_escape_string($conn, $_POST['regulation_type']);
-      $effective_date = mysqli_real_escape_string($conn, $_POST['effective_date']);
-      $expiry_date = !empty($_POST['expiry_date']) ? mysqli_real_escape_string($conn, $_POST['expiry_date']) : null;
-      $description = mysqli_real_escape_string($conn, $_POST['description']);
-      $remarks = mysqli_real_escape_string($conn, $_POST['remarks'] ?? '');
-      $created_by = (int)$_SESSION['employee_id'];
-      
-      // Generate regulation number
-      $reg_no = 'EMPREG-' . date('Ymd') . '-' . str_pad($employee_id, 4, '0', STR_PAD_LEFT);
-      
-      $stmt = mysqli_prepare($conn, "
-        INSERT INTO employee_regulations 
-        (employee_id, regulation_no, regulation_type, effective_date, expiry_date, description, remarks, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ");
-      
-      mysqli_stmt_bind_param($stmt, "issssssi", 
-        $employee_id, $reg_no, $regulation_type, $effective_date, $expiry_date, $description, $remarks, $created_by
-      );
-      
-      if (mysqli_stmt_execute($stmt)) {
-        $reg_id = mysqli_insert_id($conn);
-        
-        // Log activity
-        $log_stmt = mysqli_prepare($conn, "
-          INSERT INTO activity_logs (user_id, user_name, user_role, action_type, module, module_id, module_name, description, new_data, ip_address, user_agent)
-          VALUES (?, ?, ?, 'CREATE', 'employee_regulations', ?, ?, 'Created employee-specific regulation', ?, ?, ?)
-        ");
-        $user_id = $_SESSION['employee_id'];
-        $user_name = $_SESSION['employee_name'] ?? 'HR';
-        $user_role = $_SESSION['designation'] ?? 'hr';
-        $module_name = $reg_no;
-        $new_data_json = json_encode($_POST);
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-        $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        
-        mysqli_stmt_bind_param($log_stmt, "ississss", $user_id, $user_name, $user_role, $reg_id, $module_name, $new_data_json, $ip, $ua);
-        mysqli_stmt_execute($log_stmt);
-        
-        $message = "Employee regulation added successfully!";
-        $messageType = "success";
-      } else {
-        $message = "Error adding regulation: " . mysqli_error($conn);
-        $messageType = "danger";
-      }
+$is_admin = in_array(
+    $current_designation,
+    ['Director', 'Manager', 'HR', 'Administrator', 'Admin'],
+    true
+) || strtolower($current_department) === 'hr';
+
+/* ---------------- HELPERS ---------------- */
+
+function e($v) {
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+}
+
+function safeDate($date, $dash = '—') {
+    $date = trim((string)$date);
+
+    if ($date === '' || $date === '0000-00-00' || $date === '0000-00-00 00:00:00') {
+        return $dash;
     }
-    
-    // Cancel regulation
-    elseif ($action === 'cancel_regulation' && isset($_POST['regulation_id'])) {
-      $regulation_id = (int)$_POST['regulation_id'];
-      $cancellation_reason = mysqli_real_escape_string($conn, $_POST['cancellation_reason'] ?? '');
-      $cancelled_by = (int)$_SESSION['employee_id'];
-      $cancelled_at = date('Y-m-d H:i:s');
-      
-      $stmt = mysqli_prepare($conn, "
-        UPDATE employee_regulations 
-        SET status = 'Cancelled', cancelled_by = ?, cancelled_at = ?, cancellation_reason = ?
-        WHERE id = ?
-      ");
-      
-      mysqli_stmt_bind_param($stmt, "issi", $cancelled_by, $cancelled_at, $cancellation_reason, $regulation_id);
-      
-      if (mysqli_stmt_execute($stmt)) {
-        $message = "Regulation cancelled successfully!";
-        $messageType = "success";
-      } else {
-        $message = "Error cancelling regulation: " . mysqli_error($conn);
-        $messageType = "danger";
-      }
+
+    $ts = strtotime($date);
+
+    return $ts ? date('d M Y', $ts) : e($date);
+}
+
+function safeTime($time, $dash = '—') {
+    $time = trim((string)$time);
+
+    if ($time === '') {
+        return $dash;
     }
-  }
+
+    $ts = strtotime($time);
+
+    return $ts ? date('h:i A', $ts) : e($time);
 }
 
-// ---------------- FETCH EMPLOYEES FOR DROPDOWN ----------------
-$employees = [];
-$stmt = mysqli_prepare($conn, "
-  SELECT id, full_name, employee_code, department, designation 
-  FROM employees 
-  WHERE employee_status = 'active'
-  ORDER BY full_name ASC
-");
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-while ($row = mysqli_fetch_assoc($result)) {
-  $employees[] = $row;
+function safeActivityLog(
+    $conn,
+    $action_type,
+    $module,
+    $description,
+    $module_id = null,
+    $module_name = null,
+    $old_data = null,
+    $new_data = null
+) {
+    if (!$conn) {
+        return false;
+    }
+
+    try {
+        $tableCheck = mysqli_query($conn, "SHOW TABLES LIKE 'activity_logs'");
+
+        if (!$tableCheck || mysqli_num_rows($tableCheck) === 0) {
+            return false;
+        }
+
+        $columnsResult = mysqli_query($conn, "SHOW COLUMNS FROM activity_logs");
+
+        if (!$columnsResult) {
+            return false;
+        }
+
+        $existingColumns = [];
+
+        while ($row = mysqli_fetch_assoc($columnsResult)) {
+            $existingColumns[] = $row['Field'];
+        }
+
+        if (empty($existingColumns)) {
+            return false;
+        }
+
+        $employee_id = $_SESSION['employee_id'] ?? null;
+        $admin_id = $_SESSION['admin_id'] ?? null;
+
+        $current_user_id = $employee_id ?: ($admin_id ?: null);
+
+        $current_user_name =
+            $_SESSION['employee_name']
+            ?? $_SESSION['admin_name']
+            ?? $_SESSION['username']
+            ?? 'System';
+
+        $current_user_role =
+            $_SESSION['designation']
+            ?? $_SESSION['role']
+            ?? $_SESSION['user_role']
+            ?? 'User';
+
+        $ip_address = $_SERVER['REMOTE_ADDR'] ?? '';
+        $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $now = date('Y-m-d H:i:s');
+
+        $dataMap = [
+            'user_id' => $current_user_id,
+            'employee_id' => $employee_id ?: $current_user_id,
+            'admin_id' => $admin_id ?: null,
+            'created_by' => $current_user_id,
+            'performed_by' => $current_user_id,
+
+            'user_name' => $current_user_name,
+            'employee_name' => $current_user_name,
+            'admin_name' => $current_user_name,
+            'created_by_name' => $current_user_name,
+
+            'user_role' => $current_user_role,
+            'role' => $current_user_role,
+
+            'action_type' => $action_type,
+            'action' => $action_type,
+            'activity_type' => $action_type,
+
+            'module' => $module,
+            'module_id' => $module_id,
+            'module_name' => $module_name,
+
+            'description' => $description,
+            'details' => $description,
+            'remarks' => $description,
+
+            'old_data' => $old_data,
+            'new_data' => $new_data,
+
+            'ip_address' => $ip_address,
+            'user_agent' => $user_agent,
+
+            'created_at' => $now,
+            'updated_at' => $now,
+            'log_time' => $now,
+            'logged_at' => $now
+        ];
+
+        $insertColumns = [];
+        $insertValues = [];
+        $types = '';
+
+        foreach ($dataMap as $column => $value) {
+            if (!in_array($column, $existingColumns, true)) {
+                continue;
+            }
+
+            $insertColumns[] = $column;
+            $insertValues[] = $value;
+
+            if (
+                $column === 'user_id' ||
+                $column === 'employee_id' ||
+                $column === 'admin_id' ||
+                $column === 'created_by' ||
+                $column === 'performed_by' ||
+                $column === 'module_id'
+            ) {
+                $types .= 'i';
+            } else {
+                $types .= 's';
+            }
+        }
+
+        if (empty($insertColumns)) {
+            return false;
+        }
+
+        $columnSql = implode(', ', array_map(function ($col) {
+            return '`' . str_replace('`', '', $col) . '`';
+        }, $insertColumns));
+
+        $placeholders = implode(', ', array_fill(0, count($insertColumns), '?'));
+
+        $sql = "INSERT INTO activity_logs ($columnSql) VALUES ($placeholders)";
+
+        $stmt = mysqli_prepare($conn, $sql);
+
+        if (!$stmt) {
+            return false;
+        }
+
+        $bindParams = [];
+        $bindParams[] = $types;
+
+        foreach ($insertValues as $key => $value) {
+            $bindParams[] = &$insertValues[$key];
+        }
+
+        call_user_func_array([$stmt, 'bind_param'], $bindParams);
+
+        $ok = mysqli_stmt_execute($stmt);
+
+        mysqli_stmt_close($stmt);
+
+        return $ok;
+
+    } catch (Throwable $e) {
+        error_log("safeActivityLog error: " . $e->getMessage());
+        return false;
+    }
 }
 
-// ---------------- FETCH ACTIVE REGULATIONS ----------------
-$active_regulations = [];
-$stmt = mysqli_prepare($conn, "
-  SELECT er.*, e.full_name as employee_name, e.employee_code, e.department,
-         c.full_name as created_by_name
-  FROM employee_regulations er
-  LEFT JOIN employees e ON er.employee_id = e.id
-  LEFT JOIN employees c ON er.created_by = c.id
-  WHERE er.status = 'Active' 
-    AND (er.expiry_date IS NULL OR er.expiry_date >= CURDATE())
-  ORDER BY er.created_at DESC
-");
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-while ($row = mysqli_fetch_assoc($result)) {
-  $active_regulations[] = $row;
+/* ---------------- DELETE ACTION ---------------- */
+
+if (isset($_GET['delete']) && $is_admin) {
+
+    $delete_id = (int)$_GET['delete'];
+
+    $get_stmt = mysqli_prepare(
+        $conn,
+        "SELECT *
+         FROM attendance_regulations
+         WHERE id = ?
+         LIMIT 1"
+    );
+
+    $reg_to_delete = null;
+
+    if ($get_stmt) {
+        mysqli_stmt_bind_param($get_stmt, "i", $delete_id);
+        mysqli_stmt_execute($get_stmt);
+
+        $get_result = mysqli_stmt_get_result($get_stmt);
+        $reg_to_delete = mysqli_fetch_assoc($get_result);
+
+        mysqli_stmt_close($get_stmt);
+    }
+
+    if ($reg_to_delete) {
+
+        $delete_stmt = mysqli_prepare(
+            $conn,
+            "DELETE FROM attendance_regulations
+             WHERE id = ?
+             LIMIT 1"
+        );
+
+        if ($delete_stmt) {
+            mysqli_stmt_bind_param($delete_stmt, "i", $delete_id);
+
+            if (mysqli_stmt_execute($delete_stmt)) {
+
+                safeActivityLog(
+                    $conn,
+                    'DELETE',
+                    'attendance_regulations',
+                    'Permanently deleted attendance regulation: ' . ($reg_to_delete['regulation_name'] ?? $delete_id),
+                    $delete_id,
+                    $reg_to_delete['regulation_name'] ?? null,
+                    json_encode($reg_to_delete),
+                    null
+                );
+
+                $_SESSION['flash_success'] = "Regulation permanently deleted successfully!";
+
+            } else {
+                $_SESSION['flash_error'] = "Failed to delete regulation: " . mysqli_stmt_error($delete_stmt);
+            }
+
+            mysqli_stmt_close($delete_stmt);
+
+        } else {
+            $_SESSION['flash_error'] = "Database error: " . mysqli_error($conn);
+        }
+
+    } else {
+        $_SESSION['flash_error'] = "Regulation not found.";
+    }
+
+    header("Location: attendance-regulations.php");
+    exit;
 }
 
-// ---------------- FETCH EXPIRED/CANCELLED REGULATIONS ----------------
-$history_regulations = [];
-$stmt = mysqli_prepare($conn, "
-  SELECT er.*, e.full_name as employee_name, e.employee_code, e.department,
-         c.full_name as created_by_name, can.full_name as cancelled_by_name
-  FROM employee_regulations er
-  LEFT JOIN employees e ON er.employee_id = e.id
-  LEFT JOIN employees c ON er.created_by = c.id
-  LEFT JOIN employees can ON er.cancelled_by = can.id
-  WHERE er.status != 'Active' OR (er.expiry_date IS NOT NULL AND er.expiry_date < CURDATE())
-  ORDER BY er.updated_at DESC
-  LIMIT 50
-");
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-while ($row = mysqli_fetch_assoc($result)) {
-  $history_regulations[] = $row;
+/* ---------------- FETCH REGULATIONS ---------------- */
+
+$regulations = [];
+
+$reg_query = "
+    SELECT *
+    FROM attendance_regulations
+    ORDER BY effective_from DESC, id DESC
+";
+
+$reg_result = mysqli_query($conn, $reg_query);
+
+if ($reg_result) {
+    $regulations = mysqli_fetch_all($reg_result, MYSQLI_ASSOC);
 }
 
-// ---------------- HELPER FUNCTIONS ----------------
-function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+/* ---------------- STATS ---------------- */
 
-function getRegulationTypeBadge($type) {
-  $colors = [
-    'Late Permission' => 'warning',
-    'Early Exit' => 'info',
-    'Remote Work' => 'success',
-    'Overtime' => 'primary',
-    'Flexi Hours' => 'secondary',
-    'Other' => 'dark'
-  ];
-  $color = $colors[$type] ?? 'secondary';
-  return "<span class='badge bg-{$color} rounded-pill'>{$type}</span>";
+$total_regulations = count($regulations);
+$active_count = 0;
+$inactive_count = 0;
+$office_count = 0;
+$site_count = 0;
+$currently_effective = 0;
+
+$today = date('Y-m-d');
+
+foreach ($regulations as $reg) {
+
+    if (!empty($reg['is_active'])) {
+        $active_count++;
+    } else {
+        $inactive_count++;
+    }
+
+    if (!empty($reg['allow_office_punch'])) {
+        $office_count++;
+    }
+
+    if (!empty($reg['allow_site_punch'])) {
+        $site_count++;
+    }
+
+    $from = trim((string)($reg['effective_from'] ?? ''));
+    $to = trim((string)($reg['effective_to'] ?? ''));
+
+    if (
+        !empty($reg['is_active']) &&
+        ($from === '' || $from <= $today) &&
+        ($to === '' || $to >= $today)
+    ) {
+        $currently_effective++;
+    }
 }
 
-function getStatusBadge($status) {
-  switch ($status) {
-    case 'Active':
-      return '<span class="badge bg-success rounded-pill">Active</span>';
-    case 'Expired':
-      return '<span class="badge bg-secondary rounded-pill">Expired</span>';
-    case 'Cancelled':
-      return '<span class="badge bg-danger rounded-pill">Cancelled</span>';
-    default:
-      return '<span class="badge bg-dark rounded-pill">Unknown</span>';
-  }
-}
+$flash_success = $_SESSION['flash_success'] ?? '';
+$flash_error = $_SESSION['flash_error'] ?? '';
 
-$loggedName = $_SESSION['employee_name'] ?? 'HR';
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
 ?>
+
 <!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Employee Regulations - HR - TEK-C</title>
 
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
-  <link rel="manifest" href="assets/fav/site.webmanifest">
+<meta charset="utf-8" />
 
-  <!-- Bootstrap 5 -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-  <!-- DataTables -->
-  <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-  <!-- Select2 -->
-  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1"
+/>
 
-  <!-- TEK-C Custom Styles -->
-  <link href="assets/css/layout-styles.css" rel="stylesheet" />
-  <link href="assets/css/topbar.css" rel="stylesheet" />
-  <link href="assets/css/footer.css" rel="stylesheet" />
+<title>Attendance Regulations - TEK-C</title>
 
-  <style>
-    .content-scroll { flex: 1 1 auto; overflow: auto; padding: 22px 22px 14px; }
-    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 20px; }
-    .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
-    .panel-title { font-weight: 900; font-size: 18px; color: #1f2937; margin: 0; }
-    
-    .table thead th { font-size: 12px; letter-spacing: .2px; color: #6b7280; font-weight: 800; border-bottom: 1px solid var(--border) !important; }
-    .table td { vertical-align: middle; border-color: var(--border); font-weight: 650; color: #374151; padding: 12px 8px; }
-    
-    .employee-info { display: flex; align-items: center; gap: 10px; }
-    .employee-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--yellow), #ffd66b); display: flex; align-items: center; justify-content: center; font-weight: 900; color: #1f2937; }
-    
-    .form-label { font-weight: 800; font-size: 13px; color: #4b5563; margin-bottom: 4px; }
-    .required:after { content: " *"; color: var(--red); }
-    
-    .nav-tabs .nav-link { font-weight: 800; color: #6b7280; border: none; padding: 10px 20px; }
-    .nav-tabs .nav-link.active { color: var(--green); border-bottom: 3px solid var(--green); background: none; }
-    
-    .stats-card { background: #f8fafc; border-radius: var(--radius); padding: 15px; border: 1px solid var(--border); }
-    .stats-number { font-size: 28px; font-weight: 900; line-height: 1; }
-    .stats-label { color: #6b7280; font-weight: 700; font-size: 13px; }
-    
-    @media (max-width: 991.98px) {
-      .content-scroll { padding: 18px; }
+<link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
+<link rel="manifest" href="assets/fav/site.webmanifest">
+
+<link
+href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+rel="stylesheet"
+/>
+
+<link
+href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+rel="stylesheet"
+/>
+
+<link href="assets/css/layout-styles.css" rel="stylesheet" />
+<link href="assets/css/topbar.css" rel="stylesheet" />
+<link href="assets/css/footer.css" rel="stylesheet" />
+
+<style>
+
+:root{
+    --page-bg:#f5f7fb;
+    --card-bg:#ffffff;
+    --border:#e5e7eb;
+    --text:#111827;
+    --muted:#6b7280;
+    --soft:#f8fafc;
+    --shadow:0 10px 26px rgba(15,23,42,.055);
+    --radius:15px;
+}
+
+body{
+    background:var(--page-bg);
+}
+
+.content-scroll{
+    flex:1 1 auto;
+    overflow:auto;
+    padding:16px;
+}
+
+.regulation-wrapper{
+    width:100%;
+}
+
+.page-heading{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:14px;
+}
+
+.page-heading h1{
+    font-size:19px;
+    font-weight:900;
+    color:var(--text);
+    margin:0;
+}
+
+.page-heading p{
+    margin:3px 0 0;
+    color:var(--muted);
+    font-size:12px;
+    font-weight:600;
+}
+
+.primary-btn{
+    border:0;
+    background:#111827;
+    color:#fff;
+    height:36px;
+    padding:0 14px;
+    border-radius:11px;
+    font-size:12px;
+    font-weight:900;
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    text-decoration:none;
+    white-space:nowrap;
+}
+
+.primary-btn:hover{
+    background:#020617;
+    color:#fff;
+}
+
+.create-btn{
+    background:#2f80ed;
+}
+
+.create-btn:hover{
+    background:#2563eb;
+}
+
+.back-btn{
+    background:#ffffff;
+    color:#475569;
+    border:1px solid var(--border);
+}
+
+.back-btn:hover{
+    background:#f8fafc;
+    color:#111827;
+}
+
+.export-btn{
+    background:#10b981;
+}
+
+.export-btn:hover{
+    background:#059669;
+}
+
+.stat-card{
+    background:var(--card-bg);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:12px 13px;
+    min-height:78px;
+    display:flex;
+    align-items:center;
+    gap:11px;
+}
+
+.stat-ic{
+    width:38px;
+    height:38px;
+    border-radius:12px;
+    display:grid;
+    place-items:center;
+    color:#fff;
+    font-size:17px;
+}
+
+.blue{ background:#2f80ed; }
+.green{ background:#27ae60; }
+.orange{ background:#f2994a; }
+.purple{ background:#8e44ad; }
+.red{ background:#ef4444; }
+
+.stat-label{
+    color:var(--muted);
+    font-weight:800;
+    font-size:10.5px;
+    text-transform:uppercase;
+}
+
+.stat-value{
+    font-size:24px;
+    font-weight:950;
+    line-height:1;
+    margin-top:2px;
+}
+
+.panel{
+    background:var(--card-bg);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:13px;
+    margin-bottom:14px;
+}
+
+.panel-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:12px;
+}
+
+.panel-title{
+    font-weight:900;
+    font-size:14px;
+    margin:0;
+    color:#111827;
+}
+
+.panel-subtitle{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:700;
+    margin-top:2px;
+}
+
+.panel-count{
+    background:#64748b;
+    color:#fff;
+    border-radius:8px;
+    padding:4px 8px;
+    font-size:11px;
+    font-weight:900;
+    white-space:nowrap;
+}
+
+.filter-bar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+}
+
+.search-box{
+    position:relative;
+    flex:1 1 260px;
+    max-width:430px;
+}
+
+.search-box i{
+    position:absolute;
+    left:12px;
+    top:50%;
+    transform:translateY(-50%);
+    color:#94a3b8;
+    font-size:13px;
+    pointer-events:none;
+}
+
+.search-box input{
+    width:100%;
+    height:36px;
+    border:1px solid var(--border);
+    border-radius:11px;
+    background:#fff;
+    padding:0 12px 0 34px;
+    font-size:12px;
+    font-weight:700;
+    color:var(--text);
+    outline:none;
+}
+
+.filter-select{
+    height:36px;
+    border:1px solid var(--border);
+    border-radius:11px;
+    background:#fff;
+    padding:0 12px;
+    font-size:12px;
+    font-weight:800;
+    min-width:140px;
+}
+
+.compact-table-wrap{
+    width:100%;
+    border:1px solid var(--border);
+    border-radius:13px;
+    overflow:hidden;
+    background:#fff;
+}
+
+.compact-table{
+    width:100%;
+    margin:0;
+    table-layout:auto;
+}
+
+.compact-table thead th{
+    background:var(--soft);
+    color:#64748b;
+    font-size:10px;
+    text-transform:uppercase;
+    font-weight:900;
+    border-bottom:1px solid var(--border)!important;
+    padding:8px 9px;
+}
+
+.compact-table tbody td{
+    padding:8px 9px;
+    vertical-align:middle;
+    border-color:#eef2f7;
+    color:#334155;
+    font-weight:700;
+    font-size:11.5px;
+}
+
+.compact-table tbody tr:hover{
+    background:#fbfdff;
+}
+
+.table-primary-text{
+    color:#111827;
+    font-size:11.5px;
+    font-weight:900;
+}
+
+.table-secondary-text{
+    color:#64748b;
+    font-size:10px;
+    font-weight:700;
+    margin-top:1px;
+}
+
+.badge-pill{
+    border-radius:999px;
+    padding:5px 8px;
+    font-weight:900;
+    font-size:10px;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    white-space:nowrap;
+}
+
+.mini-dot{
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:currentColor;
+}
+
+.ontrack{ color:#15803d; background:#dcfce7; }
+.danger{ color:#b91c1c; background:#fee2e2; }
+.info{ color:#2563eb; background:#dbeafe; }
+.muted{ color:#475569; background:#f1f5f9; }
+.primary-soft{ color:#1d4ed8; background:#dbeafe; }
+
+.punch-chip-wrap{
+    display:flex;
+    flex-wrap:wrap;
+    gap:5px;
+}
+
+.action-group{
+    display:flex;
+    justify-content:flex-end;
+    gap:5px;
+    flex-wrap:wrap;
+}
+
+.action-btn{
+    width:27px;
+    height:27px;
+    border-radius:9px;
+    border:1px solid var(--border);
+    background:#fff;
+    display:grid;
+    place-items:center;
+    text-decoration:none;
+    cursor:pointer;
+}
+
+.edit-btn{
+    color:#2563eb;
+    background:#eff6ff;
+}
+
+.toggle-btn{
+    color:#7c3aed;
+    background:#f3e8ff;
+}
+
+.delete-btn{
+    color:#b91c1c;
+    background:#fee2e2;
+    border-color:#fecaca;
+}
+
+.alert{
+    border-radius:var(--radius);
+    border:none;
+    box-shadow:var(--shadow);
+    margin-bottom:20px;
+    font-size:12px;
+    font-weight:700;
+}
+
+.empty-state{
+    text-align:center;
+    padding:28px 12px;
+    color:#64748b;
+    font-weight:800;
+    font-size:12px;
+    min-height:110px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    flex-wrap:wrap;
+}
+
+.empty-state a{
+    font-weight:900;
+    text-decoration:none;
+}
+
+.info-card{
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:14px;
+    height:100%;
+}
+
+.info-title{
+    color:#111827;
+    font-size:14px;
+    font-weight:900;
+    margin:0 0 10px;
+}
+
+.info-list{
+    list-style:none;
+    padding:0;
+    margin:0;
+}
+
+.info-list li{
+    display:flex;
+    gap:8px;
+    align-items:flex-start;
+    padding:6px 0;
+    color:#475569;
+    font-size:12px;
+    font-weight:700;
+    border-bottom:1px solid #f1f5f9;
+}
+
+.info-list li:last-child{
+    border-bottom:0;
+}
+
+.info-list i{
+    margin-top:1px;
+}
+
+.modal-content{
+    border:0;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+}
+
+.modal-title{
+    font-size:16px;
+    font-weight:900;
+}
+
+.warning-text{
+    color:#dc3545;
+    font-weight:900;
+}
+
+/* ---------------- MOBILE FIX ---------------- */
+
+@media(max-width:1199px){
+
+    .compact-table thead{
+        display:none;
     }
-  </style>
+
+    .compact-table,
+    .compact-table tbody,
+    .compact-table tr,
+    .compact-table td{
+        display:block;
+        width:100%;
+    }
+
+    .compact-table tbody tr{
+        border-bottom:1px solid var(--border);
+        padding:10px;
+    }
+
+    .compact-table tbody tr:last-child{
+        border-bottom:0;
+    }
+
+    .compact-table tbody td{
+        border:0;
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-start;
+        gap:12px;
+        padding:7px 0;
+    }
+
+    .compact-table tbody td::before{
+        content:attr(data-label);
+        font-size:10px;
+        font-weight:900;
+        color:#64748b;
+        text-transform:uppercase;
+        flex:0 0 105px;
+    }
+
+    .action-group{
+        justify-content:flex-start;
+    }
+
+    .page-heading{
+        align-items:flex-start;
+        flex-direction:column;
+    }
+}
+
+@media(max-width:768px){
+
+    .content-scroll{
+        padding:12px 10px 12px!important;
+    }
+
+    .regulation-wrapper{
+        padding-left:0!important;
+        padding-right:0!important;
+    }
+
+    .page-heading{
+        gap:10px;
+        margin-bottom:12px;
+    }
+
+    .page-heading h1{
+        font-size:18px;
+    }
+
+    .page-heading p{
+        font-size:11.5px;
+        line-height:1.3;
+    }
+
+    .page-heading .d-flex{
+        width:100%;
+        gap:7px!important;
+    }
+
+    .primary-btn{
+        height:34px;
+        padding:0 11px;
+        font-size:11px;
+        flex:1 1 auto;
+        justify-content:center;
+    }
+
+    .stat-card{
+        min-height:72px;
+        padding:10px;
+        gap:9px;
+    }
+
+    .stat-ic{
+        width:34px;
+        height:34px;
+        border-radius:11px;
+        font-size:15px;
+    }
+
+    .stat-value{
+        font-size:20px;
+    }
+
+    .panel{
+        padding:10px!important;
+        border-radius:14px;
+        margin-bottom:12px;
+    }
+
+    .panel-header{
+        align-items:flex-start;
+        gap:8px;
+        margin-bottom:10px;
+    }
+
+    .panel-title{
+        font-size:13px;
+        line-height:1.2;
+    }
+
+    .panel-subtitle{
+        font-size:10.5px;
+        line-height:1.3;
+    }
+
+    .panel-count{
+        padding:3px 7px;
+        font-size:10px;
+        margin-top:1px;
+    }
+
+    .filter-bar{
+        display:flex;
+        flex-direction:column;
+        align-items:stretch;
+        gap:8px;
+        margin-bottom:10px;
+    }
+
+    .search-box{
+        width:100%;
+        max-width:none;
+        flex:none;
+    }
+
+    .search-box input{
+        height:34px;
+        border-radius:10px;
+        font-size:11.5px;
+        padding-left:34px;
+    }
+
+    .filter-select{
+        width:100%;
+        min-width:0;
+        height:34px;
+        border-radius:10px;
+        font-size:11.5px;
+    }
+
+    .compact-table-wrap{
+        border-radius:12px;
+        overflow:hidden;
+    }
+
+    .compact-table tbody tr{
+        padding:10px 11px;
+    }
+
+    .compact-table tbody td{
+        padding:6px 0;
+        gap:8px;
+    }
+
+    .compact-table tbody td::before{
+        flex:0 0 92px;
+        font-size:9.5px;
+    }
+
+    .table-primary-text{
+        font-size:11.5px;
+        text-align:right;
+    }
+
+    .table-secondary-text{
+        font-size:10px;
+        text-align:right;
+    }
+
+    .badge-pill{
+        font-size:9.5px;
+        padding:4px 7px;
+    }
+
+    .punch-chip-wrap{
+        justify-content:flex-end;
+    }
+
+    .action-group{
+        justify-content:flex-end;
+    }
+
+    .empty-state{
+        min-height:105px;
+        padding:22px 10px;
+        font-size:11.5px;
+        line-height:1.4;
+        flex-direction:row;
+    }
+
+    .info-card{
+        padding:12px;
+    }
+
+    .info-title{
+        font-size:13px;
+    }
+
+    .info-list li{
+        font-size:11.5px;
+    }
+}
+
+@media(max-width:420px){
+
+    .panel{
+        padding:9px!important;
+    }
+
+    .panel-header{
+        margin-bottom:9px;
+    }
+
+    .search-box input{
+        font-size:11px;
+    }
+
+    .compact-table tbody td{
+        flex-direction:column;
+        align-items:flex-start;
+        gap:3px;
+    }
+
+    .compact-table tbody td::before{
+        flex:0 0 auto;
+    }
+
+    .table-primary-text,
+    .table-secondary-text{
+        text-align:left;
+    }
+
+    .punch-chip-wrap,
+    .action-group{
+        justify-content:flex-start;
+    }
+
+    .empty-state{
+        text-align:center;
+        flex-direction:column;
+        gap:5px;
+    }
+}
+
+</style>
+
 </head>
+
 <body>
-  <div class="app">
-    <?php include 'includes/sidebar.php'; ?>
 
-    <main class="main" aria-label="Main">
-      <?php include 'includes/topbar.php'; ?>
+<div class="app">
 
-      <div id="contentScroll" class="content-scroll">
-        <div class="container-fluid maxw">
+<?php include 'includes/sidebar.php'; ?>
 
-          <!-- Page Header -->
-          <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-              <h2 class="fw-900 mb-1" style="color:#1f2937;">Employee Regulations</h2>
-              <p class="text-muted" style="font-weight:650;">Manage employee-specific attendance exceptions and permissions</p>
-            </div>
-            <div>
-              <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEmployeeRegulationModal">
-                <i class="bi bi-plus-lg"></i> New Employee Exception
-              </button>
-              <a href="attendance-regulations.php" class="btn btn-outline-secondary ms-2">
-                <i class="bi bi-arrow-left"></i> Back to Company Regulations
-              </a>
-            </div>
-          </div>
+<main class="main" aria-label="Main">
 
-          <?php if ($message): ?>
-            <div class="alert alert-<?php echo $messageType; ?> alert-dismissible fade show" role="alert">
-              <?php echo e($message); ?>
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-          <?php endif; ?>
+<?php include 'includes/topbar.php'; ?>
 
-          <!-- Stats Cards -->
-          <div class="row g-3 mb-4">
-            <div class="col-md-4">
-              <div class="stats-card">
-                <div class="stats-number"><?php echo count($active_regulations); ?></div>
-                <div class="stats-label">Active Employee Exceptions</div>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="stats-card">
-                <div class="stats-number">
-                  <?php
-                    $late_count = 0;
-                    $remote_count = 0;
-                    foreach ($active_regulations as $r) {
-                      if ($r['regulation_type'] === 'Late Permission') $late_count++;
-                      if ($r['regulation_type'] === 'Remote Work') $remote_count++;
-                    }
-                    echo $late_count + $remote_count;
-                  ?>
-                </div>
-                <div class="stats-label">Late/Remote Exceptions</div>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="stats-card">
-                <div class="stats-number"><?php echo count($history_regulations); ?></div>
-                <div class="stats-label">Past Exceptions</div>
-              </div>
-            </div>
-          </div>
+<div id="contentScroll" class="content-scroll">
 
-          <!-- Tabs -->
-          <ul class="nav nav-tabs mb-3" id="regulationTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-              <button class="nav-link active" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" type="button" role="tab">
-                <i class="bi bi-check-circle"></i> Active Exceptions
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">
-                <i class="bi bi-archive"></i> History
-              </button>
-            </li>
-          </ul>
+<div class="container-fluid regulation-wrapper px-0">
 
-          <!-- Tab Content -->
-          <div class="tab-content" id="regulationTabContent">
-            <!-- Active Exceptions Tab -->
-            <div class="tab-pane fade show active" id="active" role="tabpanel">
-              <div class="panel">
-                <div class="panel-header">
-                  <h3 class="panel-title">Active Employee Exceptions</h3>
-                </div>
+<!-- PAGE HEADING -->
 
-                <div class="table-responsive">
-                  <table class="table" id="activeRegulationsTable">
-                    <thead>
-                      <tr>
-                        <th>Reg No.</th>
-                        <th>Employee</th>
-                        <th>Type</th>
-                        <th>Effective Period</th>
-                        <th>Description</th>
-                        <th>Created By</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <?php if (empty($active_regulations)): ?>
-                       
-                      <?php else: ?>
-                        <?php foreach ($active_regulations as $reg): ?>
-                          <tr>
-                            <td><span class="fw-800"><?php echo e($reg['regulation_no']); ?></span></td>
-                            <td>
-                              <div class="employee-info">
-                                <div class="employee-avatar"><?php echo e(substr($reg['employee_name'] ?? 'U', 0, 1)); ?></div>
-                                <div>
-                                  <div class="fw-900"><?php echo e($reg['employee_name'] ?? 'Unknown'); ?></div>
-                                  <div class="small text-muted"><?php echo e($reg['employee_code']); ?> • <?php echo e($reg['department'] ?? 'N/A'); ?></div>
-                                </div>
-                              </div>
-                            </td>
-                            <td><?php echo getRegulationTypeBadge($reg['regulation_type']); ?></td>
-                            <td>
-                              <div><i class="bi bi-calendar-check"></i> <?php echo date('d M Y', strtotime($reg['effective_date'])); ?></div>
-                              <?php if ($reg['expiry_date']): ?>
-                                <div class="small text-muted">Until <?php echo date('d M Y', strtotime($reg['expiry_date'])); ?></div>
-                              <?php else: ?>
-                                <div class="small text-muted">Indefinite</div>
-                              <?php endif; ?>
-                            </td>
-                            <td>
-                              <div class="fw-650"><?php echo e(substr($reg['description'], 0, 50)) . (strlen($reg['description']) > 50 ? '...' : ''); ?></div>
-                              <?php if ($reg['remarks']): ?>
-                                <div class="small text-muted"><i class="bi bi-chat"></i> <?php echo e(substr($reg['remarks'], 0, 30)); ?></div>
-                              <?php endif; ?>
-                            </td>
-                            <td>
-                              <div><?php echo e($reg['created_by_name'] ?? 'HR'); ?></div>
-                              <div class="small text-muted"><?php echo date('d M Y', strtotime($reg['created_at'])); ?></div>
-                            </td>
-                            <td>
-                              <button class="btn btn-sm btn-outline-danger cancel-regulation" 
-                                      data-id="<?php echo (int)$reg['id']; ?>"
-                                      data-name="<?php echo e($reg['regulation_no']); ?>"
-                                      title="Cancel Exception">
-                                <i class="bi bi-x-circle"></i>
-                              </button>
-                            </td>
-                          </tr>
-                        <?php endforeach; ?>
-                      <?php endif; ?>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+<div class="page-heading">
 
-            <!-- History Tab -->
-            <div class="tab-pane fade" id="history" role="tabpanel">
-              <div class="panel">
-                <div class="panel-header">
-                  <h3 class="panel-title">Past Exceptions</h3>
-                </div>
+<div>
 
-                <div class="table-responsive">
-                  <table class="table" id="historyRegulationsTable">
-                    <thead>
-                      <tr>
-                        <th>Reg No.</th>
-                        <th>Employee</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Period</th>
-                        <th>Description</th>
-                        <th>Cancelled/Expired</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <?php if (empty($history_regulations)): ?>
-                       
-                      <?php else: ?>
-                        <?php foreach ($history_regulations as $reg): 
-                          $status = $reg['status'];
-                          if ($reg['expiry_date'] && $reg['expiry_date'] < date('Y-m-d') && $status === 'Active') {
-                            $status = 'Expired';
-                          }
-                        ?>
-                          <tr>
-                            <td><span class="fw-800"><?php echo e($reg['regulation_no']); ?></span></td>
-                            <td>
-                              <div><?php echo e($reg['employee_name'] ?? 'Unknown'); ?></div>
-                              <div class="small text-muted"><?php echo e($reg['employee_code']); ?></div>
-                            </td>
-                            <td><?php echo getRegulationTypeBadge($reg['regulation_type']); ?></td>
-                            <td><?php echo getStatusBadge($status); ?></td>
-                            <td>
-                              <?php echo date('d M Y', strtotime($reg['effective_date'])); ?>
-                              <?php if ($reg['expiry_date']): ?>
-                                <br><small>to <?php echo date('d M Y', strtotime($reg['expiry_date'])); ?></small>
-                              <?php endif; ?>
-                            </td>
-                            <td><?php echo e(substr($reg['description'], 0, 60)); ?></td>
-                            <td>
-                              <?php if ($reg['cancelled_at']): ?>
-                                <div><?php echo date('d M Y', strtotime($reg['cancelled_at'])); ?></div>
-                                <div class="small text-muted">by <?php echo e($reg['cancelled_by_name'] ?? 'HR'); ?></div>
-                              <?php elseif ($reg['expiry_date'] && $reg['expiry_date'] < date('Y-m-d')): ?>
-                                <div>Expired</div>
-                                <div class="small text-muted"><?php echo date('d M Y', strtotime($reg['expiry_date'])); ?></div>
-                              <?php endif; ?>
-                            </td>
-                          </tr>
-                        <?php endforeach; ?>
-                      <?php endif; ?>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
+<h1>
+Attendance Regulations
+</h1>
 
-        </div>
-      </div>
+<p>
+Manage work timing policies, punch permissions and attendance rules
+</p>
 
-      <?php include 'includes/footer.php'; ?>
-    </main>
-  </div>
+</div>
 
-  <!-- Add Employee Regulation Modal -->
-  <div class="modal fade" id="addEmployeeRegulationModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title fw-900">Add Employee Exception</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <form method="POST">
-          <input type="hidden" name="action" value="add_regulation">
-          
-          <div class="modal-body">
-            <div class="row g-3">
-              <div class="col-12">
-                <label class="form-label required">Select Employee</label>
-                <select class="form-select" name="employee_id" required>
-                  <option value="">Choose employee...</option>
-                  <?php foreach ($employees as $emp): ?>
-                    <option value="<?php echo (int)$emp['id']; ?>">
-                      <?php echo e($emp['full_name']); ?> (<?php echo e($emp['employee_code']); ?>)
-                    </option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-              
-              <div class="col-12">
-                <label class="form-label required">Regulation Type</label>
-                <select class="form-select" name="regulation_type" required>
-                  <option value="">Select type...</option>
-                  <option value="Late Permission">Late Permission</option>
-                  <option value="Early Exit">Early Exit</option>
-                  <option value="Remote Work">Remote Work</option>
-                  <option value="Overtime">Overtime</option>
-                  <option value="Flexi Hours">Flexi Hours</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              
-              <div class="col-md-6">
-                <label class="form-label required">Effective From</label>
-                <input type="date" class="form-control" name="effective_date" required value="<?php echo date('Y-m-d'); ?>">
-              </div>
-              
-              <div class="col-md-6">
-                <label class="form-label">Effective To</label>
-                <input type="date" class="form-control" name="expiry_date">
-                <div class="form-text">Leave blank for indefinite</div>
-              </div>
-              
-              <div class="col-12">
-                <label class="form-label required">Description</label>
-                <textarea class="form-control" name="description" rows="3" required 
-                          placeholder="E.g., Allowed to report at 10:00 AM on weekdays"></textarea>
-              </div>
-              
-              <div class="col-12">
-                <label class="form-label">Remarks (Optional)</label>
-                <textarea class="form-control" name="remarks" rows="2" 
-                          placeholder="Additional notes..."></textarea>
-              </div>
-            </div>
-          </div>
-          
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-primary">Add Exception</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
+<div class="d-flex gap-2 flex-wrap">
 
-  <!-- Cancel Regulation Modal -->
-  <div class="modal fade" id="cancelRegulationModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title fw-900">Cancel Exception</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <form method="POST">
-          <input type="hidden" name="action" value="cancel_regulation">
-          <input type="hidden" name="regulation_id" id="cancelId">
-          
-          <div class="modal-body">
-            <p>Are you sure you want to cancel <strong id="cancelName"></strong>?</p>
-            
-            <div class="mt-3">
-              <label class="form-label">Cancellation Reason</label>
-              <textarea class="form-control" name="cancellation_reason" rows="2" required 
-                        placeholder="Reason for cancelling this exception..."></textarea>
-            </div>
-          </div>
-          
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            <button type="submit" class="btn btn-danger">Cancel Exception</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
+<?php if ($is_admin): ?>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-  <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-  <script src="assets/js/sidebar-toggle.js"></script>
+<a
+href="add-regulation.php"
+class="primary-btn create-btn"
+>
+<i class="bi bi-plus-lg"></i>
+Add Regulation
+</a>
 
-  <script>
-    $(document).ready(function() {
-      // Initialize DataTables
-      $('#activeRegulationsTable').DataTable({
-        pageLength: 10,
-        order: [[0, 'desc']],
-        language: { search: "", searchPlaceholder: "Search exceptions..." }
-      });
-      
-      $('#historyRegulationsTable').DataTable({
-        pageLength: 10,
-        order: [[6, 'desc']],
-        language: { search: "", searchPlaceholder: "Search history..." }
-      });
-      
-      // Initialize Select2
-      $('.form-select').select2({
-        theme: 'bootstrap-5',
-        dropdownParent: $('#addEmployeeRegulationModal')
-      });
-      
-      // Cancel regulation
-      $('.cancel-regulation').click(function() {
-        $('#cancelId').val($(this).data('id'));
-        $('#cancelName').text($(this).data('name'));
-        $('#cancelRegulationModal').modal('show');
-      });
-      
-      // Reset Select2 when modal is closed
-      $('#addEmployeeRegulationModal').on('hidden.bs.modal', function() {
-        $(this).find('form')[0].reset();
-        $(this).find('select').val(null).trigger('change');
-      });
+<?php endif; ?>
+
+<a
+href="employee-regulations.php"
+class="primary-btn back-btn"
+>
+<i class="bi bi-person-check"></i>
+Employee Exceptions
+</a>
+
+<a
+href="punchin.php"
+class="primary-btn back-btn"
+>
+<i class="bi bi-arrow-left"></i>
+Back
+</a>
+
+<button
+type="button"
+class="primary-btn export-btn"
+data-bs-toggle="modal"
+data-bs-target="#exportModal"
+>
+<i class="bi bi-download"></i>
+Export
+</button>
+
+</div>
+
+</div>
+
+<!-- ALERTS -->
+
+<?php if ($flash_success): ?>
+
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+
+<i class="bi bi-check-circle-fill me-2"></i>
+
+<?php echo e($flash_success); ?>
+
+<button
+type="button"
+class="btn-close"
+data-bs-dismiss="alert"
+></button>
+
+</div>
+
+<?php endif; ?>
+
+<?php if ($flash_error): ?>
+
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+
+<i class="bi bi-exclamation-triangle-fill me-2"></i>
+
+<?php echo e($flash_error); ?>
+
+<button
+type="button"
+class="btn-close"
+data-bs-dismiss="alert"
+></button>
+
+</div>
+
+<?php endif; ?>
+
+<!-- STATS -->
+
+<div class="row g-3 mb-3">
+
+<div class="col-6 col-md-4 col-xl-2">
+<div class="stat-card">
+<div class="stat-ic blue"><i class="bi bi-list-check"></i></div>
+<div>
+<div class="stat-label">Total</div>
+<div class="stat-value"><?php echo (int)$total_regulations; ?></div>
+</div>
+</div>
+</div>
+
+<div class="col-6 col-md-4 col-xl-2">
+<div class="stat-card">
+<div class="stat-ic green"><i class="bi bi-check-circle"></i></div>
+<div>
+<div class="stat-label">Active</div>
+<div class="stat-value"><?php echo (int)$active_count; ?></div>
+</div>
+</div>
+</div>
+
+<div class="col-6 col-md-4 col-xl-2">
+<div class="stat-card">
+<div class="stat-ic orange"><i class="bi bi-calendar-check"></i></div>
+<div>
+<div class="stat-label">Effective</div>
+<div class="stat-value"><?php echo (int)$currently_effective; ?></div>
+</div>
+</div>
+</div>
+
+<div class="col-6 col-md-4 col-xl-2">
+<div class="stat-card">
+<div class="stat-ic purple"><i class="bi bi-building"></i></div>
+<div>
+<div class="stat-label">Office</div>
+<div class="stat-value"><?php echo (int)$office_count; ?></div>
+</div>
+</div>
+</div>
+
+<div class="col-6 col-md-4 col-xl-2">
+<div class="stat-card">
+<div class="stat-ic blue"><i class="bi bi-geo-alt"></i></div>
+<div>
+<div class="stat-label">Site</div>
+<div class="stat-value"><?php echo (int)$site_count; ?></div>
+</div>
+</div>
+</div>
+
+<div class="col-6 col-md-4 col-xl-2">
+<div class="stat-card">
+<div class="stat-ic red"><i class="bi bi-x-circle"></i></div>
+<div>
+<div class="stat-label">Inactive</div>
+<div class="stat-value"><?php echo (int)$inactive_count; ?></div>
+</div>
+</div>
+</div>
+
+</div>
+
+<!-- TABLE PANEL -->
+
+<div class="panel">
+
+<div class="panel-header">
+
+<div>
+
+<h3 class="panel-title">
+Attendance Regulations
+</h3>
+
+<div class="panel-subtitle">
+Compact responsive attendance policy directory
+</div>
+
+</div>
+
+<span class="panel-count">
+<?php echo count($regulations); ?> records
+</span>
+
+</div>
+
+<div class="filter-bar">
+
+<div class="search-box">
+
+<i class="bi bi-search"></i>
+
+<input
+type="text"
+id="quickSearch"
+placeholder="Search regulation name, applicable type, punch type..."
+>
+
+</div>
+
+<select
+class="filter-select"
+id="statusFilter"
+>
+
+<option value="all">
+All Status
+</option>
+
+<option value="active">
+Active
+</option>
+
+<option value="inactive">
+Inactive
+</option>
+
+</select>
+
+</div>
+
+<div class="compact-table-wrap">
+
+<table
+id="regulationsTable"
+class="table compact-table align-middle"
+>
+
+<thead>
+
+<tr>
+<th>Regulation</th>
+<th>Applicable To</th>
+<th>Work Hours</th>
+<th>Grace</th>
+<th>Min Hours</th>
+<th>Punch Types</th>
+<th>Effective</th>
+<th>Status</th>
+<?php if ($is_admin): ?>
+<th class="text-end">Actions</th>
+<?php endif; ?>
+</tr>
+
+</thead>
+
+<tbody>
+
+<?php if (empty($regulations)): ?>
+
+<tr class="no-record-row">
+
+<td colspan="<?php echo $is_admin ? '9' : '8'; ?>">
+
+<div class="empty-state">
+
+<i class="bi bi-inbox"></i>
+
+<span>
+No attendance regulations found.
+</span>
+
+<?php if ($is_admin): ?>
+
+<a
+href="add-regulation.php"
+>
+Add your first regulation
+</a>
+
+<?php endif; ?>
+
+</div>
+
+</td>
+
+</tr>
+
+<?php else: ?>
+
+<?php foreach ($regulations as $reg): ?>
+
+<?php
+$isActive = !empty($reg['is_active']);
+$rowStatus = $isActive ? 'active' : 'inactive';
+
+$from = trim((string)($reg['effective_from'] ?? ''));
+$to = trim((string)($reg['effective_to'] ?? ''));
+
+$isCurrentlyEffective =
+    $isActive &&
+    ($from === '' || $from <= $today) &&
+    ($to === '' || $to >= $today);
+?>
+
+<tr data-status="<?php echo e($rowStatus); ?>">
+
+<td data-label="Regulation">
+
+<div class="table-primary-text">
+<?php echo e($reg['regulation_name'] ?? ''); ?>
+</div>
+
+<div class="table-secondary-text">
+<i class="bi bi-hash"></i>
+ID:
+<?php echo (int)$reg['id']; ?>
+</div>
+
+<?php if ($isCurrentlyEffective): ?>
+
+<div class="table-secondary-text text-success">
+<i class="bi bi-check-circle me-1"></i>
+Currently effective
+</div>
+
+<?php endif; ?>
+
+</td>
+
+<td data-label="Applicable To">
+
+<span class="badge-pill info">
+
+<span class="mini-dot"></span>
+
+<?php echo e($reg['applicable_to'] ?? ''); ?>
+
+</span>
+
+</td>
+
+<td data-label="Work Hours">
+
+<div class="table-primary-text">
+<i class="bi bi-clock me-1"></i>
+<?php echo safeTime($reg['work_start_time'] ?? ''); ?>
+-
+<?php echo safeTime($reg['work_end_time'] ?? ''); ?>
+</div>
+
+<div class="table-secondary-text">
+Standard work window
+</div>
+
+</td>
+
+<td data-label="Grace">
+
+<div class="table-primary-text">
+<?php echo (int)($reg['grace_period_minutes'] ?? 0); ?>
+min
+</div>
+
+<div class="table-secondary-text">
+Late grace period
+</div>
+
+</td>
+
+<td data-label="Min Hours">
+
+<div class="table-primary-text">
+Full:
+<?php echo e($reg['min_work_hours_full_day'] ?? '0'); ?>h
+</div>
+
+<div class="table-secondary-text">
+Half:
+<?php echo e($reg['min_work_hours_half_day'] ?? '0'); ?>h
+</div>
+
+</td>
+
+<td data-label="Punch Types">
+
+<div class="punch-chip-wrap">
+
+<?php if (!empty($reg['allow_office_punch'])): ?>
+
+<span class="badge-pill primary-soft">
+<span class="mini-dot"></span>
+Office
+</span>
+
+<?php endif; ?>
+
+<?php if (!empty($reg['allow_site_punch'])): ?>
+
+<span class="badge-pill ontrack">
+<span class="mini-dot"></span>
+Site
+</span>
+
+<?php endif; ?>
+
+<?php if (empty($reg['allow_office_punch']) && empty($reg['allow_site_punch'])): ?>
+
+<span class="badge-pill muted">
+<span class="mini-dot"></span>
+None
+</span>
+
+<?php endif; ?>
+
+</div>
+
+</td>
+
+<td data-label="Effective">
+
+<div class="table-primary-text">
+From:
+<?php echo safeDate($reg['effective_from'] ?? ''); ?>
+</div>
+
+<div class="table-secondary-text">
+
+<?php if (!empty($reg['effective_to'])): ?>
+
+To:
+<?php echo safeDate($reg['effective_to']); ?>
+
+<?php else: ?>
+
+No end date
+
+<?php endif; ?>
+
+</div>
+
+</td>
+
+<td data-label="Status">
+
+<?php if ($isActive): ?>
+
+<span class="badge-pill ontrack">
+<span class="mini-dot"></span>
+Active
+</span>
+
+<?php else: ?>
+
+<span class="badge-pill danger">
+<span class="mini-dot"></span>
+Inactive
+</span>
+
+<?php endif; ?>
+
+</td>
+
+<?php if ($is_admin): ?>
+
+<td data-label="Actions">
+
+<div class="action-group">
+
+<a
+href="edit-regulation.php?id=<?php echo (int)$reg['id']; ?>"
+class="action-btn edit-btn"
+title="Edit"
+>
+<i class="bi bi-pencil"></i>
+</a>
+
+<a
+href="toggle-regulation.php?id=<?php echo (int)$reg['id']; ?>"
+class="action-btn toggle-btn"
+title="<?php echo $isActive ? 'Deactivate' : 'Activate'; ?>"
+>
+<i class="bi bi-<?php echo $isActive ? 'pause-circle' : 'play-circle'; ?>"></i>
+</a>
+
+<button
+type="button"
+class="action-btn delete-btn"
+title="Permanently Delete"
+onclick="confirmDelete(<?php echo (int)$reg['id']; ?>, '<?php echo e(addslashes($reg['regulation_name'] ?? '')); ?>')"
+>
+<i class="bi bi-trash"></i>
+</button>
+
+</div>
+
+</td>
+
+<?php endif; ?>
+
+</tr>
+
+<?php endforeach; ?>
+
+<?php endif; ?>
+
+</tbody>
+
+</table>
+
+</div>
+
+<div class="table-secondary-text mt-2" id="recordInfo">
+Showing
+<?php echo count($regulations); ?>
+attendance regulation records
+</div>
+
+</div>
+
+<!-- INFO PANELS -->
+
+<div class="row g-3 mt-1">
+
+<div class="col-md-6">
+
+<div class="info-card">
+
+<h4 class="info-title">
+How Regulations Work
+</h4>
+
+<ul class="info-list">
+
+<li>
+<i class="bi bi-clock text-primary"></i>
+<div>
+<strong>Work Hours:</strong>
+Define standard working hours for different employee types.
+</div>
+</li>
+
+<li>
+<i class="bi bi-alarm text-warning"></i>
+<div>
+<strong>Grace Period:</strong>
+Employees can punch in late within this window without penalty.
+</div>
+</li>
+
+<li>
+<i class="bi bi-hourglass-split text-info"></i>
+<div>
+<strong>Half Day:</strong>
+If employee works less than full day but more than half-day minimum.
+</div>
+</li>
+
+<li>
+<i class="bi bi-building text-success"></i>
+<div>
+<strong>Punch Types:</strong>
+Restrict whether employees can punch from office or site.
+</div>
+</li>
+
+</ul>
+
+</div>
+
+</div>
+
+<div class="col-md-6">
+
+<div class="info-card">
+
+<h4 class="info-title">
+Current Default Rules
+</h4>
+
+<ul class="info-list">
+
+<li>
+<i class="bi bi-clock text-success"></i>
+<div>
+<strong>Standard Work Day:</strong>
+9:00 AM - 6:00 PM
+</div>
+</li>
+
+<li>
+<i class="bi bi-alarm text-warning"></i>
+<div>
+<strong>Grace Period:</strong>
+15 minutes
+</div>
+</li>
+
+<li>
+<i class="bi bi-hourglass-split text-info"></i>
+<div>
+<strong>Half Day:</strong>
+Minimum 4 hours
+</div>
+</li>
+
+<li>
+<i class="bi bi-building text-primary"></i>
+<div>
+<strong>Office/Site Punch:</strong>
+Allowed for designated employees.
+</div>
+</li>
+
+</ul>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+<?php include 'includes/footer.php'; ?>
+
+</main>
+
+</div>
+
+<!-- DELETE CONFIRMATION MODAL -->
+
+<div
+class="modal fade"
+id="deleteModal"
+tabindex="-1"
+aria-labelledby="deleteModalLabel"
+aria-hidden="true"
+>
+
+<div class="modal-dialog modal-dialog-centered">
+
+<div class="modal-content">
+
+<div class="modal-header">
+
+<h5
+class="modal-title"
+id="deleteModalLabel"
+>
+Confirm Permanent Delete
+</h5>
+
+<button
+type="button"
+class="btn-close"
+data-bs-dismiss="modal"
+aria-label="Close"
+></button>
+
+</div>
+
+<div class="modal-body">
+
+<p class="mb-0">
+Are you sure you want to
+<span class="warning-text">
+permanently delete
+</span>
+this regulation?
+</p>
+
+<p
+class="fw-bold text-center my-3"
+id="deleteRegulationName"
+></p>
+
+<div class="alert alert-danger mb-0" style="box-shadow:none;">
+
+<i class="bi bi-exclamation-triangle-fill me-2"></i>
+
+<strong>Warning:</strong>
+This action cannot be undone. The regulation will be permanently removed from the database.
+
+</div>
+
+</div>
+
+<div class="modal-footer">
+
+<button
+type="button"
+class="btn btn-secondary"
+data-bs-dismiss="modal"
+>
+Cancel
+</button>
+
+<a
+href="#"
+id="confirmDeleteBtn"
+class="btn btn-danger"
+>
+Permanently Delete
+</a>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+<!-- EXPORT MODAL -->
+
+<div
+class="modal fade"
+id="exportModal"
+tabindex="-1"
+aria-hidden="true"
+>
+
+<div class="modal-dialog">
+
+<div class="modal-content">
+
+<div class="modal-header">
+
+<h5 class="modal-title">
+Export Attendance Regulations
+</h5>
+
+<button
+type="button"
+class="btn-close"
+data-bs-dismiss="modal"
+></button>
+
+</div>
+
+<div class="modal-body">
+
+<div class="mb-3">
+
+<label class="form-label">
+Export Format
+</label>
+
+<select
+class="form-select"
+id="exportFormat"
+>
+
+<option value="csv">
+CSV
+</option>
+
+</select>
+
+</div>
+
+<div class="alert alert-info mb-0" style="box-shadow:none;">
+
+<i class="bi bi-info-circle me-2"></i>
+This exports currently visible rows from the table.
+
+</div>
+
+</div>
+
+<div class="modal-footer">
+
+<button
+type="button"
+class="btn btn-secondary"
+data-bs-dismiss="modal"
+>
+Cancel
+</button>
+
+<button
+type="button"
+class="btn btn-success"
+onclick="exportToCSV()"
+>
+<i class="bi bi-download me-1"></i>
+Export CSV
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/js/sidebar-toggle.js"></script>
+
+<script>
+
+document.addEventListener('DOMContentLoaded', function(){
+
+    const quickSearch =
+        document.getElementById('quickSearch');
+
+    const statusFilter =
+        document.getElementById('statusFilter');
+
+    const rows =
+        document.querySelectorAll('#regulationsTable tbody tr:not(.no-record-row)');
+
+    const recordInfo =
+        document.getElementById('recordInfo');
+
+    function filterRows(){
+
+        const searchValue =
+            quickSearch.value.toLowerCase().trim();
+
+        const statusValue =
+            statusFilter.value;
+
+        let visible =
+            0;
+
+        rows.forEach(function(row){
+
+            const textMatch =
+                row.innerText.toLowerCase().includes(searchValue);
+
+            const rowStatus =
+                row.getAttribute('data-status') || '';
+
+            const statusMatch =
+                statusValue === 'all' ||
+                rowStatus === statusValue;
+
+            const show =
+                textMatch && statusMatch;
+
+            row.style.display =
+                show
+                ? ''
+                : 'none';
+
+            if (show) {
+                visible++;
+            }
+        });
+
+        if (recordInfo) {
+            recordInfo.textContent =
+                'Showing ' + visible + ' attendance regulation records';
+        }
+    }
+
+    if (quickSearch) {
+        quickSearch.addEventListener('input', filterRows);
+    }
+
+    if (statusFilter) {
+        statusFilter.addEventListener('change', filterRows);
+    }
+
+    setTimeout(function(){
+        document.querySelectorAll('.alert-dismissible').forEach(function(alertEl){
+            try {
+                const instance =
+                    bootstrap.Alert.getOrCreateInstance(alertEl);
+
+                instance.close();
+            } catch (e) {}
+        });
+    }, 5000);
+});
+
+function confirmDelete(id, name){
+
+    document.getElementById('deleteRegulationName').textContent =
+        name;
+
+    document.getElementById('confirmDeleteBtn').href =
+        '?delete=' + encodeURIComponent(id);
+
+    new bootstrap.Modal(
+        document.getElementById('deleteModal')
+    ).show();
+}
+
+function exportToCSV(){
+
+    const table =
+        document.getElementById('regulationsTable');
+
+    if (!table) {
+        return;
+    }
+
+    const rows =
+        table.querySelectorAll('tbody tr:not(.no-record-row)');
+
+    const headers =
+        Array.from(table.querySelectorAll('thead th')).map(function(th){
+            return th.innerText.replace(/\s+/g, ' ').trim();
+        });
+
+    const csv =
+        [];
+
+    csv.push(headers.join(','));
+
+    rows.forEach(function(row){
+
+        if (row.style.display === 'none') {
+            return;
+        }
+
+        const cells =
+            row.querySelectorAll('td');
+
+        const rowData =
+            Array.from(cells).map(function(td){
+                const value =
+                    td.innerText.replace(/\s+/g, ' ').trim();
+
+                return '"' + value.replace(/"/g, '""') + '"';
+            });
+
+        csv.push(rowData.join(','));
     });
-  </script>
+
+    const blob =
+        new Blob(
+            ["\uFEFF" + csv.join('\n')],
+            { type: 'text/csv;charset=utf-8;' }
+        );
+
+    const url =
+        window.URL.createObjectURL(blob);
+
+    const a =
+        document.createElement('a');
+
+    a.href =
+        url;
+
+    a.download =
+        'attendance_regulations_<?php echo date('Y-m-d'); ?>.csv';
+
+    document.body.appendChild(a);
+
+    a.click();
+
+    document.body.removeChild(a);
+
+    window.URL.revokeObjectURL(url);
+}
+
+</script>
+
 </body>
 </html>
+
+<?php
+if (isset($conn) && $conn) {
+    mysqli_close($conn);
+}
+?>

@@ -1,60 +1,303 @@
 <?php
-// hr/leave-requests.php - HR Panel for Managing Leave Requests
+// leave-requests.php - Leave Requests Management
+// TEK-C compact table section style
+
 session_start();
 require_once 'includes/db-config.php';
-require_once 'includes/activity-logger.php';
 
 date_default_timezone_set('Asia/Kolkata');
 
 $conn = get_db_connection();
-if (!$conn) { die("Database connection failed."); }
 
-// ---------------- AUTH (Multiple Roles) ----------------
+if (!$conn) {
+    die("Database connection failed.");
+}
+
+/* ---------------- AUTH ---------------- */
+
 if (empty($_SESSION['employee_id'])) {
     header("Location: ../login.php");
     exit;
 }
 
-$current_employee_id = $_SESSION['employee_id'];
+$current_employee_id = (int)$_SESSION['employee_id'];
 
-// Get current employee details
-$emp_stmt = mysqli_prepare($conn, "SELECT * FROM employees WHERE id = ? AND employee_status = 'active'");
+/* ---------------- HELPERS ---------------- */
+
+function e($v){
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+}
+
+function safeDate($v, $dash = '—'){
+
+    $v = trim((string)$v);
+
+    if ($v === '' || $v === '0000-00-00') {
+        return $dash;
+    }
+
+    $ts = strtotime($v);
+
+    return $ts ? date('d M Y', $ts) : e($v);
+}
+
+function safeDateTime($v, $dash = '—'){
+
+    $v = trim((string)$v);
+
+    if ($v === '' || $v === '0000-00-00 00:00:00') {
+        return $dash;
+    }
+
+    $ts = strtotime($v);
+
+    return $ts ? date('d M Y, h:i A', $ts) : e($v);
+}
+
+function getInitials($name){
+
+    $name = trim((string)$name);
+
+    if ($name === '') {
+        return 'U';
+    }
+
+    $parts = preg_split('/\s+/', $name);
+
+    $first = strtoupper(substr($parts[0] ?? 'U', 0, 1));
+    $last  = strtoupper(substr(end($parts) ?: '', 0, 1));
+
+    return count($parts) > 1
+        ? $first . $last
+        : $first;
+}
+
+function fileUrl($path){
+
+    $p = trim((string)$path);
+
+    if ($p === '') {
+        return '';
+    }
+
+    if (preg_match('~^https?://~i', $p)) {
+        return $p;
+    }
+
+    if (stripos($p, '../admin/uploads/') === 0) {
+        return $p;
+    }
+
+    if (stripos($p, 'admin/uploads/') === 0) {
+        return '../' . $p;
+    }
+
+    if (stripos($p, '/admin/uploads/') === 0) {
+        return '..' . $p;
+    }
+
+    if (stripos($p, 'uploads/') === 0) {
+        return '../admin/' . $p;
+    }
+
+    if (stripos($p, '/uploads/') === 0) {
+        return '../admin' . $p;
+    }
+
+    if (stripos($p, 'employees/') === 0) {
+        return '../admin/uploads/' . $p;
+    }
+
+    if (stripos($p, '/employees/') === 0) {
+        return '../admin/uploads' . $p;
+    }
+
+    return '../admin/uploads/' . ltrim($p, '/');
+}
+
+function leaveStatusBadge($status){
+
+    $status = trim((string)$status);
+
+    if ($status === 'Approved') {
+        return ['Approved', 'ontrack', 'approved'];
+    }
+
+    if ($status === 'Rejected') {
+        return ['Rejected', 'danger', 'rejected'];
+    }
+
+    if ($status === 'Pending') {
+        return ['Pending', 'warning', 'pending'];
+    }
+
+    if ($status === 'Cancelled') {
+        return ['Cancelled', 'muted', 'cancelled'];
+    }
+
+    return [$status ?: 'Unknown', 'muted', strtolower($status ?: 'unknown')];
+}
+
+function approverInfo($request){
+
+    if (!empty($request['approved_by'])) {
+        return 'Approved by ' . ($request['approver_name'] ?? 'Unknown');
+    }
+
+    if (!empty($request['rejected_by'])) {
+        return 'Rejected by ' . ($request['rejector_name'] ?? 'Unknown');
+    }
+
+    return '';
+}
+
+function logActivityLocal(
+    $conn,
+    $activity_type,
+    $module,
+    $description,
+    $reference_id = null
+){
+
+    $employee_id = $_SESSION['employee_id'] ?? null;
+    $employee_name = $_SESSION['employee_name'] ?? '';
+    $username = $_SESSION['username'] ?? '';
+    $designation = $_SESSION['designation'] ?? '';
+    $department = $_SESSION['department'] ?? '';
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+
+    $stmt = mysqli_prepare(
+        $conn,
+        "INSERT INTO activity_logs
+        (
+            employee_id,
+            employee_name,
+            username,
+            designation,
+            department,
+            activity_type,
+            module,
+            description,
+            reference_id,
+            ip_address
+        )
+        VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    );
+
+    if ($stmt) {
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "isssssssis",
+            $employee_id,
+            $employee_name,
+            $username,
+            $designation,
+            $department,
+            $activity_type,
+            $module,
+            $description,
+            $reference_id,
+            $ip
+        );
+
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+    }
+}
+
+/* ---------------- CURRENT EMPLOYEE ---------------- */
+
+$current_employee = null;
+
+$emp_stmt = mysqli_prepare(
+    $conn,
+    "SELECT *
+     FROM employees
+     WHERE id = ?
+     AND employee_status = 'active'
+     LIMIT 1"
+);
+
 if (!$emp_stmt) {
     die("Error preparing employee query: " . mysqli_error($conn));
 }
+
 mysqli_stmt_bind_param($emp_stmt, "i", $current_employee_id);
 mysqli_stmt_execute($emp_stmt);
+
 $emp_res = mysqli_stmt_get_result($emp_stmt);
 $current_employee = mysqli_fetch_assoc($emp_res);
+
 mysqli_stmt_close($emp_stmt);
 
 if (!$current_employee) {
     die("Employee not found.");
 }
 
-// Define role-based permissions
-$designation = strtolower(trim($current_employee['designation'] ?? ''));
-$department = strtolower(trim($current_employee['department'] ?? ''));
+/* ---------------- ROLE PERMISSIONS ---------------- */
 
-// Check user roles
-$isAdmin = ($designation === 'administrator' || $designation === 'admin' || $designation === 'director');
-$isHr = ($designation === 'hr' || $department === 'hr');
-$isManager = in_array($designation, ['manager', 'team lead', 'project manager', 'project engineer grade 1', 'project engineer grade 2']);
+$designation = strtolower(trim((string)($current_employee['designation'] ?? '')));
+$department  = strtolower(trim((string)($current_employee['department'] ?? '')));
 
-// Get reporting employees if manager
+$isAdmin =
+    $designation === 'administrator' ||
+    $designation === 'admin' ||
+    $designation === 'director';
+
+$isHr =
+    $designation === 'hr' ||
+    $department === 'hr';
+
+$isManager =
+    in_array(
+        $designation,
+        [
+            'manager',
+            'team lead',
+            'project manager',
+            'project engineer grade 1',
+            'project engineer grade 2'
+        ],
+        true
+    );
+
 $reporting_employees = [];
+
 if ($isManager && !$isHr && !$isAdmin) {
-    $reporting_stmt = mysqli_prepare($conn, "SELECT id FROM employees WHERE reporting_to = ?");
-    mysqli_stmt_bind_param($reporting_stmt, "i", $current_employee_id);
-    mysqli_stmt_execute($reporting_stmt);
-    $reporting_res = mysqli_stmt_get_result($reporting_stmt);
-    while ($row = mysqli_fetch_assoc($reporting_res)) {
-        $reporting_employees[] = $row['id'];
+
+    $reporting_stmt = mysqli_prepare(
+        $conn,
+        "SELECT id
+         FROM employees
+         WHERE reporting_to = ?"
+    );
+
+    if ($reporting_stmt) {
+
+        mysqli_stmt_bind_param(
+            $reporting_stmt,
+            "i",
+            $current_employee_id
+        );
+
+        mysqli_stmt_execute($reporting_stmt);
+
+        $reporting_res = mysqli_stmt_get_result($reporting_stmt);
+
+        while ($row = mysqli_fetch_assoc($reporting_res)) {
+            $reporting_employees[] = (int)$row['id'];
+        }
+
+        mysqli_stmt_close($reporting_stmt);
     }
 }
 
-// Check if user has any approval permission
-$canApprove = ($isAdmin || $isHr || $isManager);
+$canApprove =
+    $isAdmin ||
+    $isHr ||
+    $isManager;
 
 if (!$canApprove) {
     $_SESSION['flash_error'] = "You don't have permission to access this page.";
@@ -62,116 +305,205 @@ if (!$canApprove) {
     exit;
 }
 
-// ---------------- HANDLE APPROVAL/REJECTION ----------------
+$user_role = 'User';
+
+if ($isAdmin) {
+    $user_role = 'Administrator';
+} elseif ($isHr) {
+    $user_role = 'HR';
+} elseif ($isManager) {
+    $user_role = 'Manager';
+}
+
+$userRoleClass =
+    $isAdmin
+    ? 'role-admin'
+    : ($isHr ? 'role-hr' : 'role-manager');
+
+/* ---------------- ACTION MESSAGES ---------------- */
+
 $action_message = '';
 $action_message_type = '';
 
+/* ---------------- APPROVE / REJECT ---------------- */
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['leave_action'])) {
-    $leave_id = (int)$_POST['leave_id'];
-    $action = $_POST['leave_action']; // approve, reject
-    $remarks = trim($_POST['remarks'] ?? '');
-    
-    if ($action === 'reject' && empty($remarks)) {
+
+    $leave_id = (int)($_POST['leave_id'] ?? 0);
+    $action = trim((string)($_POST['leave_action'] ?? ''));
+    $remarks = trim((string)($_POST['remarks'] ?? ''));
+
+    if ($leave_id <= 0) {
+
+        $action_message = "Invalid leave request selected.";
+        $action_message_type = "danger";
+
+    } elseif ($action === 'reject' && $remarks === '') {
+
         $action_message = "Rejection reason is required.";
         $action_message_type = "danger";
+
     } else {
-        // Get leave details before update
-        $get_stmt = mysqli_prepare($conn, "
-            SELECT lr.*, e.full_name, e.employee_code, e.reporting_to 
-            FROM leave_requests lr 
-            JOIN employees e ON lr.employee_id = e.id 
-            WHERE lr.id = ?
-        ");
+
+        $get_stmt = mysqli_prepare(
+            $conn,
+            "SELECT
+                lr.*,
+                e.full_name,
+                e.employee_code,
+                e.reporting_to
+             FROM leave_requests lr
+             JOIN employees e
+             ON lr.employee_id = e.id
+             WHERE lr.id = ?
+             LIMIT 1"
+        );
+
         if ($get_stmt) {
+
             mysqli_stmt_bind_param($get_stmt, "i", $leave_id);
             mysqli_stmt_execute($get_stmt);
+
             $get_res = mysqli_stmt_get_result($get_stmt);
             $leave_data = mysqli_fetch_assoc($get_res);
+
             mysqli_stmt_close($get_stmt);
-            
-            if ($leave_data) {
-                // Check if user has permission to approve/reject this specific leave
+
+            if (!$leave_data) {
+
+                $action_message = "Leave request not found.";
+                $action_message_type = "danger";
+
+            } else {
+
                 $hasPermission = false;
-                
+
                 if ($isAdmin || $isHr) {
-                    // Admin/HR can approve any leave
+
                     $hasPermission = true;
+
                 } elseif ($isManager) {
-                    // Manager can only approve leaves of their reporting employees
-                    if ($leave_data['reporting_to'] == $current_employee_id) {
+
+                    if ((int)$leave_data['reporting_to'] === $current_employee_id) {
                         $hasPermission = true;
-                    } else {
-                        // Check if employee is in reporting list
-                        $reporting_check = in_array($leave_data['employee_id'], $reporting_employees);
-                        if ($reporting_check) {
-                            $hasPermission = true;
-                        }
+                    }
+
+                    if (in_array((int)$leave_data['employee_id'], $reporting_employees, true)) {
+                        $hasPermission = true;
                     }
                 }
-                
+
                 if (!$hasPermission) {
+
                     $action_message = "You don't have permission to process this leave request.";
                     $action_message_type = "danger";
+
+                } elseif ($leave_data['status'] !== 'Pending') {
+
+                    $action_message = "This leave request is already " . e($leave_data['status']) . ".";
+                    $action_message_type = "warning";
+
                 } else {
+
+                    $update_stmt = null;
+                    $log_action = '';
+                    $log_desc = '';
+
                     if ($action === 'approve') {
-                        // Check if already approved/rejected
-                        if ($leave_data['status'] !== 'Pending') {
-                            $action_message = "This leave request is already {$leave_data['status']}.";
-                            $action_message_type = "warning";
-                        } else {
-                            $update_stmt = mysqli_prepare($conn, "
-                                UPDATE leave_requests 
-                                SET status = 'Approved', approved_by = ?, approved_at = NOW(), approver_remarks = ? 
-                                WHERE id = ?
-                            ");
-                            if ($update_stmt) {
-                                mysqli_stmt_bind_param($update_stmt, "isi", $current_employee_id, $remarks, $leave_id);
-                                
-                                $log_action = 'APPROVE';
-                                $log_desc = "Approved leave request for {$leave_data['full_name']} ({$leave_data['total_days']} days)";
-                            }
+
+                        $update_stmt = mysqli_prepare(
+                            $conn,
+                            "UPDATE leave_requests
+                             SET
+                                status = 'Approved',
+                                approved_by = ?,
+                                approved_at = NOW(),
+                                approver_remarks = ?
+                             WHERE id = ?
+                             AND status = 'Pending'"
+                        );
+
+                        if ($update_stmt) {
+
+                            mysqli_stmt_bind_param(
+                                $update_stmt,
+                                "isi",
+                                $current_employee_id,
+                                $remarks,
+                                $leave_id
+                            );
+
+                            $log_action = 'APPROVE';
+                            $log_desc =
+                                "Approved leave request for " .
+                                $leave_data['full_name'] .
+                                " (" .
+                                $leave_data['total_days'] .
+                                " days)";
                         }
-                    } else {
-                        if ($leave_data['status'] !== 'Pending') {
-                            $action_message = "This leave request is already {$leave_data['status']}.";
-                            $action_message_type = "warning";
-                        } else {
-                            $update_stmt = mysqli_prepare($conn, "
-                                UPDATE leave_requests 
-                                SET status = 'Rejected', rejected_by = ?, rejected_at = NOW(), rejection_reason = ? 
-                                WHERE id = ?
-                            ");
-                            if ($update_stmt) {
-                                mysqli_stmt_bind_param($update_stmt, "isi", $current_employee_id, $remarks, $leave_id);
-                                
-                                $log_action = 'REJECT';
-                                $log_desc = "Rejected leave request for {$leave_data['full_name']} ({$leave_data['total_days']} days)";
-                            }
+
+                    } elseif ($action === 'reject') {
+
+                        $update_stmt = mysqli_prepare(
+                            $conn,
+                            "UPDATE leave_requests
+                             SET
+                                status = 'Rejected',
+                                rejected_by = ?,
+                                rejected_at = NOW(),
+                                rejection_reason = ?
+                             WHERE id = ?
+                             AND status = 'Pending'"
+                        );
+
+                        if ($update_stmt) {
+
+                            mysqli_stmt_bind_param(
+                                $update_stmt,
+                                "isi",
+                                $current_employee_id,
+                                $remarks,
+                                $leave_id
+                            );
+
+                            $log_action = 'REJECT';
+                            $log_desc =
+                                "Rejected leave request for " .
+                                $leave_data['full_name'] .
+                                " (" .
+                                $leave_data['total_days'] .
+                                " days)";
                         }
                     }
-                    
-                    if (isset($update_stmt) && $update_stmt) {
+
+                    if ($update_stmt) {
+
                         if (mysqli_stmt_execute($update_stmt)) {
-                            logActivity(
+
+                            logActivityLocal(
                                 $conn,
                                 $log_action,
-                                'leave',
+                                'LEAVE',
                                 $log_desc,
-                                $leave_id,
-                                null,
-                                json_encode(['status' => $action === 'approve' ? 'Approved' : 'Rejected']),
-                                json_encode(['remarks' => $remarks, 'approver_role' => $designation])
+                                $leave_id
                             );
-                            
-                            $action_message = "Leave request {$action}d successfully.";
+
+                            $action_message =
+                                $action === 'approve'
+                                ? "Leave request approved successfully."
+                                : "Leave request rejected successfully.";
+
                             $action_message_type = "success";
-                            
-                            // TODO: Send email notification to employee
-                            
+
                         } else {
-                            $action_message = "Failed to {$action} leave request: " . mysqli_error($conn);
+
+                            $action_message =
+                                "Failed to process leave request: " .
+                                mysqli_stmt_error($update_stmt);
+
                             $action_message_type = "danger";
                         }
+
                         mysqli_stmt_close($update_stmt);
                     }
                 }
@@ -180,961 +512,2422 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['leave_action'])) {
     }
 }
 
-// ---------------- HANDLE BULK ACTIONS ----------------
+/* ---------------- BULK ACTIONS ---------------- */
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action'])) {
+
     $selected_ids = $_POST['selected_ids'] ?? [];
-    $bulk_action = $_POST['bulk_action']; // approve_selected, reject_selected
-    
-    if (!empty($selected_ids)) {
-        // Verify permissions for each selected leave
-        $ids_string = implode(',', array_map('intval', $selected_ids));
-        
-        // Get all selected leaves with their reporting info
-        $verify_query = "
-            SELECT lr.id, lr.employee_id, lr.status, e.reporting_to
-            FROM leave_requests lr
-            JOIN employees e ON lr.employee_id = e.id
-            WHERE lr.id IN ({$ids_string})
-        ";
-        $verify_result = mysqli_query($conn, $verify_query);
-        
-        $valid_ids = [];
-        $invalid_ids = [];
-        
-        while ($row = mysqli_fetch_assoc($verify_result)) {
-            if ($row['status'] !== 'Pending') {
-                $invalid_ids[] = $row['id']; // Already processed
-                continue;
-            }
-            
-            $hasPermission = false;
-            if ($isAdmin || $isHr) {
-                $hasPermission = true;
-            } elseif ($isManager) {
-                if ($row['reporting_to'] == $current_employee_id || in_array($row['employee_id'], $reporting_employees)) {
-                    $hasPermission = true;
-                }
-            }
-            
-            if ($hasPermission) {
-                $valid_ids[] = $row['id'];
-            } else {
-                $invalid_ids[] = $row['id'];
-            }
-        }
-        
-        if (empty($valid_ids)) {
-            $action_message = "No valid leave requests selected for bulk action.";
-            $action_message_type = "warning";
-        } else {
-            $remarks = mysqli_real_escape_string($conn, trim($_POST['bulk_remarks'] ?? ''));
-            
-            if ($bulk_action === 'reject_selected' && empty($remarks)) {
-                $action_message = "Rejection reason is required for bulk reject.";
-                $action_message_type = "danger";
-            } else {
-                $valid_ids_string = implode(',', $valid_ids);
-                
-                if ($bulk_action === 'approve_selected') {
-                    $update_query = "
-                        UPDATE leave_requests 
-                        SET status = 'Approved', approved_by = {$current_employee_id}, approved_at = NOW(), approver_remarks = '{$remarks}' 
-                        WHERE id IN ({$valid_ids_string}) AND status = 'Pending'
-                    ";
-                    $log_action = 'APPROVE';
-                    $log_desc = "Bulk approved " . count($valid_ids) . " leave requests";
-                } else {
-                    $update_query = "
-                        UPDATE leave_requests 
-                        SET status = 'Rejected', rejected_by = {$current_employee_id}, rejected_at = NOW(), rejection_reason = '{$remarks}' 
-                        WHERE id IN ({$valid_ids_string}) AND status = 'Pending'
-                    ";
-                    $log_action = 'REJECT';
-                    $log_desc = "Bulk rejected " . count($valid_ids) . " leave requests";
-                }
-                
-                if (mysqli_query($conn, $update_query)) {
-                    $affected = mysqli_affected_rows($conn);
-                    
-                    logActivity(
-                        $conn,
-                        $log_action,
-                        'leave',
-                        $log_desc,
-                        null,
-                        null,
-                        null,
-                        json_encode(['count' => $affected, 'ids' => $valid_ids, 'skipped' => count($invalid_ids)])
-                    );
-                    
-                    $message_parts = [];
-                    if ($affected > 0) {
-                        $message_parts[] = "Successfully processed {$affected} leave requests.";
-                    }
-                    if (!empty($invalid_ids)) {
-                        $message_parts[] = "Skipped " . count($invalid_ids) . " requests (no permission or already processed).";
-                    }
-                    
-                    $action_message = implode(' ', $message_parts);
-                    $action_message_type = "success";
-                } else {
-                    $action_message = "Failed to process bulk action: " . mysqli_error($conn);
-                    $action_message_type = "danger";
-                }
-            }
-        }
-    } else {
+    $bulk_action = trim((string)($_POST['bulk_action'] ?? ''));
+    $bulk_remarks = trim((string)($_POST['bulk_remarks'] ?? ''));
+
+    $selected_ids =
+        array_values(
+            array_filter(
+                array_map('intval', (array)$selected_ids),
+                fn($id) => $id > 0
+            )
+        );
+
+    if (empty($selected_ids)) {
+
         $action_message = "No leave requests selected.";
         $action_message_type = "warning";
-    }
-}
 
-// ---------------- FILTERS ----------------
-$status_filter = $_GET['status'] ?? 'pending';
-$employee_filter = isset($_GET['employee_id']) ? (int)$_GET['employee_id'] : 0;
-$date_from = $_GET['date_from'] ?? '';
-$date_to = $_GET['date_to'] ?? '';
-$search = trim($_GET['search'] ?? '');
+    } elseif ($bulk_action === 'reject_selected' && $bulk_remarks === '') {
 
-// Build query with permission restrictions
-$query = "
-    SELECT lr.*, 
-           e.full_name, 
-           e.employee_code, 
-           e.designation, 
-           e.department,
-           e.photo as employee_photo,
-           e.reporting_to,
-           m.full_name as approver_name,
-           r.full_name as rejector_name
-    FROM leave_requests lr
-    JOIN employees e ON lr.employee_id = e.id
-    LEFT JOIN employees m ON lr.approved_by = m.id
-    LEFT JOIN employees r ON lr.rejected_by = r.id
-    WHERE 1=1
-";
+        $action_message = "Rejection reason is required for bulk reject.";
+        $action_message_type = "danger";
 
-// Add permission restrictions based on role
-if (!$isAdmin && !$isHr) {
-    if ($isManager) {
-        // Managers can see leaves of their reporting employees
-        if (!empty($reporting_employees)) {
-            $reporting_ids = implode(',', $reporting_employees);
-            $query .= " AND (e.reporting_to = {$current_employee_id} OR e.id IN ({$reporting_ids}) OR lr.employee_id IN ({$reporting_ids}))";
+    } else {
+
+        $ids_string =
+            implode(',', $selected_ids);
+
+        $verify_query = "
+            SELECT
+                lr.id,
+                lr.employee_id,
+                lr.status,
+                e.reporting_to
+            FROM leave_requests lr
+            JOIN employees e
+            ON lr.employee_id = e.id
+            WHERE lr.id IN ({$ids_string})
+        ";
+
+        $verify_result =
+            mysqli_query($conn, $verify_query);
+
+        $valid_ids = [];
+        $invalid_ids = [];
+
+        if ($verify_result) {
+
+            while ($row = mysqli_fetch_assoc($verify_result)) {
+
+                if ($row['status'] !== 'Pending') {
+                    $invalid_ids[] = (int)$row['id'];
+                    continue;
+                }
+
+                $hasPermission = false;
+
+                if ($isAdmin || $isHr) {
+
+                    $hasPermission = true;
+
+                } elseif ($isManager) {
+
+                    if ((int)$row['reporting_to'] === $current_employee_id) {
+                        $hasPermission = true;
+                    }
+
+                    if (in_array((int)$row['employee_id'], $reporting_employees, true)) {
+                        $hasPermission = true;
+                    }
+                }
+
+                if ($hasPermission) {
+                    $valid_ids[] = (int)$row['id'];
+                } else {
+                    $invalid_ids[] = (int)$row['id'];
+                }
+            }
+        }
+
+        if (empty($valid_ids)) {
+
+            $action_message = "No valid leave requests selected for bulk action.";
+            $action_message_type = "warning";
+
         } else {
-            $query .= " AND e.reporting_to = {$current_employee_id}";
+
+            $valid_ids_string =
+                implode(',', $valid_ids);
+
+            $safe_remarks =
+                mysqli_real_escape_string($conn, $bulk_remarks);
+
+            if ($bulk_action === 'approve_selected') {
+
+                $update_query = "
+                    UPDATE leave_requests
+                    SET
+                        status = 'Approved',
+                        approved_by = {$current_employee_id},
+                        approved_at = NOW(),
+                        approver_remarks = '{$safe_remarks}'
+                    WHERE id IN ({$valid_ids_string})
+                    AND status = 'Pending'
+                ";
+
+                $log_action = 'APPROVE';
+                $log_desc =
+                    "Bulk approved " .
+                    count($valid_ids) .
+                    " leave requests";
+
+            } else {
+
+                $update_query = "
+                    UPDATE leave_requests
+                    SET
+                        status = 'Rejected',
+                        rejected_by = {$current_employee_id},
+                        rejected_at = NOW(),
+                        rejection_reason = '{$safe_remarks}'
+                    WHERE id IN ({$valid_ids_string})
+                    AND status = 'Pending'
+                ";
+
+                $log_action = 'REJECT';
+                $log_desc =
+                    "Bulk rejected " .
+                    count($valid_ids) .
+                    " leave requests";
+            }
+
+            if (mysqli_query($conn, $update_query)) {
+
+                $affected =
+                    mysqli_affected_rows($conn);
+
+                logActivityLocal(
+                    $conn,
+                    $log_action,
+                    'LEAVE',
+                    $log_desc,
+                    null
+                );
+
+                $message_parts = [];
+
+                if ($affected > 0) {
+                    $message_parts[] =
+                        "Successfully processed {$affected} leave requests.";
+                }
+
+                if (!empty($invalid_ids)) {
+                    $message_parts[] =
+                        "Skipped " .
+                        count($invalid_ids) .
+                        " requests.";
+                }
+
+                $action_message =
+                    implode(' ', $message_parts);
+
+                $action_message_type =
+                    "success";
+
+            } else {
+
+                $action_message =
+                    "Failed to process bulk action: " .
+                    mysqli_error($conn);
+
+                $action_message_type =
+                    "danger";
+            }
         }
     }
 }
 
-// Apply filters
+/* ---------------- FILTERS ---------------- */
+
+$status_filter =
+    strtolower(trim((string)($_GET['status'] ?? 'pending')));
+
+$allowed_statuses =
+    ['pending', 'approved', 'rejected', 'cancelled', 'all'];
+
+if (!in_array($status_filter, $allowed_statuses, true)) {
+    $status_filter = 'pending';
+}
+
+$employee_filter =
+    isset($_GET['employee_id'])
+    ? (int)$_GET['employee_id']
+    : 0;
+
+$date_from =
+    trim((string)($_GET['date_from'] ?? ''));
+
+$date_to =
+    trim((string)($_GET['date_to'] ?? ''));
+
+$search =
+    trim((string)($_GET['search'] ?? ''));
+
+/* ---------------- EMPLOYEE FILTER LIST ---------------- */
+
+$employees_query = "
+    SELECT
+        id,
+        full_name,
+        employee_code
+    FROM employees
+    WHERE employee_status = 'active'
+";
+
+if (!$isAdmin && !$isHr && $isManager) {
+
+    if (!empty($reporting_employees)) {
+
+        $reporting_ids =
+            implode(',', $reporting_employees);
+
+        $employees_query .= "
+            AND (
+                reporting_to = {$current_employee_id}
+                OR id IN ({$reporting_ids})
+            )
+        ";
+
+    } else {
+
+        $employees_query .= "
+            AND reporting_to = {$current_employee_id}
+        ";
+    }
+}
+
+$employees_query .= "
+    ORDER BY full_name ASC
+";
+
+$employees_result =
+    mysqli_query($conn, $employees_query);
+
+$employees = [];
+
+if ($employees_result) {
+
+    while ($row = mysqli_fetch_assoc($employees_result)) {
+        $employees[] = $row;
+    }
+
+    mysqli_free_result($employees_result);
+}
+
+/* ---------------- MAIN QUERY ---------------- */
+
+$query = "
+    SELECT
+        lr.*,
+        e.full_name,
+        e.employee_code,
+        e.designation,
+        e.department,
+        e.photo AS employee_photo,
+        e.reporting_to,
+        m.full_name AS approver_name,
+        r.full_name AS rejector_name
+    FROM leave_requests lr
+    JOIN employees e
+    ON lr.employee_id = e.id
+    LEFT JOIN employees m
+    ON lr.approved_by = m.id
+    LEFT JOIN employees r
+    ON lr.rejected_by = r.id
+    WHERE 1 = 1
+";
+
+if (!$isAdmin && !$isHr) {
+
+    if ($isManager) {
+
+        if (!empty($reporting_employees)) {
+
+            $reporting_ids =
+                implode(',', $reporting_employees);
+
+            $query .= "
+                AND (
+                    e.reporting_to = {$current_employee_id}
+                    OR e.id IN ({$reporting_ids})
+                    OR lr.employee_id IN ({$reporting_ids})
+                )
+            ";
+
+        } else {
+
+            $query .= "
+                AND e.reporting_to = {$current_employee_id}
+            ";
+        }
+    }
+}
+
 $conditions = [];
 
 if ($status_filter !== 'all') {
-    $conditions[] = "lr.status = '" . mysqli_real_escape_string($conn, ucfirst($status_filter)) . "'";
+    $conditions[] =
+        "lr.status = '" .
+        mysqli_real_escape_string($conn, ucfirst($status_filter)) .
+        "'";
 }
 
 if ($employee_filter > 0) {
-    $conditions[] = "lr.employee_id = " . (int)$employee_filter;
+    $conditions[] =
+        "lr.employee_id = " .
+        (int)$employee_filter;
 }
 
-if (!empty($date_from)) {
-    $conditions[] = "lr.from_date >= '" . mysqli_real_escape_string($conn, $date_from) . "'";
+if ($date_from !== '') {
+    $conditions[] =
+        "lr.from_date >= '" .
+        mysqli_real_escape_string($conn, $date_from) .
+        "'";
 }
 
-if (!empty($date_to)) {
-    $conditions[] = "lr.to_date <= '" . mysqli_real_escape_string($conn, $date_to) . "'";
+if ($date_to !== '') {
+    $conditions[] =
+        "lr.to_date <= '" .
+        mysqli_real_escape_string($conn, $date_to) .
+        "'";
 }
 
-if (!empty($search)) {
-    $search_term = mysqli_real_escape_string($conn, $search);
-    $conditions[] = "(e.full_name LIKE '%{$search_term}%' OR e.employee_code LIKE '%{$search_term}%' OR lr.reason LIKE '%{$search_term}%')";
+if ($search !== '') {
+
+    $search_term =
+        mysqli_real_escape_string($conn, $search);
+
+    $conditions[] =
+        "(
+            e.full_name LIKE '%{$search_term}%'
+            OR e.employee_code LIKE '%{$search_term}%'
+            OR e.department LIKE '%{$search_term}%'
+            OR e.designation LIKE '%{$search_term}%'
+            OR lr.leave_type LIKE '%{$search_term}%'
+            OR lr.reason LIKE '%{$search_term}%'
+        )";
 }
 
-// Add conditions to query
 if (!empty($conditions)) {
-    $query .= " AND " . implode(" AND ", $conditions);
+    $query .= "
+        AND " .
+        implode(" AND ", $conditions);
 }
 
-$query .= " ORDER BY lr.created_at DESC";
+$query .= "
+    ORDER BY lr.created_at DESC
+";
 
-// Debug: Log the query
-error_log("Leave Requests Query: " . $query);
-
-// Execute query
 $leave_requests = [];
-$result = mysqli_query($conn, $query);
+
+$result =
+    mysqli_query($conn, $query);
 
 if ($result) {
+
     while ($row = mysqli_fetch_assoc($result)) {
         $leave_requests[] = $row;
     }
+
     mysqli_free_result($result);
+
 } else {
-    // Log error for debugging
-    error_log("MySQL Error: " . mysqli_error($conn) . " in query: " . $query);
-    $action_message = "Database error occurred. Please check error logs.";
-    $action_message_type = "danger";
+
+    $action_message =
+        "Database error occurred: " .
+        mysqli_error($conn);
+
+    $action_message_type =
+        "danger";
 }
 
-// Get statistics with permission restrictions
+/* ---------------- STATS ---------------- */
+
 $stats_condition = "";
+
 if (!$isAdmin && !$isHr) {
+
     if ($isManager) {
+
         if (!empty($reporting_employees)) {
-            $reporting_ids = implode(',', $reporting_employees);
-            $stats_condition = " AND (e.reporting_to = {$current_employee_id} OR e.id IN ({$reporting_ids}))";
+
+            $reporting_ids =
+                implode(',', $reporting_employees);
+
+            $stats_condition = "
+                AND (
+                    e.reporting_to = {$current_employee_id}
+                    OR e.id IN ({$reporting_ids})
+                )
+            ";
+
         } else {
-            $stats_condition = " AND e.reporting_to = {$current_employee_id}";
+
+            $stats_condition = "
+                AND e.reporting_to = {$current_employee_id}
+            ";
         }
     }
 }
 
 $stats_query = "
-    SELECT 
-        SUM(CASE WHEN lr.status = 'Pending' THEN 1 ELSE 0 END) as pending_count,
-        SUM(CASE WHEN lr.status = 'Approved' THEN 1 ELSE 0 END) as approved_count,
-        SUM(CASE WHEN lr.status = 'Rejected' THEN 1 ELSE 0 END) as rejected_count,
-        SUM(CASE WHEN lr.status = 'Cancelled' THEN 1 ELSE 0 END) as cancelled_count,
-        SUM(CASE WHEN lr.status = 'Pending' THEN lr.total_days ELSE 0 END) as pending_days,
-        SUM(CASE WHEN lr.status = 'Approved' THEN lr.total_days ELSE 0 END) as approved_days
+    SELECT
+        SUM(CASE WHEN lr.status = 'Pending' THEN 1 ELSE 0 END) AS pending_count,
+        SUM(CASE WHEN lr.status = 'Approved' THEN 1 ELSE 0 END) AS approved_count,
+        SUM(CASE WHEN lr.status = 'Rejected' THEN 1 ELSE 0 END) AS rejected_count,
+        SUM(CASE WHEN lr.status = 'Cancelled' THEN 1 ELSE 0 END) AS cancelled_count,
+        SUM(CASE WHEN lr.status = 'Pending' THEN lr.total_days ELSE 0 END) AS pending_days,
+        SUM(CASE WHEN lr.status = 'Approved' THEN lr.total_days ELSE 0 END) AS approved_days
     FROM leave_requests lr
-    JOIN employees e ON lr.employee_id = e.id
-    WHERE YEAR(lr.created_at) = YEAR(CURDATE()) {$stats_condition}
+    JOIN employees e
+    ON lr.employee_id = e.id
+    WHERE YEAR(lr.created_at) = YEAR(CURDATE())
+    {$stats_condition}
 ";
-$stats_result = mysqli_query($conn, $stats_query);
+
+$stats_result =
+    mysqli_query($conn, $stats_query);
+
+$stats = [
+    'pending_count' => 0,
+    'approved_count' => 0,
+    'rejected_count' => 0,
+    'cancelled_count' => 0,
+    'pending_days' => 0,
+    'approved_days' => 0
+];
+
 if ($stats_result) {
-    $stats = mysqli_fetch_assoc($stats_result);
-} else {
-    $stats = [
-        'pending_count' => 0,
-        'approved_count' => 0,
-        'rejected_count' => 0,
-        'cancelled_count' => 0,
-        'pending_days' => 0,
-        'approved_days' => 0
-    ];
-}
 
-// Get employees list for filter (restricted based on role)
-$employees_query = "
-    SELECT id, full_name, employee_code 
-    FROM employees 
-    WHERE employee_status = 'active'
-";
+    $rowStats =
+        mysqli_fetch_assoc($stats_result);
 
-if (!$isAdmin && !$isHr && $isManager) {
-    if (!empty($reporting_employees)) {
-        $reporting_ids = implode(',', $reporting_employees);
-        $employees_query .= " AND (reporting_to = {$current_employee_id} OR id IN ({$reporting_ids}))";
-    } else {
-        $employees_query .= " AND reporting_to = {$current_employee_id}";
+    if ($rowStats) {
+        $stats = array_merge($stats, $rowStats);
     }
+
+    mysqli_free_result($stats_result);
 }
 
-$employees_query .= " ORDER BY full_name";
-$employees_result = mysqli_query($conn, $employees_query);
-$employees = [];
-if ($employees_result) {
-    while ($row = mysqli_fetch_assoc($employees_result)) {
-        $employees[] = $row;
-    }
-}
+$pending_count =
+    (int)($stats['pending_count'] ?? 0);
 
-// Get pending count for badge
-$pending_count = $stats['pending_count'] ?? 0;
+$total_count =
+    (int)($stats['pending_count'] ?? 0) +
+    (int)($stats['approved_count'] ?? 0) +
+    (int)($stats['rejected_count'] ?? 0) +
+    (int)($stats['cancelled_count'] ?? 0);
 
-// Get user role display name
-$user_role = 'User';
-if ($isAdmin) $user_role = 'Administrator';
-elseif ($isHr) $user_role = 'HR';
-elseif ($isManager) $user_role = 'Manager';
+$loggedName =
+    $_SESSION['employee_name'] ??
+    $current_employee['full_name'];
 
-// ---------------- HELPERS ----------------
-function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-
-function safeDate($v, $dash='—'){
-    $v = trim((string)$v);
-    if ($v === '' || $v === '0000-00-00') return $dash;
-    $ts = strtotime($v);
-    return $ts ? date('d M Y', $ts) : e($v);
-}
-
-function safeDateTime($v, $dash='—'){
-    $v = trim((string)$v);
-    if ($v === '' || $v === '0000-00-00 00:00:00') return $dash;
-    $ts = strtotime($v);
-    return $ts ? date('d M Y, h:i A', $ts) : e($v);
-}
-
-function getStatusBadge($status) {
-    switch($status) {
-        case 'Approved':
-            return '<span class="badge bg-success px-3 py-2"><i class="bi bi-check-circle"></i> Approved</span>';
-        case 'Rejected':
-            return '<span class="badge bg-danger px-3 py-2"><i class="bi bi-x-circle"></i> Rejected</span>';
-        case 'Pending':
-            return '<span class="badge bg-warning text-dark px-3 py-2"><i class="bi bi-clock"></i> Pending</span>';
-        case 'Cancelled':
-            return '<span class="badge bg-secondary px-3 py-2"><i class="bi bi-x"></i> Cancelled</span>';
-        default:
-            return '<span class="badge bg-light text-dark px-3 py-2">' . e($status) . '</span>';
-    }
-}
-
-function getInitials($name) {
-    $words = explode(' ', $name);
-    $initials = '';
-    foreach ($words as $w) {
-        $initials .= strtoupper(substr($w, 0, 1));
-    }
-    return substr($initials, 0, 2);
-}
-
-function getApproverInfo($request) {
-    if (!empty($request['approved_by'])) {
-        return '<i class="bi bi-check-circle-fill text-success me-1"></i> by ' . e($request['approver_name'] ?? 'Unknown');
-    } elseif (!empty($request['rejected_by'])) {
-        return '<i class="bi bi-x-circle-fill text-danger me-1"></i> by ' . e($request['rejector_name'] ?? 'Unknown');
-    }
-    return '';
-}
-
-$loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
-$userRoleBadge = $isAdmin ? 'bg-danger' : ($isHr ? 'bg-info' : 'bg-warning');
 ?>
+
 <!doctype html>
 <html lang="en">
+
 <head>
-    <meta charset="utf-8">
-    <title>Leave Requests Management - TEK-C</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="assets/css/layout-styles.css" rel="stylesheet" />
-    <link href="assets/css/topbar.css" rel="stylesheet" />
-    <link href="assets/css/footer.css" rel="stylesheet" />
-    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<meta charset="utf-8" />
 
-    <style>
-        .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px; }
-        .panel{ background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 8px 24px rgba(17,24,39,.06); padding:20px; }
-        .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-        .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1"
+/>
 
-        .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-            padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; cursor:pointer; transition: all 0.2s; }
-        .stat-card:hover{ transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,0.1); }
-        .stat-card.active{ border:2px solid #3b82f6; background:#eff6ff; }
-        .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
-        .stat-ic.blue{ background: var(--blue); }
-        .stat-ic.green{ background: var(--green); }
-        .stat-ic.orange{ background: var(--orange); }
-        .stat-ic.purple{ background: #8e44ad; }
-        .stat-ic.red{ background: #e74c3c; }
-        .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-        .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
+<title>Leave Requests Management - TEK-C</title>
 
-        .filter-card{ background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:20px; }
+<link
+rel="apple-touch-icon"
+sizes="180x180"
+href="assets/fav/apple-touch-icon.png"
+>
 
-        .table thead th{ font-size:12px; letter-spacing:.2px; color:#6b7280; font-weight:800; border-bottom:1px solid #e5e7eb!important; }
-        .table td{ vertical-align:middle; border-color:#e5e7eb; font-weight:600; color:#374151; padding:14px 8px; }
+<link
+rel="icon"
+type="image/png"
+sizes="32x32"
+href="assets/fav/favicon-32x32.png"
+>
 
-        .action-btn{ width:32px; height:32px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; 
-            display:inline-flex; align-items:center; justify-content:center; color:#6b7280; text-decoration:none; margin:0 2px; }
-        .action-btn:hover{ background:#f3f4f6; color:#374151; }
-        .action-btn.approve:hover{ background:#d1fae5; color:#065f46; border-color:#065f46; }
-        .action-btn.reject:hover{ background:#fee2e2; color:#991b1b; border-color:#991b1b; }
+<link
+rel="icon"
+type="image/png"
+sizes="16x16"
+href="assets/fav/favicon-16x16.png"
+>
 
-        .employee-avatar{ width:40px; height:40px; border-radius:50%; background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-weight:800; color:#4b5563; }
-        .employee-avatar img{ width:40px; height:40px; border-radius:50%; object-fit:cover; }
+<link
+rel="manifest"
+href="assets/fav/site.webmanifest"
+>
 
-        .days-badge{ background:#e6f7ff; color:#0050b3; padding:4px 8px; border-radius:20px; font-weight:700; font-size:12px; }
+<link
+href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+rel="stylesheet"
+/>
 
-        .bulk-action-bar{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin-bottom:16px; display:none; align-items:center; gap:12px; }
-        .bulk-action-bar.show{ display:flex; }
+<link
+href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+rel="stylesheet"
+/>
 
-        .nav-tabs .nav-link{ font-weight:700; color:#6b7280; border:none; padding:10px 20px; }
-        .nav-tabs .nav-link.active{ color:#3b82f6; border-bottom:3px solid #3b82f6; background:none; }
-        .nav-tabs .nav-link .badge{ margin-left:6px; }
+<link href="assets/css/layout-styles.css" rel="stylesheet" />
+<link href="assets/css/topbar.css" rel="stylesheet" />
+<link href="assets/css/footer.css" rel="stylesheet" />
 
-        .leave-card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:12px; }
-        .leave-card:hover{ box-shadow:0 4px 12px rgba(0,0,0,0.05); }
+<style>
 
-        .role-badge{ font-size:11px; padding:4px 8px; border-radius:20px; font-weight:700; }
-        .role-admin{ background:#fee2e2; color:#991b1b; }
-        .role-hr{ background:#dbeafe; color:#1e40af; }
-        .role-manager{ background:#fef3c7; color:#92400e; }
+:root{
+    --page-bg:#f5f7fb;
+    --card-bg:#ffffff;
+    --border:#e5e7eb;
+    --text:#111827;
+    --muted:#6b7280;
+    --soft:#f8fafc;
+    --shadow:0 10px 26px rgba(15,23,42,.055);
+    --radius:15px;
+}
 
-        @media (max-width: 768px) {
-            .content-scroll{ padding:12px; }
-            .bulk-action-bar{ flex-wrap:wrap; }
-        }
-    </style>
+body{
+    background:var(--page-bg);
+}
+
+.content-scroll{
+    flex:1 1 auto;
+    overflow:auto;
+    padding:16px;
+}
+
+.leave-wrapper{
+    width:100%;
+}
+
+.page-heading{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:14px;
+}
+
+.page-heading h1{
+    font-size:19px;
+    font-weight:900;
+    color:var(--text);
+    margin:0;
+}
+
+.page-heading p{
+    margin:3px 0 0;
+    color:var(--muted);
+    font-size:12px;
+    font-weight:600;
+}
+
+.primary-btn{
+    border:0;
+    background:#111827;
+    color:#fff;
+    height:36px;
+    padding:0 14px;
+    border-radius:11px;
+    font-size:12px;
+    font-weight:900;
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    text-decoration:none;
+    white-space:nowrap;
+}
+
+.primary-btn:hover{
+    background:#020617;
+    color:#fff;
+}
+
+.export-btn{
+    background:#10b981;
+}
+
+.export-btn:hover{
+    background:#059669;
+}
+
+.print-btn{
+    background:#475569;
+}
+
+.print-btn:hover{
+    background:#334155;
+}
+
+.role-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    border-radius:999px;
+    padding:5px 9px;
+    font-size:10px;
+    font-weight:900;
+    margin-left:8px;
+}
+
+.role-admin{
+    background:#fee2e2;
+    color:#991b1b;
+}
+
+.role-hr{
+    background:#dbeafe;
+    color:#1e40af;
+}
+
+.role-manager{
+    background:#fef3c7;
+    color:#92400e;
+}
+
+.stat-card{
+    background:var(--card-bg);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:12px 13px;
+    min-height:78px;
+    display:flex;
+    align-items:center;
+    gap:11px;
+    text-decoration:none;
+    color:inherit;
+}
+
+.stat-card:hover{
+    color:inherit;
+    transform:translateY(-1px);
+}
+
+.stat-card.active{
+    border-color:#93c5fd;
+    background:#eff6ff;
+}
+
+.stat-ic{
+    width:38px;
+    height:38px;
+    border-radius:12px;
+    display:grid;
+    place-items:center;
+    color:#fff;
+    font-size:17px;
+}
+
+.blue{
+    background:#2f80ed;
+}
+
+.green{
+    background:#27ae60;
+}
+
+.orange{
+    background:#f2994a;
+}
+
+.red{
+    background:#eb5757;
+}
+
+.purple{
+    background:#8e44ad;
+}
+
+.stat-label{
+    color:var(--muted);
+    font-weight:800;
+    font-size:10.5px;
+    text-transform:uppercase;
+}
+
+.stat-value{
+    font-size:24px;
+    font-weight:950;
+}
+
+.stat-small{
+    color:var(--muted);
+    font-size:10px;
+    font-weight:700;
+    margin-top:2px;
+}
+
+.panel{
+    background:var(--card-bg);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:13px;
+}
+
+.panel-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:12px;
+    gap:10px;
+}
+
+.panel-title{
+    font-weight:900;
+    font-size:14px;
+    margin:0;
+}
+
+.panel-subtitle{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:700;
+    margin-top:2px;
+}
+
+.filter-bar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+}
+
+.search-box{
+    position:relative;
+    flex:1 1 260px;
+    max-width:430px;
+}
+
+.search-box i{
+    position:absolute;
+    left:12px;
+    top:50%;
+    transform:translateY(-50%);
+    color:#94a3b8;
+    font-size:13px;
+}
+
+.search-box input{
+    width:100%;
+    height:36px;
+    border:1px solid var(--border);
+    border-radius:11px;
+    background:#fff;
+    padding:0 12px 0 34px;
+    font-size:12px;
+    font-weight:700;
+    color:var(--text);
+    outline:none;
+}
+
+.search-box input:focus{
+    border-color:#bfdbfe;
+    box-shadow:0 0 0 3px rgba(59,130,246,.10);
+}
+
+.filter-form{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+}
+
+.filter-select,
+.filter-input{
+    height:36px;
+    border:1px solid var(--border);
+    border-radius:11px;
+    background:#fff;
+    padding:0 32px 0 12px;
+    font-size:12px;
+    font-weight:800;
+    min-width:130px;
+}
+
+.filter-input{
+    padding-right:12px;
+}
+
+.filter-employee{
+    min-width:210px;
+}
+
+.filter-submit{
+    height:36px;
+    border:0;
+    border-radius:11px;
+    background:#111827;
+    color:#fff;
+    padding:0 14px;
+    font-size:12px;
+    font-weight:900;
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+}
+
+.bulk-action-bar{
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:13px;
+    padding:10px;
+    margin-bottom:12px;
+}
+
+.bulk-action-bar.show{
+    display:flex;
+}
+
+.compact-table-wrap{
+    width:100%;
+    border:1px solid var(--border);
+    border-radius:13px;
+    overflow:hidden;
+    background:#fff;
+}
+
+.compact-table{
+    width:100%;
+    margin:0;
+    table-layout:auto;
+}
+
+.compact-table thead th{
+    background:var(--soft);
+    color:#64748b;
+    font-size:10px;
+    text-transform:uppercase;
+    font-weight:900;
+    border-bottom:1px solid var(--border)!important;
+    padding:8px 9px;
+}
+
+.compact-table tbody td{
+    padding:8px 9px;
+    vertical-align:middle;
+    border-color:#eef2f7;
+    color:#334155;
+    font-weight:700;
+    font-size:11.5px;
+}
+
+.compact-table tbody tr:hover{
+    background:#fbfdff;
+}
+
+.table-title-cell{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.employee-avatar{
+    width:30px;
+    height:30px;
+    border-radius:9px;
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+    background:#eff6ff;
+    color:#2563eb;
+    font-size:11px;
+    font-weight:950;
+    flex:0 0 auto;
+}
+
+.employee-avatar img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+}
+
+.table-primary-text{
+    color:#111827;
+    font-size:11.5px;
+    font-weight:900;
+}
+
+.table-secondary-text{
+    color:#64748b;
+    font-size:10px;
+    font-weight:700;
+    margin-top:1px;
+}
+
+.badge-pill{
+    border-radius:999px;
+    padding:5px 8px;
+    font-weight:900;
+    font-size:10px;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+}
+
+.mini-dot{
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:currentColor;
+}
+
+.ontrack{
+    color:#15803d;
+    background:#dcfce7;
+}
+
+.warning{
+    color:#b45309;
+    background:#fef3c7;
+}
+
+.danger{
+    color:#b91c1c;
+    background:#fee2e2;
+}
+
+.muted{
+    color:#475569;
+    background:#f1f5f9;
+}
+
+.days-badge{
+    border-radius:999px;
+    padding:5px 8px;
+    color:#1d4ed8;
+    background:#dbeafe;
+    font-weight:900;
+    font-size:10px;
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+}
+
+.reason-text{
+    max-width:260px;
+    color:#475569;
+    font-size:10.5px;
+    line-height:1.45;
+}
+
+.action-group{
+    display:flex;
+    justify-content:flex-end;
+    gap:5px;
+}
+
+.action-btn{
+    width:27px;
+    height:27px;
+    border-radius:9px;
+    border:1px solid var(--border);
+    background:#fff;
+    display:grid;
+    place-items:center;
+    text-decoration:none;
+    cursor:pointer;
+}
+
+.view-btn{
+    color:#475569;
+    background:#f8fafc;
+}
+
+.approve-btn{
+    color:#15803d;
+    background:#dcfce7;
+}
+
+.reject-btn{
+    color:#b91c1c;
+    background:#fee2e2;
+}
+
+.pagination-wrap{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding-top:12px;
+}
+
+.pagination-info{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:700;
+}
+
+.empty-state{
+    text-align:center;
+    padding:28px 12px;
+    color:#64748b;
+    font-weight:800;
+    font-size:12px;
+}
+
+.alert{
+    border-radius:var(--radius);
+    border:0;
+    box-shadow:var(--shadow);
+    font-size:12px;
+    font-weight:700;
+}
+
+@media(max-width:1199px){
+
+    .compact-table thead{
+        display:none;
+    }
+
+    .compact-table,
+    .compact-table tbody,
+    .compact-table tr,
+    .compact-table td{
+        display:block;
+        width:100%;
+    }
+
+    .compact-table tbody tr{
+        border-bottom:1px solid var(--border);
+        padding:10px;
+    }
+
+    .compact-table tbody td{
+        border:0;
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+    }
+
+    .compact-table tbody td::before{
+        content:attr(data-label);
+        font-size:10px;
+        font-weight:900;
+        color:#64748b;
+        text-transform:uppercase;
+        flex:0 0 95px;
+    }
+
+    .compact-table tbody td:first-child{
+        display:block;
+    }
+
+    .compact-table tbody td:first-child::before{
+        display:none;
+    }
+
+    .action-group{
+        justify-content:flex-start;
+    }
+
+    .page-heading{
+        align-items:flex-start;
+        flex-direction:column;
+    }
+}
+
+@media(max-width:768px){
+
+    .content-scroll{
+        padding:12px 10px 12px!important;
+    }
+
+    .container-fluid.maxw{
+        padding-left:6px!important;
+        padding-right:6px!important;
+    }
+
+    .panel{
+        padding:12px!important;
+        margin-bottom:12px;
+        border-radius:14px;
+    }
+
+    .filter-form{
+        width:100%;
+    }
+
+    .filter-select,
+    .filter-input,
+    .filter-employee,
+    .filter-submit{
+        width:100%;
+    }
+}
+
+</style>
+
 </head>
+
 <body>
+
 <div class="app">
-    <?php include 'includes/sidebar.php'; ?>
-    
-    <main class="main" aria-label="Main">
-        <?php include 'includes/topbar.php'; ?>
 
-        <div class="content-scroll">
-            <div class="container-fluid maxw">
+<?php include 'includes/sidebar.php'; ?>
 
-                <!-- Page Header with Role Badge -->
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <h1 class="h3 fw-bold mb-1">
-                            Leave Requests Management
-                            <?php if ($pending_count > 0): ?>
-                                <span class="badge bg-warning text-dark ms-2"><?= $pending_count ?> Pending</span>
-                            <?php endif; ?>
-                        </h1>
-                        <div class="d-flex align-items-center gap-2">
-                            <p class="text-muted mb-0">Review and manage employee leave requests</p>
-                            <span class="role-badge <?= $userRoleBadge ?>">
-                                <i class="bi bi-shield-check me-1"></i> <?= $user_role ?>
-                            </span>
-                        </div>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <?php if ($isAdmin || $isHr): ?>
-                        <button class="btn btn-outline-primary" onclick="exportToExcel()">
-                            <i class="bi bi-file-excel"></i> Export
-                        </button>
-                        <?php endif; ?>
-                        <button class="btn btn-outline-secondary" onclick="window.print()">
-                            <i class="bi bi-printer"></i> Print
-                        </button>
-                    </div>
-                </div>
+<main class="main" aria-label="Main">
 
-                <!-- Action Messages -->
-                <?php if (!empty($action_message)): ?>
-                    <div class="alert alert-<?= $action_message_type ?> alert-dismissible fade show mb-3" role="alert">
-                        <i class="bi bi-<?= $action_message_type === 'success' ? 'check-circle' : 'exclamation-triangle' ?>-fill me-2"></i>
-                        <?= e($action_message) ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                <?php endif; ?>
+<?php include 'includes/topbar.php'; ?>
 
-                <!-- Statistics Row -->
-                <div class="row g-3 mb-4">
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card <?= $status_filter === 'pending' ? 'active' : '' ?>" onclick="window.location.href='?status=pending'">
-                            <div class="stat-ic orange"><i class="bi bi-clock"></i></div>
-                            <div>
-                                <div class="stat-label">Pending</div>
-                                <div class="stat-value"><?= (int)($stats['pending_count'] ?? 0) ?></div>
-                                <small><?= (int)($stats['pending_days'] ?? 0) ?> days</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card <?= $status_filter === 'approved' ? 'active' : '' ?>" onclick="window.location.href='?status=approved'">
-                            <div class="stat-ic green"><i class="bi bi-check-circle"></i></div>
-                            <div>
-                                <div class="stat-label">Approved</div>
-                                <div class="stat-value"><?= (int)($stats['approved_count'] ?? 0) ?></div>
-                                <small><?= (int)($stats['approved_days'] ?? 0) ?> days</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card <?= $status_filter === 'rejected' ? 'active' : '' ?>" onclick="window.location.href='?status=rejected'">
-                            <div class="stat-ic red"><i class="bi bi-x-circle"></i></div>
-                            <div>
-                                <div class="stat-label">Rejected</div>
-                                <div class="stat-value"><?= (int)($stats['rejected_count'] ?? 0) ?></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card <?= $status_filter === 'all' ? 'active' : '' ?>" onclick="window.location.href='?status=all'">
-                            <div class="stat-ic purple"><i class="bi bi-calendar-check"></i></div>
-                            <div>
-                                <div class="stat-label">Total</div>
-                                <div class="stat-value">
-                                    <?= (int)($stats['pending_count'] ?? 0) + (int)($stats['approved_count'] ?? 0) + (int)($stats['rejected_count'] ?? 0) + (int)($stats['cancelled_count'] ?? 0) ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+<div class="content-scroll">
 
-                <!-- Filter Card -->
-                <div class="filter-card">
-                    <form method="GET" action="" id="filterForm">
-                        <div class="row g-3">
-                            <div class="col-md-2">
-                                <label class="form-label fw-bold">Status</label>
-                                <select name="status" class="form-select" onchange="this.form.submit()">
-                                    <option value="pending" <?= $status_filter === 'pending' ? 'selected' : '' ?>>Pending</option>
-                                    <option value="approved" <?= $status_filter === 'approved' ? 'selected' : '' ?>>Approved</option>
-                                    <option value="rejected" <?= $status_filter === 'rejected' ? 'selected' : '' ?>>Rejected</option>
-                                    <option value="all" <?= $status_filter === 'all' ? 'selected' : '' ?>>All Requests</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label fw-bold">Employee</label>
-                                <select name="employee_id" class="form-select select2" onchange="this.form.submit()">
-                                    <option value="0">All Employees</option>
-                                    <?php foreach ($employees as $emp): ?>
-                                        <option value="<?= $emp['id'] ?>" <?= $employee_filter == $emp['id'] ? 'selected' : '' ?>>
-                                            <?= e($emp['full_name']) ?> (<?= e($emp['employee_code']) ?>)
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label fw-bold">From Date</label>
-                                <input type="date" name="date_from" class="form-control" value="<?= e($date_from) ?>" onchange="this.form.submit()">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label fw-bold">To Date</label>
-                                <input type="date" name="date_to" class="form-control" value="<?= e($date_to) ?>" onchange="this.form.submit()">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label fw-bold">Search</label>
-                                <input type="text" name="search" class="form-control" placeholder="Name, Code, Reason..." value="<?= e($search) ?>">
-                            </div>
-                        </div>
-                    </form>
-                </div>
+<div class="container-fluid leave-wrapper px-0">
 
-                <!-- Bulk Action Bar (Only for pending status) -->
-                <?php if ($status_filter === 'pending' && !empty($leave_requests)): ?>
-                <div class="bulk-action-bar" id="bulkActionBar">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="selectAllCheckbox">
-                        <label class="form-check-label fw-bold" for="selectAllCheckbox">
-                            Select All (<span id="selectedCount">0</span> selected)
-                        </label>
-                    </div>
-                    <div class="ms-auto d-flex gap-2">
-                        <button class="btn btn-success" onclick="bulkApprove()">
-                            <i class="bi bi-check-all"></i> Approve Selected
-                        </button>
-                        <button class="btn btn-danger" onclick="bulkReject()">
-                            <i class="bi bi-x-circle"></i> Reject Selected
-                        </button>
-                        <button class="btn btn-outline-secondary" onclick="clearSelection()">
-                            <i class="bi bi-x"></i> Clear
-                        </button>
-                    </div>
-                </div>
-                <?php endif; ?>
+<!-- PAGE HEADING -->
 
-                <!-- Leave Requests Table/Cards -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <h5 class="panel-title">
-                            <i class="bi bi-list-ul me-2"></i>
-                            Leave Requests
-                            <span class="badge bg-secondary ms-2"><?= count($leave_requests) ?></span>
-                        </h5>
-                    </div>
+<div class="page-heading">
 
-                    <!-- Desktop Table View -->
-                    <div class="table-responsive d-none d-lg-block">
-                        <table class="table align-middle" id="leaveTable">
-                            <thead>
-                                <tr>
-                                    <?php if ($status_filter === 'pending'): ?>
-                                        <th style="width:40px">
-                                            <input class="form-check-input" type="checkbox" id="selectAllHeader">
-                                        </th>
-                                    <?php endif; ?>
-                                    <th>Employee</th>
-                                    <th>Leave Type</th>
-                                    <th>Period</th>
-                                    <th>Days</th>
-                                    <th>Reason</th>
-                                    <th>Applied On</th>
-                                    <th>Status / Approver</th>
-                                    <?php if ($status_filter === 'pending'): ?>
-                                    <th style="width:120px">Actions</th>
-                                    <?php endif; ?>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($leave_requests)): ?>
-                                    <tr>
-                                        <td colspan="<?= $status_filter === 'pending' ? '9' : '8' ?>" class="text-center text-muted py-4">
-                                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                                            No leave requests found.
-                                        </td>
-                                    </tr>
-                                <?php else: ?>
-                                    <?php foreach ($leave_requests as $request): ?>
-                                        <tr>
-                                            <?php if ($status_filter === 'pending'): ?>
-                                                <td>
-                                                    <input class="form-check-input row-select" type="checkbox" value="<?= $request['id'] ?>">
-                                                </td>
-                                            <?php endif; ?>
-                                            <td>
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <div class="employee-avatar">
-                                                        <?php if (!empty($request['employee_photo'])): ?>
-                                                            <img src="<?= e($request['employee_photo']) ?>" alt="<?= e($request['full_name']) ?>">
-                                                        <?php else: ?>
-                                                            <?= getInitials($request['full_name']) ?>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                    <div>
-                                                        <div class="fw-bold"><?= e($request['full_name']) ?></div>
-                                                        <small class="text-muted"><?= e($request['employee_code']) ?></small>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-light text-dark"><?= e($request['leave_type']) ?></span>
-                                            </td>
-                                            <td>
-                                                <?= safeDate($request['from_date']) ?><br>
-                                                <small class="text-muted">to <?= safeDate($request['to_date']) ?></small>
-                                            </td>
-                                            <td>
-                                                <span class="days-badge">
-                                                    <i class="bi bi-calendar"></i> <?= $request['total_days'] ?> days
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div data-bs-toggle="tooltip" title="<?= e($request['reason']) ?>">
-                                                    <?= e(substr($request['reason'], 0, 30)) ?>...
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <?= safeDateTime($request['applied_at'] ?? $request['created_at']) ?>
-                                            </td>
-                                            <td>
-                                                <?= getStatusBadge($request['status']) ?>
-                                                <?php if ($request['status'] !== 'Pending'): ?>
-                                                    <div class="small text-muted mt-1">
-                                                        <?= getApproverInfo($request) ?>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </td>
-                                            <?php if ($status_filter === 'pending'): ?>
-                                            <td>
-                                                <div class="d-flex gap-1">
-                                                    <button class="action-btn" onclick="viewDetails(<?= $request['id'] ?>)" title="View Details">
-                                                        <i class="bi bi-eye"></i>
-                                                    </button>
-                                                    
-                                                    <?php 
-                                                    // Check if user can approve this specific request
-                                                    $canApproveThis = false;
-                                                    if ($isAdmin || $isHr) {
-                                                        $canApproveThis = true;
-                                                    } elseif ($isManager) {
-                                                        if ($request['reporting_to'] == $current_employee_id) {
-                                                            $canApproveThis = true;
-                                                        }
-                                                    }
-                                                    
-                                                    if ($canApproveThis): 
-                                                    ?>
-                                                        <button class="action-btn approve" onclick="openApproveModal(<?= $request['id'] ?>, '<?= e($request['full_name']) ?>')" title="Approve">
-                                                            <i class="bi bi-check-lg"></i>
-                                                        </button>
-                                                        <button class="action-btn reject" onclick="openRejectModal(<?= $request['id'] ?>, '<?= e($request['full_name']) ?>')" title="Reject">
-                                                            <i class="bi bi-x-lg"></i>
-                                                        </button>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </td>
-                                            <?php endif; ?>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
+<div>
 
-                    <!-- Mobile Card View -->
-                    <div class="d-block d-lg-none">
-                        <?php if (empty($leave_requests)): ?>
-                            <div class="text-center text-muted py-4">
-                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                                No leave requests found.
-                            </div>
-                        <?php else: ?>
-                            <?php foreach ($leave_requests as $request): ?>
-                                <div class="leave-card">
-                                    <div class="d-flex justify-content-between align-items-start mb-2">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="employee-avatar" style="width:32px;height:32px;">
-                                                <?php if (!empty($request['employee_photo'])): ?>
-                                                    <img src="<?= e($request['employee_photo']) ?>" alt="<?= e($request['full_name']) ?>" style="width:32px;height:32px;">
-                                                <?php else: ?>
-                                                    <?= getInitials($request['full_name']) ?>
-                                                <?php endif; ?>
-                                            </div>
-                                            <div>
-                                                <div class="fw-bold"><?= e($request['full_name']) ?></div>
-                                                <small class="text-muted"><?= e($request['employee_code']) ?></small>
-                                            </div>
-                                        </div>
-                                        <?= getStatusBadge($request['status']) ?>
-                                    </div>
-                                    
-                                    <div class="row g-2 mb-2">
-                                        <div class="col-6">
-                                            <small class="text-muted">Type:</small>
-                                            <div><?= e($request['leave_type']) ?></div>
-                                        </div>
-                                        <div class="col-6">
-                                            <small class="text-muted">Days:</small>
-                                            <div><span class="days-badge"><?= $request['total_days'] ?> days</span></div>
-                                        </div>
-                                        <div class="col-12">
-                                            <small class="text-muted">Period:</small>
-                                            <div><?= safeDate($request['from_date']) ?> - <?= safeDate($request['to_date']) ?></div>
-                                        </div>
-                                        <div class="col-12">
-                                            <small class="text-muted">Reason:</small>
-                                            <div><?= e(substr($request['reason'], 0, 50)) ?>...</div>
-                                        </div>
-                                        <?php if ($request['status'] !== 'Pending'): ?>
-                                        <div class="col-12">
-                                            <small class="text-muted">Approver:</small>
-                                            <div><?= getApproverInfo($request) ?></div>
-                                        </div>
-                                        <?php endif; ?>
-                                    </div>
-                                    
-                                    <?php if ($status_filter === 'pending'): ?>
-                                    <div class="d-flex gap-2 justify-content-end mt-2">
-                                        <button class="btn btn-sm btn-outline-secondary" onclick="viewDetails(<?= $request['id'] ?>)">
-                                            <i class="bi bi-eye"></i> View
-                                        </button>
-                                        <?php 
-                                        $canApproveThis = false;
-                                        if ($isAdmin || $isHr) {
-                                            $canApproveThis = true;
-                                        } elseif ($isManager) {
-                                            if ($request['reporting_to'] == $current_employee_id) {
-                                                $canApproveThis = true;
-                                            }
-                                        }
-                                        
-                                        if ($canApproveThis): 
-                                        ?>
-                                            <button class="btn btn-sm btn-success" onclick="openApproveModal(<?= $request['id'] ?>, '<?= e($request['full_name']) ?>')">
-                                                <i class="bi bi-check-lg"></i> Approve
-                                            </button>
-                                            <button class="btn btn-sm btn-danger" onclick="openRejectModal(<?= $request['id'] ?>, '<?= e($request['full_name']) ?>')">
-                                                <i class="bi bi-x-lg"></i> Reject
-                                            </button>
-                                        <?php endif; ?>
-                                    </div>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
+<h1>
+Leave Requests
 
-            </div>
-        </div>
+<?php if ($pending_count > 0): ?>
 
-        <?php include 'includes/footer.php'; ?>
-    </main>
+<span class="badge bg-warning text-dark ms-2">
+<?php echo (int)$pending_count; ?>
+Pending
+</span>
+
+<?php endif; ?>
+
+<span class="role-badge <?php echo e($userRoleClass); ?>">
+<i class="bi bi-shield-check"></i>
+<?php echo e($user_role); ?>
+</span>
+
+</h1>
+
+<p>
+Review, approve, reject and track employee leave requests
+</p>
+
 </div>
 
-<!-- Approve Modal -->
-<div class="modal fade" id="approveModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="">
-                <input type="hidden" name="leave_id" id="approve_leave_id">
-                <input type="hidden" name="leave_action" value="approve">
-                
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="bi bi-check-circle-fill text-success me-2"></i>
-                        Approve Leave Request
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to approve leave request for <strong id="approve_employee_name"></strong>?</p>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Remarks (Optional)</label>
-                        <textarea name="remarks" class="form-control" rows="2" placeholder="Add any remarks..."></textarea>
-                    </div>
-                    
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        You are approving as <strong><?= $user_role ?></strong>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">
-                        <i class="bi bi-check-lg"></i> Confirm Approval
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
+<div class="d-flex gap-2 flex-wrap">
+
+<button
+class="primary-btn print-btn"
+onclick="window.print()"
+>
+<i class="bi bi-printer"></i>
+Print
+</button>
+
+<button
+class="primary-btn export-btn"
+data-bs-toggle="modal"
+data-bs-target="#exportModal"
+>
+<i class="bi bi-download"></i>
+Export
+</button>
+
 </div>
 
-<!-- Reject Modal -->
-<div class="modal fade" id="rejectModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="">
-                <input type="hidden" name="leave_id" id="reject_leave_id">
-                <input type="hidden" name="leave_action" value="reject">
-                
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="bi bi-x-circle-fill text-danger me-2"></i>
-                        Reject Leave Request
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to reject leave request for <strong id="reject_employee_name"></strong>?</p>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold required">Rejection Reason</label>
-                        <textarea name="remarks" class="form-control" rows="3" required placeholder="Please provide reason for rejection..."></textarea>
-                    </div>
-                    
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        You are rejecting as <strong><?= $user_role ?></strong>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger">
-                        <i class="bi bi-x-lg"></i> Confirm Rejection
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
 </div>
 
-<!-- Bulk Reject Modal -->
-<div class="modal fade" id="bulkRejectModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="">
-                <input type="hidden" name="bulk_action" value="reject_selected">
-                <div id="bulkSelectedIds"></div>
-                
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="bi bi-x-circle-fill text-danger me-2"></i>
-                        Bulk Reject Leave Requests
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to reject <span id="bulkCount"></span> selected leave requests?</p>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold required">Rejection Reason</label>
-                        <textarea name="bulk_remarks" class="form-control" rows="3" required placeholder="Please provide reason for rejection..."></textarea>
-                    </div>
-                    
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
-                        You can only reject requests you have permission for.
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger">
-                        <i class="bi bi-x-lg"></i> Confirm Bulk Rejection
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
+<!-- ACTION MESSAGE -->
+
+<?php if ($action_message !== ''): ?>
+
+<div class="alert alert-<?php echo e($action_message_type); ?> alert-dismissible fade show" role="alert">
+
+<i class="bi bi-<?php echo $action_message_type === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>-fill me-2"></i>
+
+<?php echo e($action_message); ?>
+
+<button
+type="button"
+class="btn-close"
+data-bs-dismiss="alert"
+></button>
+
+</div>
+
+<?php endif; ?>
+
+<!-- STATS -->
+
+<div class="row g-3 mb-3">
+
+<div class="col-12 col-sm-6 col-xl-3">
+
+<a
+href="?status=pending"
+class="stat-card <?php echo $status_filter === 'pending' ? 'active' : ''; ?>"
+>
+
+<div class="stat-ic orange">
+<i class="bi bi-clock-fill"></i>
+</div>
+
+<div>
+
+<div class="stat-label">
+Pending
+</div>
+
+<div class="stat-value">
+<?php echo (int)($stats['pending_count'] ?? 0); ?>
+</div>
+
+<div class="stat-small">
+<?php echo (float)($stats['pending_days'] ?? 0); ?>
+days
+</div>
+
+</div>
+
+</a>
+
+</div>
+
+<div class="col-12 col-sm-6 col-xl-3">
+
+<a
+href="?status=approved"
+class="stat-card <?php echo $status_filter === 'approved' ? 'active' : ''; ?>"
+>
+
+<div class="stat-ic green">
+<i class="bi bi-check-circle-fill"></i>
+</div>
+
+<div>
+
+<div class="stat-label">
+Approved
+</div>
+
+<div class="stat-value">
+<?php echo (int)($stats['approved_count'] ?? 0); ?>
+</div>
+
+<div class="stat-small">
+<?php echo (float)($stats['approved_days'] ?? 0); ?>
+days
+</div>
+
+</div>
+
+</a>
+
+</div>
+
+<div class="col-12 col-sm-6 col-xl-3">
+
+<a
+href="?status=rejected"
+class="stat-card <?php echo $status_filter === 'rejected' ? 'active' : ''; ?>"
+>
+
+<div class="stat-ic red">
+<i class="bi bi-x-circle-fill"></i>
+</div>
+
+<div>
+
+<div class="stat-label">
+Rejected
+</div>
+
+<div class="stat-value">
+<?php echo (int)($stats['rejected_count'] ?? 0); ?>
+</div>
+
+</div>
+
+</a>
+
+</div>
+
+<div class="col-12 col-sm-6 col-xl-3">
+
+<a
+href="?status=all"
+class="stat-card <?php echo $status_filter === 'all' ? 'active' : ''; ?>"
+>
+
+<div class="stat-ic purple">
+<i class="bi bi-calendar-check-fill"></i>
+</div>
+
+<div>
+
+<div class="stat-label">
+Total Requests
+</div>
+
+<div class="stat-value">
+<?php echo (int)$total_count; ?>
+</div>
+
+</div>
+
+</a>
+
+</div>
+
+</div>
+
+<!-- BULK ACTION BAR -->
+
+<?php if ($status_filter === 'pending' && !empty($leave_requests)): ?>
+
+<div class="bulk-action-bar" id="bulkActionBar">
+
+<div class="form-check">
+
+<input
+class="form-check-input"
+type="checkbox"
+id="selectAllCheckbox"
+>
+
+<label
+class="form-check-label fw-bold"
+for="selectAllCheckbox"
+>
+Select All
+(<span id="selectedCount">0</span> selected)
+</label>
+
+</div>
+
+<div class="d-flex gap-2 flex-wrap">
+
+<button
+type="button"
+class="btn btn-sm btn-success"
+onclick="bulkApprove()"
+>
+<i class="bi bi-check-all"></i>
+Approve Selected
+</button>
+
+<button
+type="button"
+class="btn btn-sm btn-danger"
+onclick="bulkReject()"
+>
+<i class="bi bi-x-circle"></i>
+Reject Selected
+</button>
+
+<button
+type="button"
+class="btn btn-sm btn-outline-secondary"
+onclick="clearSelection()"
+>
+<i class="bi bi-x"></i>
+Clear
+</button>
+
+</div>
+
+</div>
+
+<?php endif; ?>
+
+<!-- PANEL -->
+
+<div class="panel">
+
+<div class="panel-header">
+
+<div>
+
+<h3 class="panel-title">
+Leave Requests
+</h3>
+
+<div class="panel-subtitle">
+Compact responsive leave request directory
+</div>
+
+</div>
+
+<span class="badge bg-secondary">
+<?php echo count($leave_requests); ?>
+records
+</span>
+
+</div>
+
+<!-- FILTER BAR -->
+
+<div class="filter-bar">
+
+<div class="search-box">
+
+<i class="bi bi-search"></i>
+
+<input
+type="text"
+id="quickSearch"
+placeholder="Search employee, leave type, date, reason or status..."
+>
+
+</div>
+
+<form
+method="GET"
+action=""
+id="filterForm"
+class="filter-form"
+>
+
+<select
+name="status"
+class="filter-select"
+>
+
+<option value="pending" <?php echo $status_filter === 'pending' ? 'selected' : ''; ?>>
+Pending
+</option>
+
+<option value="approved" <?php echo $status_filter === 'approved' ? 'selected' : ''; ?>>
+Approved
+</option>
+
+<option value="rejected" <?php echo $status_filter === 'rejected' ? 'selected' : ''; ?>>
+Rejected
+</option>
+
+<option value="cancelled" <?php echo $status_filter === 'cancelled' ? 'selected' : ''; ?>>
+Cancelled
+</option>
+
+<option value="all" <?php echo $status_filter === 'all' ? 'selected' : ''; ?>>
+All
+</option>
+
+</select>
+
+<select
+name="employee_id"
+class="filter-select filter-employee"
+>
+
+<option value="0">
+All Employees
+</option>
+
+<?php foreach ($employees as $emp): ?>
+
+<option
+value="<?php echo (int)$emp['id']; ?>"
+<?php echo (int)$employee_filter === (int)$emp['id'] ? 'selected' : ''; ?>
+>
+<?php echo e($emp['full_name']); ?>
+(<?php echo e($emp['employee_code']); ?>)
+</option>
+
+<?php endforeach; ?>
+
+</select>
+
+<input
+type="date"
+name="date_from"
+class="filter-input"
+value="<?php echo e($date_from); ?>"
+>
+
+<input
+type="date"
+name="date_to"
+class="filter-input"
+value="<?php echo e($date_to); ?>"
+>
+
+<input
+type="hidden"
+name="search"
+id="serverSearch"
+value="<?php echo e($search); ?>"
+>
+
+<button
+type="submit"
+class="filter-submit"
+>
+<i class="bi bi-funnel"></i>
+Apply
+</button>
+
+</form>
+
+</div>
+
+<!-- TABLE -->
+
+<div class="compact-table-wrap">
+
+<table
+class="table compact-table align-middle"
+id="leaveTable"
+>
+
+<thead>
+
+<tr>
+
+<?php if ($status_filter === 'pending'): ?>
+
+<th style="width:36px;">
+<input
+class="form-check-input"
+type="checkbox"
+id="selectAllHeader"
+>
+</th>
+
+<?php endif; ?>
+
+<th>Employee</th>
+<th>Leave Type</th>
+<th>Period</th>
+<th>Days</th>
+<th>Reason</th>
+<th>Applied</th>
+<th>Status</th>
+
+<?php if ($status_filter === 'pending'): ?>
+
+<th class="text-end">Actions</th>
+
+<?php else: ?>
+
+<th class="text-end">View</th>
+
+<?php endif; ?>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<?php if (empty($leave_requests)): ?>
+
+<tr class="no-record-row">
+
+<td colspan="<?php echo $status_filter === 'pending' ? 9 : 8; ?>">
+
+<div class="empty-state">
+
+<i class="bi bi-inbox me-1"></i>
+No leave requests found.
+
+</div>
+
+</td>
+
+</tr>
+
+<?php else: ?>
+
+<?php foreach ($leave_requests as $request): ?>
+
+<?php
+
+[$statusLabel, $statusClass, $statusKey] =
+    leaveStatusBadge($request['status'] ?? '');
+
+$employeeName =
+    trim((string)($request['full_name'] ?? ''));
+
+$initials =
+    getInitials($employeeName);
+
+$photoSrc =
+    fileUrl($request['employee_photo'] ?? '');
+
+$approverText =
+    approverInfo($request);
+
+$canApproveThis =
+    false;
+
+if ($isAdmin || $isHr) {
+    $canApproveThis = true;
+} elseif ($isManager) {
+    if ((int)($request['reporting_to'] ?? 0) === $current_employee_id) {
+        $canApproveThis = true;
+    }
+    if (in_array((int)($request['employee_id'] ?? 0), $reporting_employees, true)) {
+        $canApproveThis = true;
+    }
+}
+
+?>
+
+<tr
+data-status="<?php echo e($statusKey); ?>"
+>
+
+<?php if ($status_filter === 'pending'): ?>
+
+<td data-label="Select">
+
+<input
+class="form-check-input row-select"
+type="checkbox"
+value="<?php echo (int)$request['id']; ?>"
+>
+
+</td>
+
+<?php endif; ?>
+
+<!-- EMPLOYEE -->
+
+<td data-label="Employee">
+
+<div class="table-title-cell">
+
+<div class="employee-avatar">
+
+<?php if ($photoSrc !== ''): ?>
+
+<img
+src="<?php echo e($photoSrc); ?>"
+alt="<?php echo e($employeeName); ?>"
+onerror="this.style.display='none'; this.parentNode.innerHTML='<?php echo e($initials); ?>';"
+>
+
+<?php else: ?>
+
+<?php echo e($initials); ?>
+
+<?php endif; ?>
+
+</div>
+
+<div>
+
+<div class="table-primary-text">
+<?php echo e($employeeName); ?>
+</div>
+
+<div class="table-secondary-text">
+
+<?php echo e($request['employee_code'] ?? ''); ?>
+
+<?php if (!empty($request['department'])): ?>
+
+•
+<?php echo e($request['department']); ?>
+
+<?php endif; ?>
+
+</div>
+
+</div>
+
+</div>
+
+</td>
+
+<!-- LEAVE TYPE -->
+
+<td data-label="Leave Type">
+
+<div class="table-primary-text">
+<?php echo e($request['leave_type'] ?? ''); ?>
+</div>
+
+<div class="table-secondary-text">
+<?php echo e($request['designation'] ?? ''); ?>
+</div>
+
+</td>
+
+<!-- PERIOD -->
+
+<td data-label="Period">
+
+<div class="table-primary-text">
+<?php echo e(safeDate($request['from_date'] ?? '')); ?>
+</div>
+
+<div class="table-secondary-text">
+to
+<?php echo e(safeDate($request['to_date'] ?? '')); ?>
+</div>
+
+</td>
+
+<!-- DAYS -->
+
+<td data-label="Days">
+
+<span class="days-badge">
+
+<i class="bi bi-calendar"></i>
+
+<?php echo e($request['total_days'] ?? '0'); ?>
+
+days
+
+</span>
+
+</td>
+
+<!-- REASON -->
+
+<td data-label="Reason">
+
+<div
+class="reason-text"
+title="<?php echo e($request['reason'] ?? ''); ?>"
+>
+
+<?php
+
+$reason =
+    trim((string)($request['reason'] ?? ''));
+
+echo e(
+    strlen($reason) > 70
+    ? substr($reason, 0, 70) . '...'
+    : $reason
+);
+
+?>
+
+</div>
+
+<?php if (!empty($request['contact_during_leave'])): ?>
+
+<div class="table-secondary-text">
+Contact:
+<?php echo e($request['contact_during_leave']); ?>
+</div>
+
+<?php endif; ?>
+
+</td>
+
+<!-- APPLIED -->
+
+<td data-label="Applied">
+
+<div class="table-primary-text">
+<?php echo e(safeDateTime($request['applied_at'] ?? $request['created_at'] ?? '')); ?>
+</div>
+
+<?php if (!empty($request['handover_to'])): ?>
+
+<div class="table-secondary-text">
+Handover:
+<?php echo e($request['handover_to']); ?>
+</div>
+
+<?php endif; ?>
+
+</td>
+
+<!-- STATUS -->
+
+<td data-label="Status">
+
+<span class="badge-pill <?php echo e($statusClass); ?>">
+
+<span class="mini-dot"></span>
+
+<?php echo e($statusLabel); ?>
+
+</span>
+
+<?php if ($approverText !== ''): ?>
+
+<div class="table-secondary-text mt-1">
+<?php echo e($approverText); ?>
+</div>
+
+<?php endif; ?>
+
+</td>
+
+<!-- ACTIONS -->
+
+<td data-label="Actions">
+
+<div class="action-group">
+
+<a
+href="leave-details.php?id=<?php echo (int)$request['id']; ?>"
+class="action-btn view-btn"
+title="View Details"
+>
+<i class="bi bi-eye"></i>
+</a>
+
+<?php if ($status_filter === 'pending' && $canApproveThis): ?>
+
+<button
+type="button"
+class="action-btn approve-btn"
+onclick="openApproveModal(<?php echo (int)$request['id']; ?>, '<?php echo e(addslashes($employeeName)); ?>')"
+title="Approve"
+>
+<i class="bi bi-check-lg"></i>
+</button>
+
+<button
+type="button"
+class="action-btn reject-btn"
+onclick="openRejectModal(<?php echo (int)$request['id']; ?>, '<?php echo e(addslashes($employeeName)); ?>')"
+title="Reject"
+>
+<i class="bi bi-x-lg"></i>
+</button>
+
+<?php endif; ?>
+
+</div>
+
+</td>
+
+</tr>
+
+<?php endforeach; ?>
+
+<?php endif; ?>
+
+</tbody>
+
+</table>
+
+</div>
+
+<!-- PAGINATION INFO -->
+
+<div class="pagination-wrap">
+
+<div class="pagination-info" id="recordInfo">
+
+Showing
+<?php echo count($leave_requests); ?>
+leave request records
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+<?php include 'includes/footer.php'; ?>
+
+</main>
+
+</div>
+
+<!-- APPROVE MODAL -->
+
+<div
+class="modal fade"
+id="approveModal"
+tabindex="-1"
+>
+
+<div class="modal-dialog">
+
+<div class="modal-content">
+
+<form
+method="POST"
+action=""
+>
+
+<input
+type="hidden"
+name="leave_id"
+id="approve_leave_id"
+>
+
+<input
+type="hidden"
+name="leave_action"
+value="approve"
+>
+
+<div class="modal-header">
+
+<h5 class="modal-title fw-bold">
+
+<i class="bi bi-check-circle-fill text-success me-2"></i>
+Approve Leave Request
+
+</h5>
+
+<button
+type="button"
+class="btn-close"
+data-bs-dismiss="modal"
+></button>
+
+</div>
+
+<div class="modal-body">
+
+<p>
+Approve leave request for
+<strong id="approve_employee_name"></strong>?
+</p>
+
+<div class="mb-3">
+
+<label class="form-label fw-bold">
+Remarks
+<span class="text-muted">(Optional)</span>
+</label>
+
+<textarea
+name="remarks"
+class="form-control"
+rows="2"
+placeholder="Add remarks..."
+></textarea>
+
+</div>
+
+<div class="alert alert-info mb-0" style="box-shadow:none;">
+
+<i class="bi bi-info-circle me-2"></i>
+
+You are approving as
+<strong><?php echo e($user_role); ?></strong>.
+
+</div>
+
+</div>
+
+<div class="modal-footer">
+
+<button
+type="button"
+class="btn btn-outline-secondary"
+data-bs-dismiss="modal"
+>
+Cancel
+</button>
+
+<button
+type="submit"
+class="btn btn-success"
+>
+<i class="bi bi-check-lg"></i>
+Confirm Approval
+</button>
+
+</div>
+
+</form>
+
+</div>
+
+</div>
+
+</div>
+
+<!-- REJECT MODAL -->
+
+<div
+class="modal fade"
+id="rejectModal"
+tabindex="-1"
+>
+
+<div class="modal-dialog">
+
+<div class="modal-content">
+
+<form
+method="POST"
+action=""
+>
+
+<input
+type="hidden"
+name="leave_id"
+id="reject_leave_id"
+>
+
+<input
+type="hidden"
+name="leave_action"
+value="reject"
+>
+
+<div class="modal-header">
+
+<h5 class="modal-title fw-bold">
+
+<i class="bi bi-x-circle-fill text-danger me-2"></i>
+Reject Leave Request
+
+</h5>
+
+<button
+type="button"
+class="btn-close"
+data-bs-dismiss="modal"
+></button>
+
+</div>
+
+<div class="modal-body">
+
+<p>
+Reject leave request for
+<strong id="reject_employee_name"></strong>?
+</p>
+
+<div class="mb-3">
+
+<label class="form-label fw-bold">
+Rejection Reason
+<span class="text-danger">*</span>
+</label>
+
+<textarea
+name="remarks"
+class="form-control"
+rows="3"
+required
+placeholder="Please provide reason for rejection..."
+></textarea>
+
+</div>
+
+<div class="alert alert-info mb-0" style="box-shadow:none;">
+
+<i class="bi bi-info-circle me-2"></i>
+
+You are rejecting as
+<strong><?php echo e($user_role); ?></strong>.
+
+</div>
+
+</div>
+
+<div class="modal-footer">
+
+<button
+type="button"
+class="btn btn-outline-secondary"
+data-bs-dismiss="modal"
+>
+Cancel
+</button>
+
+<button
+type="submit"
+class="btn btn-danger"
+>
+<i class="bi bi-x-lg"></i>
+Confirm Rejection
+</button>
+
+</div>
+
+</form>
+
+</div>
+
+</div>
+
+</div>
+
+<!-- BULK REJECT MODAL -->
+
+<div
+class="modal fade"
+id="bulkRejectModal"
+tabindex="-1"
+>
+
+<div class="modal-dialog">
+
+<div class="modal-content">
+
+<form
+method="POST"
+action=""
+>
+
+<input
+type="hidden"
+name="bulk_action"
+value="reject_selected"
+>
+
+<div id="bulkSelectedIds"></div>
+
+<div class="modal-header">
+
+<h5 class="modal-title fw-bold">
+
+<i class="bi bi-x-circle-fill text-danger me-2"></i>
+Bulk Reject Leave Requests
+
+</h5>
+
+<button
+type="button"
+class="btn-close"
+data-bs-dismiss="modal"
+></button>
+
+</div>
+
+<div class="modal-body">
+
+<p>
+Reject
+<strong id="bulkCount"></strong>
+selected leave requests?
+</p>
+
+<div class="mb-3">
+
+<label class="form-label fw-bold">
+Rejection Reason
+<span class="text-danger">*</span>
+</label>
+
+<textarea
+name="bulk_remarks"
+class="form-control"
+rows="3"
+required
+placeholder="Please provide reason for rejection..."
+></textarea>
+
+</div>
+
+<div class="alert alert-warning mb-0" style="box-shadow:none;">
+
+<i class="bi bi-exclamation-triangle me-2"></i>
+
+Only requests you have permission for will be processed.
+
+</div>
+
+</div>
+
+<div class="modal-footer">
+
+<button
+type="button"
+class="btn btn-outline-secondary"
+data-bs-dismiss="modal"
+>
+Cancel
+</button>
+
+<button
+type="submit"
+class="btn btn-danger"
+>
+<i class="bi bi-x-lg"></i>
+Confirm Bulk Rejection
+</button>
+
+</div>
+
+</form>
+
+</div>
+
+</div>
+
+</div>
+
+<!-- EXPORT MODAL -->
+
+<div
+class="modal fade"
+id="exportModal"
+tabindex="-1"
+>
+
+<div class="modal-dialog">
+
+<div class="modal-content">
+
+<div class="modal-header">
+
+<h5 class="modal-title fw-bold">
+Export Leave Requests
+</h5>
+
+<button
+type="button"
+class="btn-close"
+data-bs-dismiss="modal"
+></button>
+
+</div>
+
+<div class="modal-body">
+
+<div class="mb-3">
+
+<label class="form-label">
+Export Format
+</label>
+
+<select
+class="form-select"
+id="exportFormat"
+>
+
+<option value="csv">
+CSV
+</option>
+
+</select>
+
+</div>
+
+<div class="alert alert-info mb-0" style="box-shadow:none;">
+
+<i class="bi bi-info-circle me-2"></i>
+
+This export downloads the currently displayed table rows as CSV.
+
+</div>
+
+</div>
+
+<div class="modal-footer">
+
+<button
+type="button"
+class="btn btn-secondary"
+data-bs-dismiss="modal"
+>
+Cancel
+</button>
+
+<button
+type="button"
+class="btn btn-success"
+onclick="exportToCSV()"
+>
+<i class="bi bi-download me-1"></i>
+Export
+</button>
+
+</div>
+
+</div>
+
+</div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-$(document).ready(function() {
-    // Initialize DataTable
-    <?php if (!empty($leave_requests)): ?>
-    $('#leaveTable').DataTable({
-        pageLength: 25,
-        ordering: true,
-        searching: false,
-        info: true,
-        paging: true,
-        language: {
-            info: "Showing _START_ to _END_ of _TOTAL_ requests",
-            infoEmpty: "No requests to show",
-            infoFiltered: "(filtered from _MAX_ total requests)"
+
+let updateBulkSelection = function(){};
+
+document.addEventListener('DOMContentLoaded', function(){
+
+    const quickSearch =
+        document.getElementById('quickSearch');
+
+    const serverSearch =
+        document.getElementById('serverSearch');
+
+    const tableRows =
+        document.querySelectorAll('#leaveTable tbody tr:not(.no-record-row)');
+
+    const recordInfo =
+        document.getElementById('recordInfo');
+
+    function filterRows(){
+
+        const searchValue =
+            quickSearch.value.toLowerCase().trim();
+
+        let visibleCount =
+            0;
+
+        tableRows.forEach(function(row){
+
+            const rowText =
+                row.innerText.toLowerCase();
+
+            const matches =
+                rowText.includes(searchValue);
+
+            row.style.display =
+                matches
+                ? ''
+                : 'none';
+
+            if (matches) {
+                visibleCount++;
+            }
+        });
+
+        if (recordInfo) {
+            recordInfo.textContent =
+                'Showing ' + visibleCount + ' leave request records';
         }
-    });
-    <?php endif; ?>
 
-    // Initialize Select2
-    $('.select2').select2({
-        theme: 'bootstrap-5',
-        width: '100%'
-    });
-
-    // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
-    // Bulk selection functionality
-    <?php if ($status_filter === 'pending' && !empty($leave_requests)): ?>
-    const selectAllHeader = document.getElementById('selectAllHeader');
-    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-    const rowCheckboxes = document.querySelectorAll('.row-select');
-    const bulkActionBar = document.getElementById('bulkActionBar');
-    const selectedCountSpan = document.getElementById('selectedCount');
-
-    function updateBulkSelection() {
-        const checked = document.querySelectorAll('.row-select:checked');
-        selectedCountSpan.textContent = checked.length;
-        
-        if (checked.length > 0) {
-            bulkActionBar.classList.add('show');
-        } else {
-            bulkActionBar.classList.remove('show');
-        }
-
-        // Update select all checkbox
-        if (selectAllHeader) {
-            selectAllHeader.checked = checked.length === rowCheckboxes.length;
-            selectAllHeader.indeterminate = checked.length > 0 && checked.length < rowCheckboxes.length;
-        }
-        if (selectAllCheckbox) {
-            selectAllCheckbox.checked = checked.length === rowCheckboxes.length;
-            selectAllCheckbox.indeterminate = checked.length > 0 && checked.length < rowCheckboxes.length;
+        if (serverSearch) {
+            serverSearch.value =
+                searchValue;
         }
     }
 
-    // Select all functionality
+    if (quickSearch) {
+
+        quickSearch.value =
+            serverSearch ? serverSearch.value : '';
+
+        quickSearch.addEventListener('input', filterRows);
+    }
+
+    const selectAllHeader =
+        document.getElementById('selectAllHeader');
+
+    const selectAllCheckbox =
+        document.getElementById('selectAllCheckbox');
+
+    const rowCheckboxes =
+        document.querySelectorAll('.row-select');
+
+    const bulkActionBar =
+        document.getElementById('bulkActionBar');
+
+    const selectedCountSpan =
+        document.getElementById('selectedCount');
+
+    updateBulkSelection = function(){
+
+        const checked =
+            document.querySelectorAll('.row-select:checked');
+
+        if (selectedCountSpan) {
+            selectedCountSpan.textContent =
+                checked.length;
+        }
+
+        if (bulkActionBar) {
+            if (checked.length > 0) {
+                bulkActionBar.classList.add('show');
+            } else {
+                bulkActionBar.classList.remove('show');
+            }
+        }
+
+        if (selectAllHeader) {
+            selectAllHeader.checked =
+                checked.length === rowCheckboxes.length &&
+                rowCheckboxes.length > 0;
+
+            selectAllHeader.indeterminate =
+                checked.length > 0 &&
+                checked.length < rowCheckboxes.length;
+        }
+
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked =
+                checked.length === rowCheckboxes.length &&
+                rowCheckboxes.length > 0;
+
+            selectAllCheckbox.indeterminate =
+                checked.length > 0 &&
+                checked.length < rowCheckboxes.length;
+        }
+    };
+
     if (selectAllHeader) {
-        selectAllHeader.addEventListener('change', function() {
-            rowCheckboxes.forEach(cb => {
+        selectAllHeader.addEventListener('change', function(){
+            rowCheckboxes.forEach(function(cb){
                 cb.checked = selectAllHeader.checked;
             });
             updateBulkSelection();
@@ -1142,171 +2935,261 @@ $(document).ready(function() {
     }
 
     if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', function() {
-            rowCheckboxes.forEach(cb => {
+        selectAllCheckbox.addEventListener('change', function(){
+            rowCheckboxes.forEach(function(cb){
                 cb.checked = selectAllCheckbox.checked;
             });
             updateBulkSelection();
         });
     }
 
-    // Individual checkbox changes
-    if (rowCheckboxes.length > 0) {
-        rowCheckboxes.forEach(cb => {
-            cb.addEventListener('change', updateBulkSelection);
-        });
-    }
-    <?php endif; ?>
-
-    // Auto-submit filter form on search input change with debounce
-    let searchTimeout;
-    const searchInput = document.querySelector('input[name="search"]');
-    if (searchInput) {
-        searchInput.addEventListener('keyup', function() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                document.getElementById('filterForm').submit();
-            }, 500);
-        });
-    }
+    rowCheckboxes.forEach(function(cb){
+        cb.addEventListener('change', updateBulkSelection);
+    });
 });
 
-// View Details
-function viewDetails(id) {
-    window.location.href = 'leave-details.php?id=' + id;
+function openApproveModal(id, employeeName){
+
+    document.getElementById('approve_leave_id').value =
+        id;
+
+    document.getElementById('approve_employee_name').textContent =
+        employeeName;
+
+    new bootstrap.Modal(
+        document.getElementById('approveModal')
+    ).show();
 }
 
-// Open Approve Modal
-function openApproveModal(id, employeeName) {
-    document.getElementById('approve_leave_id').value = id;
-    document.getElementById('approve_employee_name').textContent = employeeName;
-    new bootstrap.Modal(document.getElementById('approveModal')).show();
+function openRejectModal(id, employeeName){
+
+    document.getElementById('reject_leave_id').value =
+        id;
+
+    document.getElementById('reject_employee_name').textContent =
+        employeeName;
+
+    new bootstrap.Modal(
+        document.getElementById('rejectModal')
+    ).show();
 }
 
-// Open Reject Modal
-function openRejectModal(id, employeeName) {
-    document.getElementById('reject_leave_id').value = id;
-    document.getElementById('reject_employee_name').textContent = employeeName;
-    new bootstrap.Modal(document.getElementById('rejectModal')).show();
-}
+function bulkApprove(){
 
-// Bulk Approve
-function bulkApprove() {
-    const selected = document.querySelectorAll('.row-select:checked');
+    const selected =
+        document.querySelectorAll('.row-select:checked');
+
     if (selected.length === 0) {
         alert('Please select at least one leave request.');
         return;
     }
 
-    if (confirm(`Are you sure you want to approve ${selected.length} selected leave requests?`)) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '';
-
-        const actionInput = document.createElement('input');
-        actionInput.type = 'hidden';
-        actionInput.name = 'bulk_action';
-        actionInput.value = 'approve_selected';
-        form.appendChild(actionInput);
-
-        selected.forEach(cb => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'selected_ids[]';
-            input.value = cb.value;
-            form.appendChild(input);
-        });
-
-        document.body.appendChild(form);
-        form.submit();
+    if (!confirm('Approve ' + selected.length + ' selected leave requests?')) {
+        return;
     }
+
+    const form =
+        document.createElement('form');
+
+    form.method =
+        'POST';
+
+    form.action =
+        '';
+
+    const actionInput =
+        document.createElement('input');
+
+    actionInput.type =
+        'hidden';
+
+    actionInput.name =
+        'bulk_action';
+
+    actionInput.value =
+        'approve_selected';
+
+    form.appendChild(actionInput);
+
+    selected.forEach(function(cb){
+
+        const input =
+            document.createElement('input');
+
+        input.type =
+            'hidden';
+
+        input.name =
+            'selected_ids[]';
+
+        input.value =
+            cb.value;
+
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+
+    form.submit();
 }
 
-// Bulk Reject
-function bulkReject() {
-    const selected = document.querySelectorAll('.row-select:checked');
+function bulkReject(){
+
+    const selected =
+        document.querySelectorAll('.row-select:checked');
+
     if (selected.length === 0) {
         alert('Please select at least one leave request.');
         return;
     }
 
-    // Populate bulk reject modal
-    const idsContainer = document.getElementById('bulkSelectedIds');
-    idsContainer.innerHTML = '';
-    
-    selected.forEach(cb => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'selected_ids[]';
-        input.value = cb.value;
+    const idsContainer =
+        document.getElementById('bulkSelectedIds');
+
+    idsContainer.innerHTML =
+        '';
+
+    selected.forEach(function(cb){
+
+        const input =
+            document.createElement('input');
+
+        input.type =
+            'hidden';
+
+        input.name =
+            'selected_ids[]';
+
+        input.value =
+            cb.value;
+
         idsContainer.appendChild(input);
     });
 
-    document.getElementById('bulkCount').textContent = selected.length;
-    new bootstrap.Modal(document.getElementById('bulkRejectModal')).show();
+    document.getElementById('bulkCount').textContent =
+        selected.length;
+
+    new bootstrap.Modal(
+        document.getElementById('bulkRejectModal')
+    ).show();
 }
 
-// Clear Selection
-function clearSelection() {
-    document.querySelectorAll('.row-select').forEach(cb => {
+function clearSelection(){
+
+    document.querySelectorAll('.row-select').forEach(function(cb){
         cb.checked = false;
     });
+
     updateBulkSelection();
 }
 
-// Export to Excel
-function exportToExcel() {
-    const rows = document.querySelectorAll('#leaveTable tbody tr');
-    const csv = [];
-    
-    // Headers
-    const headers = ['Employee', 'Leave Type', 'From Date', 'To Date', 'Days', 'Reason', 'Applied On', 'Status'];
+function exportToCSV(){
+
+    const rows =
+        document.querySelectorAll('#leaveTable tbody tr:not(.no-record-row)');
+
+    const csv =
+        [];
+
+    const headers = [
+        'Employee',
+        'Leave Type',
+        'Period',
+        'Days',
+        'Reason',
+        'Applied',
+        'Status'
+    ];
+
     csv.push(headers.join(','));
-    
-    // Data rows
-    rows.forEach(row => {
-        if (row.cells.length >= 8) {
-            const startIdx = <?= $status_filter === 'pending' ? '1' : '0' ?>;
-            const employee = row.cells[startIdx]?.innerText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim() || '';
-            const leaveType = row.cells[startIdx + 1]?.innerText.trim() || '';
-            const period = row.cells[startIdx + 2]?.innerText.trim() || '';
-            const days = row.cells[startIdx + 3]?.innerText.trim() || '';
-            const reason = row.cells[startIdx + 4]?.innerText.trim() || '';
-            const appliedOn = row.cells[startIdx + 5]?.innerText.trim() || '';
-            const status = row.cells[startIdx + 6]?.innerText.trim() || '';
 
-            const fromDate = period.split('to')[0]?.trim() || '';
-            const toDate = period.split('to')[1]?.trim() || '';
+    rows.forEach(function(row){
 
-            const rowData = [
-                '"' + employee.replace(/"/g, '""') + '"',
-                '"' + leaveType.replace(/"/g, '""') + '"',
-                '"' + fromDate.replace(/"/g, '""') + '"',
-                '"' + toDate.replace(/"/g, '""') + '"',
-                '"' + days.replace(/"/g, '""') + '"',
-                '"' + reason.replace(/"/g, '""') + '"',
-                '"' + appliedOn.replace(/"/g, '""') + '"',
-                '"' + status.replace(/"/g, '""') + '"'
-            ];
-            csv.push(rowData.join(','));
+        if (row.style.display === 'none') {
+            return;
         }
+
+        const cells =
+            row.querySelectorAll('td');
+
+        if (!cells.length) {
+            return;
+        }
+
+        let offset =
+            <?php echo $status_filter === 'pending' ? '1' : '0'; ?>;
+
+        const employee =
+            cells[offset]?.innerText.replace(/\s+/g, ' ').trim() || '';
+
+        const leaveType =
+            cells[offset + 1]?.innerText.replace(/\s+/g, ' ').trim() || '';
+
+        const period =
+            cells[offset + 2]?.innerText.replace(/\s+/g, ' ').trim() || '';
+
+        const days =
+            cells[offset + 3]?.innerText.replace(/\s+/g, ' ').trim() || '';
+
+        const reason =
+            cells[offset + 4]?.innerText.replace(/\s+/g, ' ').trim() || '';
+
+        const applied =
+            cells[offset + 5]?.innerText.replace(/\s+/g, ' ').trim() || '';
+
+        const status =
+            cells[offset + 6]?.innerText.replace(/\s+/g, ' ').trim() || '';
+
+        const rowData = [
+            employee,
+            leaveType,
+            period,
+            days,
+            reason,
+            applied,
+            status
+        ].map(function(value){
+            return '"' + String(value).replace(/"/g, '""') + '"';
+        });
+
+        csv.push(rowData.join(','));
     });
-    
-    const csvString = csv.join('\n');
-    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'leave_requests_<?= date('Y-m-d') ?>.csv';
+
+    const csvString =
+        csv.join('\n');
+
+    const blob =
+        new Blob(
+            ["\uFEFF" + csvString],
+            { type: 'text/csv;charset=utf-8;' }
+        );
+
+    const url =
+        window.URL.createObjectURL(blob);
+
+    const a =
+        document.createElement('a');
+
+    a.href =
+        url;
+
+    a.download =
+        'leave_requests_<?php echo date('Y-m-d'); ?>.csv';
+
     document.body.appendChild(a);
+
     a.click();
+
     document.body.removeChild(a);
+
     window.URL.revokeObjectURL(url);
 }
+
 </script>
 
 </body>
 </html>
+
 <?php
 if (isset($conn) && $conn) {
     mysqli_close($conn);
