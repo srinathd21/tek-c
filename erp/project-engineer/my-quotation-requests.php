@@ -333,7 +333,7 @@ $editable_statuses_js = json_encode($editable_statuses);
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>My Quotation Requests - TEK-C</title>
+    <title>Vendor Finalization Tender - TEK-C</title>
 
     <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
@@ -933,7 +933,7 @@ $editable_statuses_js = json_encode($editable_statuses);
 
                     <div class="page-heading">
                         <div>
-                            <h1>My Quotation Requests</h1>
+                            <h1>Vendor Finalization Tender</h1>
                             <p>
                                 <i class="bi bi-person-badge me-1"></i>
                                 Role:
@@ -941,7 +941,8 @@ $editable_statuses_js = json_encode($editable_statuses);
                                     <i class="bi bi-pencil-square"></i>
                                     <?php echo e(getRoleDisplay($designation)); ?>
                                 </span>
-                                <span class="ms-1">Edit and direct delete available only for Draft and Pending Assignment requests.</span>
+                                <span class="ms-1">Edit and direct delete available only for Draft and Pending
+                                    Assignment requests.</span>
                             </p>
                         </div>
 
@@ -1208,7 +1209,8 @@ $editable_statuses_js = json_encode($editable_statuses);
 
                         <div class="table-secondary-text mt-2">
                             <i class="bi bi-info-circle"></i>
-                            Draft and Pending Assignment requests can be edited or directly deleted. Once assigned, delete is locked.
+                            Draft and Pending Assignment requests can be edited or directly deleted. Once assigned,
+                            delete is locked.
                         </div>
                     </div>
 
@@ -1232,7 +1234,8 @@ $editable_statuses_js = json_encode($editable_statuses);
                         <div class="table-primary-text" id="deleteRequestTitle"></div>
                     </div>
                     <p class="text-danger small mt-3 mb-0">This action cannot be undone.</p>
-                    <p class="text-muted small mt-1 mb-0">Only Draft and Pending Assignment requests are allowed for direct delete.</p>
+                    <p class="text-muted small mt-1 mb-0">Only Draft and Pending Assignment requests are allowed for
+                        direct delete.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>

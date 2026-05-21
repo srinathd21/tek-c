@@ -259,7 +259,7 @@ if ($preselected_site_id > 0) {
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>New Quotation Request - TEK-C Dashboard</title>
+    <title>Vendor Finalization Tender - TEK-C Dashboard</title>
 
     <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
@@ -958,7 +958,7 @@ if ($preselected_site_id > 0) {
                     <!-- Page Header -->
                     <div class="page-heading">
                         <div>
-                            <h1>New Quotation Request</h1>
+                            <h1>Vendor Finalization Tender</h1>
                             <p>Create supplier quotation request based on project drawings and requirements.</p>
                         </div>
 

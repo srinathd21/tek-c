@@ -614,6 +614,7 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
 ?>
 <!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <title>Leave Requests Management - TEK-C</title>
@@ -626,917 +627,1436 @@ $userRoleBadge = $isAdmin ? 'atrisk' : ($isHr ? 'progressing' : ($isTl ? 'pendin
     <link href="assets/css/footer.css" rel="stylesheet" />
 
     <style>
-        :root{
-            --page-bg:#f5f7fb;
-            --card-bg:#ffffff;
-            --border:#e5e7eb;
-            --text:#111827;
-            --muted:#6b7280;
-            --soft:#f8fafc;
-            --shadow:0 10px 26px rgba(15,23,42,.055);
-            --radius:15px;
+    :root {
+        --page-bg: #f5f7fb;
+        --card-bg: #ffffff;
+        --border: #e5e7eb;
+        --text: #111827;
+        --muted: #6b7280;
+        --soft: #f8fafc;
+        --shadow: 0 10px 26px rgba(15, 23, 42, .055);
+        --radius: 15px;
+    }
+
+    body {
+        background: var(--page-bg);
+    }
+
+    .content-scroll {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 16px;
+    }
+
+    .projects-wrapper {
+        width: 100%;
+    }
+
+    .page-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .page-heading h1 {
+        font-size: 19px;
+        font-weight: 900;
+        color: var(--text);
+        margin: 0;
+    }
+
+    .page-heading p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .primary-btn,
+    .secondary-btn,
+    .success-btn,
+    .danger-btn {
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        text-decoration: none;
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .primary-btn {
+        background: #111827;
+        color: #fff;
+    }
+
+    .primary-btn:hover {
+        background: #020617;
+        color: #fff;
+    }
+
+    .secondary-btn {
+        border: 1px solid var(--border);
+        background: #fff;
+        color: #334155;
+    }
+
+    .secondary-btn:hover {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+        color: #111827;
+    }
+
+    .success-btn {
+        background: #16a34a;
+        color: #fff;
+    }
+
+    .success-btn:hover {
+        background: #15803d;
+        color: #fff;
+    }
+
+    .danger-btn {
+        background: #dc2626;
+        color: #fff;
+    }
+
+    .danger-btn:hover {
+        background: #b91c1c;
+        color: #fff;
+    }
+
+    .panel,
+    .filter-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 13px;
+        margin-bottom: 14px;
+    }
+
+    .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .panel-title {
+        font-weight: 900;
+        font-size: 14px;
+        margin: 0;
+        color: var(--text);
+    }
+
+    .panel-subtitle {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+
+    .stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 12px 13px;
+        min-height: 78px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        cursor: pointer;
+        transition: .15s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 32px rgba(15, 23, 42, .09);
+    }
+
+    .stat-card.active {
+        border-color: #93c5fd;
+        background: #eff6ff;
+    }
+
+    .stat-ic {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 17px;
+        flex: 0 0 auto;
+    }
+
+    .blue {
+        background: #2f80ed;
+    }
+
+    .orange {
+        background: #f2994a;
+    }
+
+    .green {
+        background: #27ae60;
+    }
+
+    .red {
+        background: #eb5757;
+    }
+
+    .purple {
+        background: #8b5cf6;
+    }
+
+    .stat-label {
+        color: var(--muted);
+        font-weight: 800;
+        font-size: 10.5px;
+        text-transform: uppercase;
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: 950;
+        color: var(--text);
+        line-height: 1;
+    }
+
+    .form-label {
+        font-size: 11px;
+        font-weight: 900;
+        color: #475569;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+
+    .form-control,
+    .form-select {
+        min-height: 38px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 800;
+        color: #111827;
+        padding: 8px 11px;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+        border-color: #bfdbfe;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+    }
+
+    .badge-pill {
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-weight: 900;
+        font-size: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .mini-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .ontrack {
+        color: #15803d;
+        background: #dcfce7;
+        border-color: #bbf7d0;
+    }
+
+    .progressing {
+        color: #2563eb;
+        background: #dbeafe;
+        border-color: #bfdbfe;
+    }
+
+    .pending {
+        color: #6d28d9;
+        background: #ede9fe;
+        border-color: #ddd6fe;
+    }
+
+    .atrisk {
+        color: #b91c1c;
+        background: #fee2e2;
+        border-color: #fecaca;
+    }
+
+    .neutral {
+        color: #475569;
+        background: #f1f5f9;
+        border-color: #e2e8f0;
+    }
+
+    .compact-table-wrap {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .compact-table {
+        width: 100%;
+        margin: 0;
+        table-layout: auto;
+    }
+
+    .compact-table thead th {
+        background: var(--soft);
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 900;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 8px 9px;
+    }
+
+    .compact-table tbody td {
+        padding: 8px 9px;
+        vertical-align: middle;
+        border-color: #eef2f7;
+        color: #334155;
+        font-weight: 700;
+        font-size: 11.5px;
+    }
+
+    .compact-table tbody tr:hover {
+        background: #fbfdff;
+    }
+
+    .employee-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 190px;
+    }
+
+    .employee-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        background: #111827;
+        display: grid;
+        place-items: center;
+        font-weight: 950;
+        font-size: 12px;
+        color: #fff;
+        overflow: hidden;
+        flex: 0 0 auto;
+    }
+
+    .employee-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .table-primary-text {
+        color: #111827;
+        font-size: 11.5px;
+        font-weight: 900;
+    }
+
+    .table-secondary-text {
+        color: #64748b;
+        font-size: 10px;
+        font-weight: 700;
+        margin-top: 1px;
+    }
+
+    .days-badge {
+        background: #eff6ff;
+        color: #2563eb;
+        border: 1px solid #bfdbfe;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-weight: 900;
+        font-size: 10px;
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+    }
+
+    .action-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        text-decoration: none;
+        transition: .15s ease;
+    }
+
+    .action-btn:hover {
+        background: #f8fafc;
+        color: #111827;
+    }
+
+    .action-btn.approve:hover {
+        background: #dcfce7;
+        color: #15803d;
+        border-color: #86efac;
+    }
+
+    .action-btn.reject:hover {
+        background: #fee2e2;
+        color: #b91c1c;
+        border-color: #fecaca;
+    }
+
+    .bulk-action-bar {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        box-shadow: var(--shadow);
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        display: none;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .bulk-action-bar.show {
+        display: flex;
+    }
+
+    .leave-card {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+        padding: 12px;
+        margin-bottom: 12px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 30px 12px;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .empty-state i {
+        display: block;
+        font-size: 34px;
+        opacity: .45;
+        margin-bottom: 8px;
+    }
+
+    .modal-content {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 24px 55px rgba(15, 23, 42, .18);
+    }
+
+    .modal-header {
+        border-bottom: 1px solid #eef2f7;
+    }
+
+    .modal-title {
+        font-size: 15px;
+        font-weight: 950;
+        color: #111827;
+    }
+
+    .view-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .view-detail-card {
+        border: 1px solid #eef2f7;
+        background: #f8fafc;
+        border-radius: 13px;
+        padding: 10px;
+    }
+
+    .view-detail-card.full {
+        grid-column: 1 / -1;
+    }
+
+    .view-detail-label {
+        font-size: 10px;
+        font-weight: 900;
+        color: #64748b;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+
+    .view-detail-value {
+        font-size: 12px;
+        font-weight: 850;
+        color: #111827;
+        word-break: break-word;
+        line-height: 1.45;
+    }
+
+    .selected-date-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 5px 8px;
+        margin: 2px;
+        background: #eff6ff;
+        color: #2563eb;
+        border: 1px solid #bfdbfe;
+        font-size: 10px;
+        font-weight: 900;
+    }
+
+    @media(max-width:991.98px) {
+        .main {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
         }
 
-        body{ background:var(--page-bg); }
-
-        .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px; }
-        .projects-wrapper{ width:100%; }
-
-        .page-heading{
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap:12px;
-            margin-bottom:14px;
+        .sidebar {
+            position: fixed !important;
+            transform: translateX(-100%);
+            z-index: 1040 !important;
         }
 
-        .page-heading h1{ font-size:19px; font-weight:900; color:var(--text); margin:0; }
-        .page-heading p{ margin:3px 0 0; color:var(--muted); font-size:12px; font-weight:600; }
+        .sidebar.open,
+        .sidebar.active,
+        .sidebar.show {
+            transform: translateX(0) !important;
+        }
+    }
 
-        .primary-btn,.secondary-btn,.success-btn,.danger-btn{
-            min-height:36px;
-            padding:0 14px;
-            border-radius:11px;
-            font-size:12px;
-            font-weight:900;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            gap:7px;
-            text-decoration:none;
-            white-space:nowrap;
-            border:0;
+    @media(max-width:1199px) {
+        .compact-table thead {
+            display: none;
         }
 
-        .primary-btn{ background:#111827; color:#fff; }
-        .primary-btn:hover{ background:#020617; color:#fff; }
-        .secondary-btn{ border:1px solid var(--border); background:#fff; color:#334155; }
-        .secondary-btn:hover{ border-color:#cbd5e1; background:#f8fafc; color:#111827; }
-        .success-btn{ background:#16a34a; color:#fff; }
-        .success-btn:hover{ background:#15803d; color:#fff; }
-        .danger-btn{ background:#dc2626; color:#fff; }
-        .danger-btn:hover{ background:#b91c1c; color:#fff; }
-
-        .panel,.filter-card{
-            background:var(--card-bg);
-            border:1px solid var(--border);
-            border-radius:var(--radius);
-            box-shadow:var(--shadow);
-            padding:13px;
-            margin-bottom:14px;
+        .compact-table,
+        .compact-table tbody,
+        .compact-table tr,
+        .compact-table td {
+            display: block;
+            width: 100%;
         }
 
-        .panel-header{
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap:12px;
-            margin-bottom:12px;
+        .compact-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            padding: 10px;
         }
 
-        .panel-title{ font-weight:900; font-size:14px; margin:0; color:var(--text); }
-        .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
-
-        .stat-card{
-            background:var(--card-bg);
-            border:1px solid var(--border);
-            border-radius:var(--radius);
-            box-shadow:var(--shadow);
-            padding:12px 13px;
-            min-height:78px;
-            display:flex;
-            align-items:center;
-            gap:11px;
-            cursor:pointer;
-            transition:.15s ease;
+        .compact-table tbody td {
+            border: 0;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
         }
 
-        .stat-card:hover{ transform:translateY(-1px); box-shadow:0 14px 32px rgba(15,23,42,.09); }
-        .stat-card.active{ border-color:#93c5fd; background:#eff6ff; }
-
-        .stat-ic{
-            width:38px;
-            height:38px;
-            border-radius:12px;
-            display:grid;
-            place-items:center;
-            color:#fff;
-            font-size:17px;
-            flex:0 0 auto;
+        .compact-table tbody td::before {
+            content: attr(data-label);
+            font-size: 10px;
+            font-weight: 900;
+            color: #64748b;
+            text-transform: uppercase;
+            flex: 0 0 105px;
         }
 
-        .blue{background:#2f80ed;}
-        .orange{background:#f2994a;}
-        .green{background:#27ae60;}
-        .red{background:#eb5757;}
-        .purple{background:#8b5cf6;}
-
-        .stat-label{ color:var(--muted); font-weight:800; font-size:10.5px; text-transform:uppercase; }
-        .stat-value{ font-size:24px; font-weight:950; color:var(--text); line-height:1; }
-
-        .form-label{
-            font-size:11px;
-            font-weight:900;
-            color:#475569;
-            text-transform:uppercase;
-            margin-bottom:6px;
+        .compact-table tbody td:first-child {
+            display: block;
         }
 
-        .form-control,.form-select{
-            min-height:38px;
-            border:1px solid var(--border);
-            border-radius:11px;
-            font-size:12px;
-            font-weight:800;
-            color:#111827;
-            padding:8px 11px;
+        .compact-table tbody td:first-child::before {
+            display: none;
+        }
+    }
+
+    @media(max-width:768px) {
+        .content-scroll {
+            padding: 12px 10px !important;
         }
 
-        .form-control:focus,.form-select:focus{
-            border-color:#bfdbfe;
-            box-shadow:0 0 0 3px rgba(59,130,246,.10);
+        .page-heading {
+            align-items: flex-start;
+            flex-direction: column;
         }
 
-        .badge-pill{
-            border-radius:999px;
-            padding:5px 8px;
-            font-weight:900;
-            font-size:10px;
-            display:inline-flex;
-            align-items:center;
-            gap:6px;
-            border:1px solid transparent;
-            text-decoration:none;
-            white-space:nowrap;
+        .panel,
+        .filter-card {
+            padding: 12px;
         }
 
-        .mini-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
-        .ontrack{color:#15803d;background:#dcfce7;border-color:#bbf7d0;}
-        .progressing{color:#2563eb;background:#dbeafe;border-color:#bfdbfe;}
-        .pending{color:#6d28d9;background:#ede9fe;border-color:#ddd6fe;}
-        .atrisk{color:#b91c1c;background:#fee2e2;border-color:#fecaca;}
-        .neutral{color:#475569;background:#f1f5f9;border-color:#e2e8f0;}
-
-        .compact-table-wrap{
-            width:100%;
-            border:1px solid var(--border);
-            border-radius:13px;
-            overflow:hidden;
-            background:#fff;
+        .bulk-action-bar {
+            flex-wrap: wrap;
         }
 
-        .compact-table{ width:100%; margin:0; table-layout:auto; }
-
-        .compact-table thead th{
-            background:var(--soft);
-            color:#64748b;
-            font-size:10px;
-            text-transform:uppercase;
-            font-weight:900;
-            border-bottom:1px solid var(--border)!important;
-            padding:8px 9px;
+        .primary-btn,
+        .secondary-btn,
+        .success-btn,
+        .danger-btn {
+            width: 100%;
         }
 
-        .compact-table tbody td{
-            padding:8px 9px;
-            vertical-align:middle;
-            border-color:#eef2f7;
-            color:#334155;
-            font-weight:700;
-            font-size:11.5px;
+        .view-detail-grid {
+            grid-template-columns: 1fr;
         }
-
-        .compact-table tbody tr:hover{ background:#fbfdff; }
-
-        .employee-cell{ display:flex; align-items:center; gap:8px; min-width:190px; }
-        .employee-avatar{
-            width:34px;
-            height:34px;
-            border-radius:12px;
-            background:#111827;
-            display:grid;
-            place-items:center;
-            font-weight:950;
-            font-size:12px;
-            color:#fff;
-            overflow:hidden;
-            flex:0 0 auto;
-        }
-
-        .employee-avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
-
-        .table-primary-text{ color:#111827; font-size:11.5px; font-weight:900; }
-        .table-secondary-text{ color:#64748b; font-size:10px; font-weight:700; margin-top:1px; }
-
-        .days-badge{
-            background:#eff6ff;
-            color:#2563eb;
-            border:1px solid #bfdbfe;
-            padding:4px 8px;
-            border-radius:999px;
-            font-weight:900;
-            font-size:10px;
-            display:inline-flex;
-            gap:5px;
-            align-items:center;
-        }
-
-        .action-btn{
-            width:32px;
-            height:32px;
-            border-radius:10px;
-            border:1px solid var(--border);
-            background:#fff;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            color:#64748b;
-            text-decoration:none;
-            transition:.15s ease;
-        }
-
-        .action-btn:hover{ background:#f8fafc; color:#111827; }
-        .action-btn.approve:hover{ background:#dcfce7; color:#15803d; border-color:#86efac; }
-        .action-btn.reject:hover{ background:#fee2e2; color:#b91c1c; border-color:#fecaca; }
-
-        .bulk-action-bar{
-            background:#fff;
-            border:1px solid var(--border);
-            border-radius:13px;
-            box-shadow:var(--shadow);
-            padding:10px 12px;
-            margin-bottom:14px;
-            display:none;
-            align-items:center;
-            gap:12px;
-        }
-
-        .bulk-action-bar.show{ display:flex; }
-
-        .leave-card{
-            background:#fff;
-            border:1px solid var(--border);
-            border-radius:14px;
-            box-shadow:var(--shadow);
-            padding:12px;
-            margin-bottom:12px;
-        }
-
-        .empty-state{
-            text-align:center;
-            padding:30px 12px;
-            color:#64748b;
-            font-size:12px;
-            font-weight:900;
-        }
-
-        .empty-state i{
-            display:block;
-            font-size:34px;
-            opacity:.45;
-            margin-bottom:8px;
-        }
-
-        .modal-content{
-            border:1px solid var(--border);
-            border-radius:16px;
-            box-shadow:0 24px 55px rgba(15,23,42,.18);
-        }
-
-        .modal-header{ border-bottom:1px solid #eef2f7; }
-        .modal-title{ font-size:15px; font-weight:950; color:#111827; }
-
-        @media(max-width:991.98px){
-            .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
-            .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
-            .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
-        }
-
-        @media(max-width:1199px){
-            .compact-table thead{ display:none; }
-            .compact-table,.compact-table tbody,.compact-table tr,.compact-table td{ display:block; width:100%; }
-            .compact-table tbody tr{ border-bottom:1px solid var(--border); padding:10px; }
-            .compact-table tbody td{
-                border:0;
-                display:flex;
-                justify-content:space-between;
-                gap:12px;
-            }
-            .compact-table tbody td::before{
-                content:attr(data-label);
-                font-size:10px;
-                font-weight:900;
-                color:#64748b;
-                text-transform:uppercase;
-                flex:0 0 105px;
-            }
-            .compact-table tbody td:first-child{ display:block; }
-            .compact-table tbody td:first-child::before{ display:none; }
-        }
-
-        @media(max-width:768px){
-            .content-scroll{ padding:12px 10px!important; }
-            .page-heading{ align-items:flex-start; flex-direction:column; }
-            .panel,.filter-card{ padding:12px; }
-            .bulk-action-bar{ flex-wrap:wrap; }
-            .primary-btn,.secondary-btn,.success-btn,.danger-btn{ width:100%; }
-        }
+    }
     </style>
 </head>
+
 <body>
-<div class="app">
-    <?php include 'includes/sidebar.php'; ?>
-    
-    <main class="main" aria-label="Main">
-        <?php include 'includes/topbar.php'; ?>
+    <div class="app">
+        <?php include 'includes/sidebar.php'; ?>
 
-        <div class="content-scroll">
-            <div class="container-fluid projects-wrapper px-0">
+        <main class="main" aria-label="Main">
+            <?php include 'includes/topbar.php'; ?>
 
-                <!-- Page Header -->
-                <div class="page-heading">
-                    <div>
-                        <h1>
-                            Leave Requests Management
-                            <?php if ($pending_count > 0): ?>
+            <div class="content-scroll">
+                <div class="container-fluid projects-wrapper px-0">
+
+                    <!-- Page Header -->
+                    <div class="page-heading">
+                        <div>
+                            <h1>
+                                Leave Requests Management
+                                <?php if ($pending_count > 0): ?>
                                 <span class="badge-pill pending ms-2">
                                     <span class="mini-dot"></span><?= $pending_count ?> Pending
                                 </span>
+                                <?php endif; ?>
+                            </h1>
+                            <p>Review and manage leave requests using current DB workflow: approver_id based approval.
+                            </p>
+                        </div>
+
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="badge-pill <?= $userRoleBadge ?>">
+                                <i class="bi bi-shield-check"></i>
+                                <?= e($user_role) ?>
+                            </span>
+
+                            <?php if ($isAdmin || $isHr): ?>
+                            <button class="secondary-btn" onclick="exportToExcel()">
+                                <i class="bi bi-file-excel"></i>
+                                Export
+                            </button>
                             <?php endif; ?>
-                        </h1>
-                        <p>Review and manage leave requests using current DB workflow: approver_id based approval.</p>
+
+                            <button class="primary-btn" onclick="window.print()">
+                                <i class="bi bi-printer"></i>
+                                Print
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="d-flex gap-2 flex-wrap">
-                        <span class="badge-pill <?= $userRoleBadge ?>">
-                            <i class="bi bi-shield-check"></i>
-                            <?= e($user_role) ?>
-                        </span>
-
-                        <?php if ($isAdmin || $isHr): ?>
-                        <button class="secondary-btn" onclick="exportToExcel()">
-                            <i class="bi bi-file-excel"></i>
-                            Export
-                        </button>
-                        <?php endif; ?>
-
-                        <button class="primary-btn" onclick="window.print()">
-                            <i class="bi bi-printer"></i>
-                            Print
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Action Messages -->
-                <?php if (!empty($action_message)): ?>
+                    <!-- Action Messages -->
+                    <?php if (!empty($action_message)): ?>
                     <div class="alert alert-<?= $action_message_type ?> alert-dismissible fade show mb-3" role="alert">
-                        <i class="bi bi-<?= $action_message_type === 'success' ? 'check-circle' : 'exclamation-triangle' ?>-fill me-2"></i>
+                        <i
+                            class="bi bi-<?= $action_message_type === 'success' ? 'check-circle' : 'exclamation-triangle' ?>-fill me-2"></i>
                         <?= e($action_message) ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
-                <?php endif; ?>
+                    <?php endif; ?>
 
-                <!-- Statistics Row -->
-                <div class="row g-3 mb-4">
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card <?= $status_filter === 'pending' ? 'active' : '' ?>" onclick="window.location.href='?status=pending'">
-                            <div class="stat-ic orange"><i class="bi bi-clock"></i></div>
-                            <div>
-                                <div class="stat-label">Pending</div>
-                                <div class="stat-value"><?= (int)($stats['pending_count'] ?? 0) ?></div>
-                                <small><?= (int)($stats['pending_days'] ?? 0) ?> days</small>
+                    <!-- Statistics Row -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card <?= $status_filter === 'pending' ? 'active' : '' ?>"
+                                onclick="window.location.href='?status=pending'">
+                                <div class="stat-ic orange"><i class="bi bi-clock"></i></div>
+                                <div>
+                                    <div class="stat-label">Pending</div>
+                                    <div class="stat-value"><?= (int)($stats['pending_count'] ?? 0) ?></div>
+                                    <small><?= (int)($stats['pending_days'] ?? 0) ?> days</small>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card <?= $status_filter === 'approved' ? 'active' : '' ?>" onclick="window.location.href='?status=approved'">
-                            <div class="stat-ic green"><i class="bi bi-check-circle"></i></div>
-                            <div>
-                                <div class="stat-label">Approved</div>
-                                <div class="stat-value"><?= (int)($stats['approved_count'] ?? 0) ?></div>
-                                <small><?= (int)($stats['approved_days'] ?? 0) ?> days</small>
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card <?= $status_filter === 'approved' ? 'active' : '' ?>"
+                                onclick="window.location.href='?status=approved'">
+                                <div class="stat-ic green"><i class="bi bi-check-circle"></i></div>
+                                <div>
+                                    <div class="stat-label">Approved</div>
+                                    <div class="stat-value"><?= (int)($stats['approved_count'] ?? 0) ?></div>
+                                    <small><?= (int)($stats['approved_days'] ?? 0) ?> days</small>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card <?= $status_filter === 'rejected' ? 'active' : '' ?>" onclick="window.location.href='?status=rejected'">
-                            <div class="stat-ic red"><i class="bi bi-x-circle"></i></div>
-                            <div>
-                                <div class="stat-label">Rejected</div>
-                                <div class="stat-value"><?= (int)($stats['rejected_count'] ?? 0) ?></div>
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card <?= $status_filter === 'rejected' ? 'active' : '' ?>"
+                                onclick="window.location.href='?status=rejected'">
+                                <div class="stat-ic red"><i class="bi bi-x-circle"></i></div>
+                                <div>
+                                    <div class="stat-label">Rejected</div>
+                                    <div class="stat-value"><?= (int)($stats['rejected_count'] ?? 0) ?></div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="stat-card <?= $status_filter === 'all' ? 'active' : '' ?>" onclick="window.location.href='?status=all'">
-                            <div class="stat-ic purple"><i class="bi bi-calendar-check"></i></div>
-                            <div>
-                                <div class="stat-label">Total</div>
-                                <div class="stat-value">
-                                    <?= (int)($stats['pending_count'] ?? 0) + (int)($stats['approved_count'] ?? 0) + (int)($stats['rejected_count'] ?? 0) + (int)($stats['cancelled_count'] ?? 0) ?>
+                        <div class="col-6 col-md-3">
+                            <div class="stat-card <?= $status_filter === 'all' ? 'active' : '' ?>"
+                                onclick="window.location.href='?status=all'">
+                                <div class="stat-ic purple"><i class="bi bi-calendar-check"></i></div>
+                                <div>
+                                    <div class="stat-label">Total</div>
+                                    <div class="stat-value">
+                                        <?= (int)($stats['pending_count'] ?? 0) + (int)($stats['approved_count'] ?? 0) + (int)($stats['rejected_count'] ?? 0) + (int)($stats['cancelled_count'] ?? 0) ?>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Filter Card -->
-                <div class="filter-card">
-                    <form method="GET" action="" id="filterForm">
-                        <div class="row g-3">
-                            <div class="col-md-2">
-                                <label class="form-label">Status</label>
-                                <select name="status" class="form-select" onchange="this.form.submit()">
-                                    <option value="pending" <?= $status_filter === 'pending' ? 'selected' : '' ?>>Pending</option>
-                                    <option value="approved" <?= $status_filter === 'approved' ? 'selected' : '' ?>>Approved</option>
-                                    <option value="rejected" <?= $status_filter === 'rejected' ? 'selected' : '' ?>>Rejected</option>
-                                    <option value="all" <?= $status_filter === 'all' ? 'selected' : '' ?>>All Requests</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Employee</label>
-                                <select name="employee_id" class="form-select" onchange="this.form.submit()">
-                                    <option value="0">All Employees</option>
-                                    <?php foreach ($employees as $emp): ?>
-                                        <option value="<?= $emp['id'] ?>" <?= $employee_filter == $emp['id'] ? 'selected' : '' ?>>
+                    <!-- Filter Card -->
+                    <div class="filter-card">
+                        <form method="GET" action="" id="filterForm">
+                            <div class="row g-3">
+                                <div class="col-md-2">
+                                    <label class="form-label">Status</label>
+                                    <select name="status" class="form-select" onchange="this.form.submit()">
+                                        <option value="pending" <?= $status_filter === 'pending' ? 'selected' : '' ?>>
+                                            Pending</option>
+                                        <option value="approved" <?= $status_filter === 'approved' ? 'selected' : '' ?>>
+                                            Approved</option>
+                                        <option value="rejected" <?= $status_filter === 'rejected' ? 'selected' : '' ?>>
+                                            Rejected</option>
+                                        <option value="all" <?= $status_filter === 'all' ? 'selected' : '' ?>>All
+                                            Requests</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Employee</label>
+                                    <select name="employee_id" class="form-select" onchange="this.form.submit()">
+                                        <option value="0">All Employees</option>
+                                        <?php foreach ($employees as $emp): ?>
+                                        <option value="<?= $emp['id'] ?>"
+                                            <?= $employee_filter == $emp['id'] ? 'selected' : '' ?>>
                                             <?= e($emp['full_name']) ?> (<?= e($emp['employee_code']) ?>)
                                         </option>
-                                    <?php endforeach; ?>
-                                </select>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">From Date</label>
+                                    <input type="date" name="date_from" class="form-control"
+                                        value="<?= e($date_from) ?>" onchange="this.form.submit()">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">To Date</label>
+                                    <input type="date" name="date_to" class="form-control" value="<?= e($date_to) ?>"
+                                        onchange="this.form.submit()">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Search</label>
+                                    <input type="text" name="search" class="form-control"
+                                        placeholder="Name, Code, Reason..." value="<?= e($search) ?>">
+                                </div>
                             </div>
-                            <div class="col-md-2">
-                                <label class="form-label">From Date</label>
-                                <input type="date" name="date_from" class="form-control" value="<?= e($date_from) ?>" onchange="this.form.submit()">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">To Date</label>
-                                <input type="date" name="date_to" class="form-control" value="<?= e($date_to) ?>" onchange="this.form.submit()">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Search</label>
-                                <input type="text" name="search" class="form-control" placeholder="Name, Code, Reason..." value="<?= e($search) ?>">
-                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Bulk Action Bar (Only for pending status) -->
+                    <?php if ($status_filter === 'pending' && !empty($leave_requests)): ?>
+                    <div class="bulk-action-bar" id="bulkActionBar">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="selectAllCheckbox">
+                            <label class="form-check-label fw-bold" for="selectAllCheckbox">
+                                Select All (<span id="selectedCount">0</span> selected)
+                            </label>
                         </div>
-                    </form>
-                </div>
-
-                <!-- Bulk Action Bar (Only for pending status) -->
-                <?php if ($status_filter === 'pending' && !empty($leave_requests)): ?>
-                <div class="bulk-action-bar" id="bulkActionBar">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="selectAllCheckbox">
-                        <label class="form-check-label fw-bold" for="selectAllCheckbox">
-                            Select All (<span id="selectedCount">0</span> selected)
-                        </label>
-                    </div>
-                    <div class="ms-auto d-flex gap-2">
-                        <button class="success-btn" onclick="bulkApprove()">
-                            <i class="bi bi-check-all"></i> Approve Selected
-                        </button>
-                        <button class="danger-btn" onclick="bulkReject()">
-                            <i class="bi bi-x-circle"></i> Reject Selected
-                        </button>
-                        <button class="secondary-btn" onclick="clearSelection()">
-                            <i class="bi bi-x"></i> Clear
-                        </button>
-                    </div>
-                </div>
-                <?php endif; ?>
-
-                <!-- Leave Requests Table/Cards -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <div>
-                            <h5 class="panel-title">
-                                <i class="bi bi-list-ul me-2"></i>
-                                Leave Requests
-                            </h5>
-                            <div class="panel-subtitle">Filtered requests assigned by approver_id</div>
+                        <div class="ms-auto d-flex gap-2">
+                            <button class="success-btn" onclick="bulkApprove()">
+                                <i class="bi bi-check-all"></i> Approve Selected
+                            </button>
+                            <button class="danger-btn" onclick="bulkReject()">
+                                <i class="bi bi-x-circle"></i> Reject Selected
+                            </button>
+                            <button class="secondary-btn" onclick="clearSelection()">
+                                <i class="bi bi-x"></i> Clear
+                            </button>
                         </div>
-                        <span class="badge-pill neutral"><?= count($leave_requests) ?> Records</span>
                     </div>
+                    <?php endif; ?>
 
-                    <!-- Desktop Table View -->
-                    <div class="compact-table-wrap">
-                        <table class="table compact-table align-middle mb-0" id="leaveTable">
-                            <thead>
-                                <tr>
-                                    <?php if ($status_filter === 'pending'): ?>
+                    <!-- Leave Requests Table/Cards -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h5 class="panel-title">
+                                    <i class="bi bi-list-ul me-2"></i>
+                                    Leave Requests
+                                </h5>
+                                <div class="panel-subtitle">Filtered requests assigned by approver_id</div>
+                            </div>
+                            <span class="badge-pill neutral"><?= count($leave_requests) ?> Records</span>
+                        </div>
+
+                        <!-- Desktop Table View -->
+                        <div class="compact-table-wrap">
+                            <table class="table compact-table align-middle mb-0" id="leaveTable">
+                                <thead>
+                                    <tr>
+                                        <?php if ($status_filter === 'pending'): ?>
                                         <th style="width:40px">
                                             <input class="form-check-input" type="checkbox" id="selectAllHeader">
                                         </th>
-                                    <?php endif; ?>
-                                    <th>Employee</th>
-                                    <th>Leave Type</th>
-                                    <th>Period</th>
-                                    <th>Days</th>
-                                    <th>Reason</th>
-                                    <th>Applied On</th>
-                                    <th>Status / Approver</th>
-                                    <?php if ($status_filter === 'pending'): ?>
-                                    <th style="width:120px">Actions</th>
-                                    <?php endif; ?>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($leave_requests)): ?>
-                                    <tr>
-                                        <td colspan="<?= $status_filter === 'pending' ? '9' : '8' ?>"><div class="empty-state"><i class="bi bi-inbox"></i>No leave requests found.</div></td>
+                                        <?php endif; ?>
+                                        <th>Employee</th>
+                                        <th>Leave Type</th>
+                                        <th>Period</th>
+                                        <th>Days</th>
+                                        <th>Reason</th>
+                                        <th>Applied On</th>
+                                        <th>Status / Approver</th>
+                                        <th style="width:120px">Actions</th>
                                     </tr>
-                                <?php else: ?>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($leave_requests)): ?>
+                                    <tr>
+                                        <td colspan="<?= $status_filter === 'pending' ? '9' : '8' ?>">
+                                            <div class="empty-state"><i class="bi bi-inbox"></i>No leave requests found.
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php else: ?>
                                     <?php foreach ($leave_requests as $request): ?>
-                                        <tr>
-                                            <?php if ($status_filter === 'pending'): ?>
-                                                <td data-label="Select">
-                                                    <input class="form-check-input row-select" type="checkbox" value="<?= $request['id'] ?>">
-                                                </td>
-                                            <?php endif; ?>
-                                            <td data-label="Employee">
-                                                <div class="employee-cell">
-                                                    <div class="employee-avatar">
-                                                        <?php if (!empty($request['employee_photo'])): ?>
-                                                            <img src="<?= e($request['employee_photo']) ?>" alt="<?= e($request['full_name']) ?>">
-                                                        <?php else: ?>
-                                                            <?= getInitials($request['full_name']) ?>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                    <div>
-                                                        <div class="table-primary-text"><?= e($request['full_name']) ?></div>
-                                                        <div class="table-secondary-text"><?= e($request['employee_code']) ?></div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td data-label="Leave Type">
-                                                <span class="badge-pill neutral"><?= e($request['leave_type']) ?></span>
-                                            </td>
-                                            <td data-label="Period">
-                                                <?= safeDate($request['from_date']) ?><br>
-                                                <small class="text-muted">to <?= safeDate($request['to_date']) ?></small>
-                                            </td>
-                                            <td data-label="Days">
-                                                <span class="days-badge">
-                                                    <i class="bi bi-calendar"></i> <?= $request['total_days'] ?> days
-                                                </span>
-                                            </td>
-                                            <td data-label="Reason">
-                                                <div class="table-secondary-text" data-bs-toggle="tooltip" title="<?= e($request['reason']) ?>">
-                                                    <?= e(substr($request['reason'], 0, 30)) ?>...
-                                                </div>
-                                            </td>
-                                            <td data-label="Applied On">
-                                                <?= safeDateTime($request['applied_at'] ?? $request['created_at']) ?>
-                                            </td>
-                                            <td data-label="Status / Approver">
-                                                <?= getStatusBadge($request['status']) ?>
-                                                <?php if ($request['status'] !== 'Pending'): ?>
-                                                    <div class="small text-muted mt-1">
-                                                        <?= getApproverInfo($request) ?>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </td>
-                                            <?php if ($status_filter === 'pending'): ?>
-                                            <td data-label="Actions">
-                                                <div class="d-flex gap-1">
-                                                    <button class="action-btn" onclick="viewDetails(<?= $request['id'] ?>)" title="View Details">
-                                                        <i class="bi bi-eye"></i>
-                                                    </button>
-                                                    
-                                                    <?php 
-                                                    // Check if user can approve this specific request
-                                                    $canApproveThis = canProcessLeave($request, (int)$current_employee_id, $currentRoleKey);
-                                                    
-                                                    if ($canApproveThis): 
-                                                    ?>
-                                                        <button class="action-btn approve" onclick="openApproveModal(<?= $request['id'] ?>, '<?= e($request['full_name']) ?>')" title="Approve">
-                                                            <i class="bi bi-check-lg"></i>
-                                                        </button>
-                                                        <button class="action-btn reject" onclick="openRejectModal(<?= $request['id'] ?>, '<?= e($request['full_name']) ?>')" title="Reject">
-                                                            <i class="bi bi-x-lg"></i>
-                                                        </button>
+                                    <tr>
+                                        <?php if ($status_filter === 'pending'): ?>
+                                        <td data-label="Select">
+                                            <input class="form-check-input row-select" type="checkbox"
+                                                value="<?= $request['id'] ?>">
+                                        </td>
+                                        <?php endif; ?>
+                                        <td data-label="Employee">
+                                            <div class="employee-cell">
+                                                <div class="employee-avatar">
+                                                    <?php if (!empty($request['employee_photo'])): ?>
+                                                    <img src="<?= e($request['employee_photo']) ?>"
+                                                        alt="<?= e($request['full_name']) ?>">
+                                                    <?php else: ?>
+                                                    <?= getInitials($request['full_name']) ?>
                                                     <?php endif; ?>
                                                 </div>
-                                            </td>
+                                                <div>
+                                                    <div class="table-primary-text"><?= e($request['full_name']) ?>
+                                                    </div>
+                                                    <div class="table-secondary-text">
+                                                        <?= e($request['employee_code']) ?></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td data-label="Leave Type">
+                                            <span class="badge-pill neutral"><?= e($request['leave_type']) ?></span>
+                                        </td>
+                                        <td data-label="Period">
+                                            <?= safeDate($request['from_date']) ?><br>
+                                            <small class="text-muted">to <?= safeDate($request['to_date']) ?></small>
+                                        </td>
+                                        <td data-label="Days">
+                                            <span class="days-badge">
+                                                <i class="bi bi-calendar"></i> <?= $request['total_days'] ?> days
+                                            </span>
+                                        </td>
+                                        <td data-label="Reason">
+                                            <div class="table-secondary-text" data-bs-toggle="tooltip"
+                                                title="<?= e($request['reason']) ?>">
+                                                <?= e(substr($request['reason'], 0, 30)) ?>...
+                                            </div>
+                                        </td>
+                                        <td data-label="Applied On">
+                                            <?= safeDateTime($request['applied_at'] ?? $request['created_at']) ?>
+                                        </td>
+                                        <td data-label="Status / Approver">
+                                            <?= getStatusBadge($request['status']) ?>
+                                            <?php if ($request['status'] !== 'Pending'): ?>
+                                            <div class="small text-muted mt-1">
+                                                <?= getApproverInfo($request) ?>
+                                            </div>
                                             <?php endif; ?>
-                                        </tr>
+                                        </td>
+                                        <td data-label="Actions">
+                                            <div class="d-flex gap-1 flex-wrap">
+                                                <button type="button" class="action-btn"
+                                                    onclick="openViewModal(<?= (int)$request['id'] ?>)"
+                                                    title="View Details">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+
+                                                <?php
+                                                    $canApproveThis = canProcessLeave($request, (int)$current_employee_id, $currentRoleKey);
+                                                    if ($request['status'] === 'Pending' && $canApproveThis):
+                                                    ?>
+                                                <button type="button" class="action-btn approve"
+                                                    onclick="openApproveModal(<?= (int)$request['id'] ?>, '<?= e($request['full_name']) ?>')"
+                                                    title="Approve">
+                                                    <i class="bi bi-check-lg"></i>
+                                                </button>
+                                                <button type="button" class="action-btn reject"
+                                                    onclick="openRejectModal(<?= (int)$request['id'] ?>, '<?= e($request['full_name']) ?>')"
+                                                    title="Reject">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+                                    </tr>
                                     <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
                     </div>
 
-                                    </div>
+                </div>
+            </div>
 
+            <?php include 'includes/footer.php'; ?>
+        </main>
+    </div>
+
+
+    <!-- View Leave Request Modal -->
+    <div class="modal fade" id="viewLeaveModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-eye-fill text-primary me-2"></i>
+                        Leave Request Details
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-3">
+                        <div>
+                            <h6 class="fw-black mb-1" id="viewEmployeeName" style="font-weight:950;">—</h6>
+                            <div class="table-secondary-text" id="viewEmployeeMeta">—</div>
+                        </div>
+                        <span class="badge-pill neutral" id="viewStatusBadge">—</span>
+                    </div>
+
+                    <div class="view-detail-grid">
+                        <div class="view-detail-card">
+                            <div class="view-detail-label">Request ID</div>
+                            <div class="view-detail-value" id="viewRequestId">—</div>
+                        </div>
+
+                        <div class="view-detail-card">
+                            <div class="view-detail-label">Leave Type</div>
+                            <div class="view-detail-value" id="viewLeaveType">—</div>
+                        </div>
+
+                        <div class="view-detail-card">
+                            <div class="view-detail-label">From Date</div>
+                            <div class="view-detail-value" id="viewFromDate">—</div>
+                        </div>
+
+                        <div class="view-detail-card">
+                            <div class="view-detail-label">To Date</div>
+                            <div class="view-detail-value" id="viewToDate">—</div>
+                        </div>
+
+                        <div class="view-detail-card">
+                            <div class="view-detail-label">Total Days</div>
+                            <div class="view-detail-value" id="viewTotalDays">—</div>
+                        </div>
+
+                        <div class="view-detail-card">
+                            <div class="view-detail-label">Applied On</div>
+                            <div class="view-detail-value" id="viewAppliedOn">—</div>
+                        </div>
+
+                        <div class="view-detail-card">
+                            <div class="view-detail-label">Contact During Leave</div>
+                            <div class="view-detail-value" id="viewContact">—</div>
+                        </div>
+
+                        <div class="view-detail-card">
+                            <div class="view-detail-label">Handover To</div>
+                            <div class="view-detail-value" id="viewHandover">—</div>
+                        </div>
+
+                        <div class="view-detail-card full">
+                            <div class="view-detail-label">Reason</div>
+                            <div class="view-detail-value" id="viewReason">—</div>
+                        </div>
+
+                        <div class="view-detail-card full">
+                            <div class="view-detail-label">Selected Dates</div>
+                            <div class="view-detail-value" id="viewSelectedDates">—</div>
+                        </div>
+
+                        <div class="view-detail-card">
+                            <div class="view-detail-label">Approved By</div>
+                            <div class="view-detail-value" id="viewApprovedBy">—</div>
+                        </div>
+
+                        <div class="view-detail-card">
+                            <div class="view-detail-label">Rejected By</div>
+                            <div class="view-detail-value" id="viewRejectedBy">—</div>
+                        </div>
+
+                        <div class="view-detail-card full">
+                            <div class="view-detail-label">Approver / Rejection Remarks</div>
+                            <div class="view-detail-value" id="viewRemarks">—</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Close</button>
+                </div>
             </div>
         </div>
+    </div>
 
-        <?php include 'includes/footer.php'; ?>
-    </main>
-</div>
+    <!-- Approve Modal -->
+    <div class="modal fade" id="approveModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="">
+                    <input type="hidden" name="leave_id" id="approve_leave_id">
+                    <input type="hidden" name="leave_action" value="approve">
 
-<!-- Approve Modal -->
-<div class="modal fade" id="approveModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="">
-                <input type="hidden" name="leave_id" id="approve_leave_id">
-                <input type="hidden" name="leave_action" value="approve">
-                
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="bi bi-check-circle-fill text-success me-2"></i>
-                        Approve Leave Request
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to approve leave request for <strong id="approve_employee_name"></strong>?</p>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Remarks (Optional)</label>
-                        <textarea name="remarks" class="form-control" rows="2" placeholder="Add any remarks..."></textarea>
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            Approve Leave Request
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
-                    
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        You are approving as <strong><?= $user_role ?></strong>
+                    <div class="modal-body">
+                        <p>Are you sure you want to approve leave request for <strong
+                                id="approve_employee_name"></strong>?</p>
+
+                        <div class="mb-3">
+                            <label class="form-label">Remarks (Optional)</label>
+                            <textarea name="remarks" class="form-control" rows="2"
+                                placeholder="Add any remarks..."></textarea>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            You are approving as <strong><?= $user_role ?></strong>
+                        </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="success-btn">
-                        <i class="bi bi-check-lg"></i> Confirm Approval
-                    </button>
-                </div>
-            </form>
+                    <div class="modal-footer">
+                        <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="success-btn">
+                            <i class="bi bi-check-lg"></i> Confirm Approval
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- Reject Modal -->
-<div class="modal fade" id="rejectModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="">
-                <input type="hidden" name="leave_id" id="reject_leave_id">
-                <input type="hidden" name="leave_action" value="reject">
-                
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="bi bi-x-circle-fill text-danger me-2"></i>
-                        Reject Leave Request
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to reject leave request for <strong id="reject_employee_name"></strong>?</p>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold required">Rejection Reason</label>
-                        <textarea name="remarks" class="form-control" rows="3" required placeholder="Please provide reason for rejection..."></textarea>
+    <!-- Reject Modal -->
+    <div class="modal fade" id="rejectModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="">
+                    <input type="hidden" name="leave_id" id="reject_leave_id">
+                    <input type="hidden" name="leave_action" value="reject">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-x-circle-fill text-danger me-2"></i>
+                            Reject Leave Request
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
-                    
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        You are rejecting as <strong><?= $user_role ?></strong>
+                    <div class="modal-body">
+                        <p>Are you sure you want to reject leave request for <strong
+                                id="reject_employee_name"></strong>?</p>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold required">Rejection Reason</label>
+                            <textarea name="remarks" class="form-control" rows="3" required
+                                placeholder="Please provide reason for rejection..."></textarea>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            You are rejecting as <strong><?= $user_role ?></strong>
+                        </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="danger-btn">
-                        <i class="bi bi-x-lg"></i> Confirm Rejection
-                    </button>
-                </div>
-            </form>
+                    <div class="modal-footer">
+                        <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="danger-btn">
+                            <i class="bi bi-x-lg"></i> Confirm Rejection
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- Bulk Reject Modal -->
-<div class="modal fade" id="bulkRejectModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="">
-                <input type="hidden" name="bulk_action" value="reject_selected">
-                <div id="bulkSelectedIds"></div>
-                
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="bi bi-x-circle-fill text-danger me-2"></i>
-                        Bulk Reject Leave Requests
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to reject <span id="bulkCount"></span> selected leave requests?</p>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold required">Rejection Reason</label>
-                        <textarea name="bulk_remarks" class="form-control" rows="3" required placeholder="Please provide reason for rejection..."></textarea>
+    <!-- Bulk Reject Modal -->
+    <div class="modal fade" id="bulkRejectModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="">
+                    <input type="hidden" name="bulk_action" value="reject_selected">
+                    <div id="bulkSelectedIds"></div>
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-x-circle-fill text-danger me-2"></i>
+                            Bulk Reject Leave Requests
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
-                    
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
-                        You can only reject requests you have permission for.
+                    <div class="modal-body">
+                        <p>Are you sure you want to reject <span id="bulkCount"></span> selected leave requests?</p>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold required">Rejection Reason</label>
+                            <textarea name="bulk_remarks" class="form-control" rows="3" required
+                                placeholder="Please provide reason for rejection..."></textarea>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            You can only reject requests you have permission for.
+                        </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="danger-btn">
-                        <i class="bi bi-x-lg"></i> Confirm Bulk Rejection
-                    </button>
-                </div>
-            </form>
+                    <div class="modal-footer">
+                        <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="danger-btn">
+                            <i class="bi bi-x-lg"></i> Confirm Bulk Rejection
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="assets/js/sidebar-toggle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/sidebar-toggle.js"></script>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (window.bootstrap) {
-        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
-            new bootstrap.Tooltip(el);
-        });
-    }
-
-    <?php if ($status_filter === 'pending' && !empty($leave_requests)): ?>
-    const selectAllHeader = document.getElementById('selectAllHeader');
-    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-    const rowCheckboxes = document.querySelectorAll('.row-select');
-    const bulkActionBar = document.getElementById('bulkActionBar');
-    const selectedCountSpan = document.getElementById('selectedCount');
-
-    window.updateBulkSelection = function() {
-        const checked = document.querySelectorAll('.row-select:checked');
-        if (selectedCountSpan) selectedCountSpan.textContent = checked.length;
-
-        if (bulkActionBar) {
-            if (checked.length > 0) bulkActionBar.classList.add('show');
-            else bulkActionBar.classList.remove('show');
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.bootstrap) {
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+                new bootstrap.Tooltip(el);
+            });
         }
 
+        <?php if ($status_filter === 'pending' && !empty($leave_requests)): ?>
+        const selectAllHeader = document.getElementById('selectAllHeader');
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        const rowCheckboxes = document.querySelectorAll('.row-select');
+        const bulkActionBar = document.getElementById('bulkActionBar');
+        const selectedCountSpan = document.getElementById('selectedCount');
+
+        window.updateBulkSelection = function() {
+            const checked = document.querySelectorAll('.row-select:checked');
+            if (selectedCountSpan) selectedCountSpan.textContent = checked.length;
+
+            if (bulkActionBar) {
+                if (checked.length > 0) bulkActionBar.classList.add('show');
+                else bulkActionBar.classList.remove('show');
+            }
+
+            if (selectAllHeader) {
+                selectAllHeader.checked = checked.length === rowCheckboxes.length && rowCheckboxes.length >
+                    0;
+                selectAllHeader.indeterminate = checked.length > 0 && checked.length < rowCheckboxes.length;
+            }
+
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = checked.length === rowCheckboxes.length && rowCheckboxes
+                    .length > 0;
+                selectAllCheckbox.indeterminate = checked.length > 0 && checked.length < rowCheckboxes
+                    .length;
+            }
+        };
+
         if (selectAllHeader) {
-            selectAllHeader.checked = checked.length === rowCheckboxes.length && rowCheckboxes.length > 0;
-            selectAllHeader.indeterminate = checked.length > 0 && checked.length < rowCheckboxes.length;
+            selectAllHeader.addEventListener('change', function() {
+                rowCheckboxes.forEach(cb => cb.checked = selectAllHeader.checked);
+                updateBulkSelection();
+            });
         }
 
         if (selectAllCheckbox) {
-            selectAllCheckbox.checked = checked.length === rowCheckboxes.length && rowCheckboxes.length > 0;
-            selectAllCheckbox.indeterminate = checked.length > 0 && checked.length < rowCheckboxes.length;
+            selectAllCheckbox.addEventListener('change', function() {
+                rowCheckboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+                updateBulkSelection();
+            });
         }
-    };
 
-    if (selectAllHeader) {
-        selectAllHeader.addEventListener('change', function() {
-            rowCheckboxes.forEach(cb => cb.checked = selectAllHeader.checked);
-            updateBulkSelection();
-        });
+        rowCheckboxes.forEach(cb => cb.addEventListener('change', updateBulkSelection));
+        <?php endif; ?>
+
+        let searchTimeout;
+        const searchInput = document.querySelector('input[name="search"]');
+        if (searchInput) {
+            searchInput.addEventListener('keyup', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    document.getElementById('filterForm').submit();
+                }, 500);
+            });
+        }
+    });
+
+    const leaveRequestDetails = <?php
+$leaveViewData = [];
+foreach ($leave_requests as $lr) {
+    $selectedDates = [];
+    $selectedJson = trim((string)($lr['selected_dates_json'] ?? ''));
+    if ($selectedJson !== '') {
+        $decoded = json_decode($selectedJson, true);
+        if (is_array($decoded) && !empty($decoded['dates']) && is_array($decoded['dates'])) {
+            foreach ($decoded['dates'] as $dateRow) {
+                if (!is_array($dateRow)) continue;
+                $selectedDates[] = [
+                    'date' => safeDate($dateRow['date'] ?? ''),
+                    'day_name' => (string)($dateRow['day_name'] ?? ''),
+                    'half_day' => (string)($dateRow['half_day'] ?? '')
+                ];
+            }
+        }
     }
 
-    if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', function() {
-            rowCheckboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
-            updateBulkSelection();
-        });
-    }
-
-    rowCheckboxes.forEach(cb => cb.addEventListener('change', updateBulkSelection));
-    <?php endif; ?>
-
-    let searchTimeout;
-    const searchInput = document.querySelector('input[name="search"]');
-    if (searchInput) {
-        searchInput.addEventListener('keyup', function() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                document.getElementById('filterForm').submit();
-            }, 500);
-        });
-    }
-});
-
-function viewDetails(id) {
-    window.location.href = 'leave-details.php?id=' + id;
+    $leaveViewData[(int)$lr['id']] = [
+        'id' => (int)$lr['id'],
+        'full_name' => (string)($lr['full_name'] ?? ''),
+        'employee_code' => (string)($lr['employee_code'] ?? ''),
+        'designation' => (string)($lr['designation'] ?? ''),
+        'department' => (string)($lr['department'] ?? ''),
+        'leave_type' => (string)($lr['leave_type'] ?? ''),
+        'from_date' => safeDate($lr['from_date'] ?? ''),
+        'to_date' => safeDate($lr['to_date'] ?? ''),
+        'total_days' => (string)($lr['total_days'] ?? ''),
+        'reason' => (string)($lr['reason'] ?? ''),
+        'contact_during_leave' => (string)($lr['contact_during_leave'] ?? ''),
+        'handover_to' => (string)($lr['handover_to'] ?? ''),
+        'status' => (string)($lr['status'] ?? ''),
+        'applied_on' => safeDateTime($lr['applied_at'] ?? $lr['created_at'] ?? ''),
+        'approved_by' => (string)($lr['approver_name'] ?? ''),
+        'approved_at' => safeDateTime($lr['approved_at'] ?? ''),
+        'approver_remarks' => (string)($lr['approver_remarks'] ?? ''),
+        'rejected_by' => (string)($lr['rejector_name'] ?? ''),
+        'rejected_at' => safeDateTime($lr['rejected_at'] ?? ''),
+        'rejection_reason' => (string)($lr['rejection_reason'] ?? ''),
+        'selected_dates' => $selectedDates
+    ];
 }
+echo json_encode($leaveViewData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+?>;
 
-function openApproveModal(id, employeeName) {
-    document.getElementById('approve_leave_id').value = id;
-    document.getElementById('approve_employee_name').textContent = employeeName;
-    new bootstrap.Modal(document.getElementById('approveModal')).show();
-}
-
-function openRejectModal(id, employeeName) {
-    document.getElementById('reject_leave_id').value = id;
-    document.getElementById('reject_employee_name').textContent = employeeName;
-    new bootstrap.Modal(document.getElementById('rejectModal')).show();
-}
-
-function bulkApprove() {
-    const selected = document.querySelectorAll('.row-select:checked');
-    if (selected.length === 0) {
-        alert('Please select at least one leave request.');
-        return;
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value && String(value).trim() !== '' ? value : '—';
     }
 
-    if (confirm(`Are you sure you want to approve ${selected.length} selected leave requests?`)) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '';
+    function openViewModal(id) {
+        const data = leaveRequestDetails[id];
+        if (!data) {
+            alert('Leave request details not found.');
+            return;
+        }
 
-        const actionInput = document.createElement('input');
-        actionInput.type = 'hidden';
-        actionInput.name = 'bulk_action';
-        actionInput.value = 'approve_selected';
-        form.appendChild(actionInput);
+        setText('viewEmployeeName', data.full_name);
+        setText('viewEmployeeMeta',
+            `${data.employee_code || '—'} • ${data.designation || '—'} • ${data.department || '—'}`);
+        setText('viewRequestId', '#' + data.id);
+        setText('viewLeaveType', data.leave_type);
+        setText('viewFromDate', data.from_date);
+        setText('viewToDate', data.to_date);
+        setText('viewTotalDays', `${data.total_days || '0'} day(s)`);
+        setText('viewAppliedOn', data.applied_on);
+        setText('viewContact', data.contact_during_leave);
+        setText('viewHandover', data.handover_to);
+        setText('viewReason', data.reason);
+        setText('viewApprovedBy', data.approved_by ?
+            `${data.approved_by}${data.approved_at && data.approved_at !== '—' ? ' • ' + data.approved_at : ''}` :
+            '—');
+        setText('viewRejectedBy', data.rejected_by ?
+            `${data.rejected_by}${data.rejected_at && data.rejected_at !== '—' ? ' • ' + data.rejected_at : ''}` :
+            '—');
+
+        const remarks = data.status === 'Rejected' ?
+            data.rejection_reason :
+            (data.approver_remarks || data.rejection_reason || '');
+        setText('viewRemarks', remarks);
+
+        const badge = document.getElementById('viewStatusBadge');
+        if (badge) {
+            const status = (data.status || '').toLowerCase();
+            badge.className = 'badge-pill ' + (status === 'approved' ? 'ontrack' : status === 'rejected' ? 'atrisk' :
+                status === 'pending' ? 'pending' : 'neutral');
+            badge.innerHTML = `<span class="mini-dot"></span>${data.status || '—'}`;
+        }
+
+        const selectedDatesEl = document.getElementById('viewSelectedDates');
+        if (selectedDatesEl) {
+            if (data.selected_dates && data.selected_dates.length) {
+                selectedDatesEl.innerHTML = data.selected_dates.map(function(row) {
+                    const half = row.half_day ? ` • ${row.half_day}` : '';
+                    return `<span class="selected-date-chip"><i class="bi bi-calendar-day"></i>${row.date}${row.day_name ? ' • ' + row.day_name : ''}${half}</span>`;
+                }).join('');
+            } else {
+                selectedDatesEl.textContent = '—';
+            }
+        }
+
+        new bootstrap.Modal(document.getElementById('viewLeaveModal')).show();
+    }
+
+    function openApproveModal(id, employeeName) {
+        document.getElementById('approve_leave_id').value = id;
+        document.getElementById('approve_employee_name').textContent = employeeName;
+        new bootstrap.Modal(document.getElementById('approveModal')).show();
+    }
+
+    function openRejectModal(id, employeeName) {
+        document.getElementById('reject_leave_id').value = id;
+        document.getElementById('reject_employee_name').textContent = employeeName;
+        new bootstrap.Modal(document.getElementById('rejectModal')).show();
+    }
+
+    function bulkApprove() {
+        const selected = document.querySelectorAll('.row-select:checked');
+        if (selected.length === 0) {
+            alert('Please select at least one leave request.');
+            return;
+        }
+
+        if (confirm(`Are you sure you want to approve ${selected.length} selected leave requests?`)) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '';
+
+            const actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'bulk_action';
+            actionInput.value = 'approve_selected';
+            form.appendChild(actionInput);
+
+            selected.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'selected_ids[]';
+                input.value = cb.value;
+                form.appendChild(input);
+            });
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    function bulkReject() {
+        const selected = document.querySelectorAll('.row-select:checked');
+        if (selected.length === 0) {
+            alert('Please select at least one leave request.');
+            return;
+        }
+
+        const idsContainer = document.getElementById('bulkSelectedIds');
+        idsContainer.innerHTML = '';
 
         selected.forEach(cb => {
             const input = document.createElement('input');
             input.type = 'hidden';
             input.name = 'selected_ids[]';
             input.value = cb.value;
-            form.appendChild(input);
+            idsContainer.appendChild(input);
         });
 
-        document.body.appendChild(form);
-        form.submit();
-    }
-}
-
-function bulkReject() {
-    const selected = document.querySelectorAll('.row-select:checked');
-    if (selected.length === 0) {
-        alert('Please select at least one leave request.');
-        return;
+        document.getElementById('bulkCount').textContent = selected.length;
+        new bootstrap.Modal(document.getElementById('bulkRejectModal')).show();
     }
 
-    const idsContainer = document.getElementById('bulkSelectedIds');
-    idsContainer.innerHTML = '';
+    function clearSelection() {
+        document.querySelectorAll('.row-select').forEach(cb => cb.checked = false);
+        if (typeof updateBulkSelection === 'function') updateBulkSelection();
+    }
 
-    selected.forEach(cb => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'selected_ids[]';
-        input.value = cb.value;
-        idsContainer.appendChild(input);
-    });
+    function exportToExcel() {
+        const rows = document.querySelectorAll('#leaveTable tbody tr');
+        const csv = [];
+        const headers = ['Employee', 'Leave Type', 'From Date', 'To Date', 'Days', 'Reason', 'Applied On', 'Status'];
+        csv.push(headers.join(','));
 
-    document.getElementById('bulkCount').textContent = selected.length;
-    new bootstrap.Modal(document.getElementById('bulkRejectModal')).show();
-}
+        rows.forEach(row => {
+            if (row.cells.length >= 8) {
+                const startIdx = <?= $status_filter === 'pending' ? '1' : '0' ?>;
+                const employee = row.cells[startIdx]?.innerText.replace(/\n/g, ' ').replace(/\s+/g, ' ')
+                .trim() || '';
+                const leaveType = row.cells[startIdx + 1]?.innerText.trim() || '';
+                const period = row.cells[startIdx + 2]?.innerText.trim() || '';
+                const days = row.cells[startIdx + 3]?.innerText.trim() || '';
+                const reason = row.cells[startIdx + 4]?.innerText.trim() || '';
+                const appliedOn = row.cells[startIdx + 5]?.innerText.trim() || '';
+                const status = row.cells[startIdx + 6]?.innerText.trim() || '';
 
-function clearSelection() {
-    document.querySelectorAll('.row-select').forEach(cb => cb.checked = false);
-    if (typeof updateBulkSelection === 'function') updateBulkSelection();
-}
+                const fromDate = period.split('to')[0]?.trim() || '';
+                const toDate = period.split('to')[1]?.trim() || '';
 
-function exportToExcel() {
-    const rows = document.querySelectorAll('#leaveTable tbody tr');
-    const csv = [];
-    const headers = ['Employee', 'Leave Type', 'From Date', 'To Date', 'Days', 'Reason', 'Applied On', 'Status'];
-    csv.push(headers.join(','));
+                csv.push([
+                    '"' + employee.replace(/"/g, '""') + '"',
+                    '"' + leaveType.replace(/"/g, '""') + '"',
+                    '"' + fromDate.replace(/"/g, '""') + '"',
+                    '"' + toDate.replace(/"/g, '""') + '"',
+                    '"' + days.replace(/"/g, '""') + '"',
+                    '"' + reason.replace(/"/g, '""') + '"',
+                    '"' + appliedOn.replace(/"/g, '""') + '"',
+                    '"' + status.replace(/"/g, '""') + '"'
+                ].join(','));
+            }
+        });
 
-    rows.forEach(row => {
-        if (row.cells.length >= 8) {
-            const startIdx = <?= $status_filter === 'pending' ? '1' : '0' ?>;
-            const employee = row.cells[startIdx]?.innerText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim() || '';
-            const leaveType = row.cells[startIdx + 1]?.innerText.trim() || '';
-            const period = row.cells[startIdx + 2]?.innerText.trim() || '';
-            const days = row.cells[startIdx + 3]?.innerText.trim() || '';
-            const reason = row.cells[startIdx + 4]?.innerText.trim() || '';
-            const appliedOn = row.cells[startIdx + 5]?.innerText.trim() || '';
-            const status = row.cells[startIdx + 6]?.innerText.trim() || '';
-
-            const fromDate = period.split('to')[0]?.trim() || '';
-            const toDate = period.split('to')[1]?.trim() || '';
-
-            csv.push([
-                '"' + employee.replace(/"/g, '""') + '"',
-                '"' + leaveType.replace(/"/g, '""') + '"',
-                '"' + fromDate.replace(/"/g, '""') + '"',
-                '"' + toDate.replace(/"/g, '""') + '"',
-                '"' + days.replace(/"/g, '""') + '"',
-                '"' + reason.replace(/"/g, '""') + '"',
-                '"' + appliedOn.replace(/"/g, '""') + '"',
-                '"' + status.replace(/"/g, '""') + '"'
-            ].join(','));
-        }
-    });
-
-    const blob = new Blob(["\uFEFF" + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'leave_requests_<?= date('Y-m-d') ?>.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-}
-</script>
+        const blob = new Blob(["\uFEFF" + csv.join('\n')], {
+            type: 'text/csv;charset=utf-8;'
+        });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'leave_requests_<?= date('Y-m-d') ?>.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    }
+    </script>
 
 </body>
+
 </html>
 <?php
 if (isset($conn) && $conn) {
