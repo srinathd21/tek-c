@@ -88,21 +88,26 @@ function hasColumn(mysqli $conn, string $table, string $column): bool {
   return $ok;
 }
 
+function isValidDbDate($v): bool {
+  $v = trim((string)$v);
+  if ($v === '' || $v === '0000-00-00' || $v === '0000-00-00 00:00:00') return false;
+  return (bool)strtotime($v);
+}
+
 function projectHealthBadge($start, $end){
   $today = date('Y-m-d');
   $start = trim((string)$start);
   $end   = trim((string)$end);
 
-  if ($end !== '' && $end !== '0000-00-00' && $end < $today) {
+  if (isValidDbDate($end) && $end < $today) {
     return ['Delayed', 'delayed', 'bi-exclamation-triangle-fill'];
   }
-  if ($end !== '' && $end !== '0000-00-00') {
+
+  if (isValidDbDate($end)) {
     $d = (strtotime($end) - strtotime($today)) / 86400;
     if ($d >= 0 && $d <= 7) return ['At Risk', 'atrisk', 'bi-exclamation-circle-fill'];
   }
-  if ($start !== '' && $start !== '0000-00-00' && $start > $today) {
-    return ['On Track', 'ontrack', 'bi-check2-circle'];
-  }
+
   return ['On Track', 'ontrack', 'bi-check2-circle'];
 }
 
@@ -127,8 +132,7 @@ $st = mysqli_prepare($conn, "
   FROM sites s
   INNER JOIN clients c ON c.id = s.client_id
   WHERE (s.expected_completion_date IS NULL
-         OR s.expected_completion_date = ''
-         OR s.expected_completion_date = '0000-00-00'
+                  OR s.expected_completion_date = '0000-00-00'
          OR s.expected_completion_date >= ?)
   ORDER BY s.created_at DESC
 ");
@@ -237,8 +241,7 @@ $st = mysqli_prepare($conn, "
   SELECT s.id, s.project_name, s.start_date, s.expected_completion_date
   FROM sites s
   WHERE (s.expected_completion_date IS NULL
-         OR s.expected_completion_date = ''
-         OR s.expected_completion_date = '0000-00-00'
+                  OR s.expected_completion_date = '0000-00-00'
          OR s.expected_completion_date >= ?)
   ORDER BY s.created_at DESC
   LIMIT 8

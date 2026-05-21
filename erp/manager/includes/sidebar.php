@@ -59,9 +59,9 @@
       <span class="label">Today Reports</span>
     </a>
 
-    <a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#quotationMenu" role="button" aria-expanded="false" aria-controls="quotationMenu">
+    <a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#quotationMenu"  title="Vendor Finalization Tender" role="button" aria-expanded="false" aria-controls="quotationMenu">
       <i class="bi bi-file-text"></i>
-      <span class="label">Quotations</span>
+      <span class="label">Vendor Finalization Tender</span>
       <span class="ms-auto label chevron-wrap">
         <i class="bi bi-chevron-down chevron"></i>
       </span>
@@ -70,7 +70,7 @@
     <div class="collapse ps-2 side-submenu-collapse" id="quotationMenu">
       <a class="side-link sub-link" href="all-quotation-requests.php">
         <i class="bi bi-inbox"></i>
-        <span class="label">All Quotation</span>
+        <span class="label">All VFT</span>
       </a>
 
       <a class="side-link sub-link" href="dealers.php">

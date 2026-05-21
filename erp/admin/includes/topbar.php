@@ -261,16 +261,12 @@ $logoutUrl = '../logout.php';
             <span>My Profile</span>
           </a>
 
-          <a href="my-attendance.php" class="profile-menu-item">
+          <a href="attendance.php" class="profile-menu-item">
             <i class="bi bi-calendar2-check"></i>
-            <span>My Attendance</span>
+            <span>Attendance</span>
           </a>
 
-          <a href="apply-leave.php" class="profile-menu-item">
-            <i class="bi bi-calendar-plus"></i>
-            <span>Apply Leave</span>
-          </a>
-
+        
           <!-- <a href="settings.php" class="profile-menu-item">
             <i class="bi bi-gear"></i>
             <span>Settings</span>

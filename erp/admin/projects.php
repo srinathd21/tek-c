@@ -372,9 +372,7 @@ foreach ($projects as $p) {
             <a href="add-site.php" class="btn-add">
               <i class="bi bi-plus-circle"></i> Add Project
             </a>
-            <button class="btn-export" data-bs-toggle="modal" data-bs-target="#exportModal">
-              <i class="bi bi-download"></i> Export
-            </button>
+            
           </div>
         </div>
 

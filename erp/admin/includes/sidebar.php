@@ -38,12 +38,18 @@
     <div class="collapse ps-2" id="menuEmployees">
       <a class="side-link" href="add-employee.php"><i class="bi bi-person-plus"></i><span class="label">Add
           Employee</span></a>
-      <a class="side-link" href="manage-employees.php"><i class="bi bi-people"></i><span class="label">Manage
+      <a class="side-link" href="employees.php"><i class="bi bi-people"></i><span class="label">Manage
           Employees</span></a>
     </div>
     <a class="side-link" href="attendance.php">
-      <i class="bi bi-kanban"></i><span class="label">Attendance</span>
-    </a>
+    <i class="bi bi-calendar-check"></i>
+    <span class="label">Attendance</span>
+</a>
+
+<a class="side-link" href="leave-requests.php">
+    <i class="bi bi-person-workspace"></i>
+    <span class="label">Leave Request</span>
+</a>
     <!-- Sites -->
     <a class="side-link" data-bs-toggle="collapse" href="#menuSites" role="button" aria-expanded="false">
       <i class="bi bi-geo-alt"></i><span class="label">Sites</span>
@@ -78,21 +84,30 @@
           Credentials</span></a>
     </div>
 
-    <!-- HR & Admin -->
-    <a class="side-link" data-bs-toggle="collapse" href="#menuHRAdmin" role="button" aria-expanded="false">
-      <i class="bi bi-person-lines-fill"></i><span class="label">HR &amp; Admin</span>
-      <span class="ms-auto label"><i class="bi bi-chevron-down"></i></span>
+        <a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#quotationMenu"  title="Vendor Finalization Tender" role="button" aria-expanded="false" aria-controls="quotationMenu">
+      <i class="bi bi-file-text"></i>
+      <span class="label">Vendor Finalization Tender</span>
+      <span class="ms-auto label chevron-wrap">
+        <i class="bi bi-chevron-down chevron"></i>
+      </span>
     </a>
-    <div class="collapse ps-2" id="menuHRAdmin">
-      <a class="side-link" href="add-hr.php"><i class="bi bi-person-plus-fill"></i><span class="label">Add HR
-          Entry</span></a>
-      <a class="side-link" href="hr.php"><i class="bi bi-card-checklist"></i><span class="label">Manage HR</span></a>
+
+    <div class="collapse ps-2 side-submenu-collapse" id="quotationMenu">
+      <a class="side-link sub-link" href="all-quotation-requests.php">
+        <i class="bi bi-inbox"></i>
+        <span class="label">All VFT</span>
+      </a>
+
+      <a class="side-link sub-link" href="dealers.php">
+        <i class="bi bi-shop"></i>
+        <span class="label">Dealers</span>
+      </a>
     </div>
 
     <!-- Accounts -->
 
-
-    <a class="side-link" href="leave-request-list.php">
+<!-- 
+    <a class="side-link" href="leave-requests.php">
       <i class="bi bi-gear"></i><span class="label">Leave Request List</span>
     </a>
     <div class="collapse ps-2" id="menuAccounts">
@@ -100,15 +115,12 @@
           Entry</span></a>
       <a class="side-link" href="accounts.php"><i class="bi bi-journal-text"></i><span class="label">Manage
           Accounts</span></a>
-    </div>
+    </div> -->
 
-    <a class="side-link" data-bs-toggle="collapse" href="#menuAccounts" role="button" aria-expanded="false">
-      <i class="bi bi-cash-stack"></i><span class="label">Accounts</span>
-      <span class="ms-auto label"><i class="bi bi-chevron-down"></i></span>
-    </a>
+
 
     <!-- Weekly Bills -->
-    <a class="side-link" data-bs-toggle="collapse" href="#menuWeeklyBills" role="button" aria-expanded="false">
+    <!-- <a class="side-link" data-bs-toggle="collapse" href="#menuWeeklyBills" role="button" aria-expanded="false">
       <i class="bi bi-receipt"></i><span class="label">Weekly Bills</span>
       <span class="ms-auto label"><i class="bi bi-chevron-down"></i></span>
     </a>
@@ -117,17 +129,38 @@
           Bill</span></a>
       <a class="side-link" href="weekly-bills.php"><i class="bi bi-receipt"></i><span class="label">Manage Weekly
           Bills</span></a>
-    </div>
+    </div> -->
 
     <!-- Reports -->
     <a class="side-link" href="emp-reports.php">
       <i class="bi bi-file-earmark-bar-graph"></i><span class="label">Reports Hub</span>
     </a>
 
+        <a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#hrMasterMenu" role="button" aria-expanded="false" aria-controls="hrMasterMenu">
+  
+     <i class="bi bi-database-gear"></i>
+     <span class="label">Document Config</span>
+     <span class="ms-auto label chevron-wrap">
+       <i class="bi bi-chevron-down chevron"></i>
+     </span>
+    </a>
+<!--  -->
+    <div class="collapse ps-2 side-submenu-collapse" id="hrMasterMenu">
+     <a class="side-link sub-link" href="manage-stakeholder-types.php">
+       <i class="bi bi-people-fill"></i>
+       <span class="label">Manage Stakeholder Types</span>
+     </a>
+     <a class="side-link sub-link" href="vfs_packages.php">
+       <i class="bi bi-box-seam"></i>
+       <span class="label">VFS Packages</span>
+     </a>
+    </div>
+
     <!-- Settings -->
     <a class="side-link" href="manage-settings.php">
       <i class="bi bi-gear"></i><span class="label">Settings</span>
     </a>
+
 
     <!-- Logout (NEW) -->
     <a class="side-link" href="logout.php" id="logoutLink">
