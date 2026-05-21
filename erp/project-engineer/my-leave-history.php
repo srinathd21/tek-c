@@ -1162,8 +1162,8 @@ $totalPages = max(1, (int)ceil($totalRecords / $perPage));
                         <div class="d-flex gap-2 flex-wrap">
                             <a href="apply-leave.php" class="primary-btn"><i class="bi bi-plus-circle"></i> Apply
                                 Leave</a>
-                            <a href="export-leave-history.php?<?php echo e(http_build_query($_GET)); ?>"
-                                class="primary-btn export-btn"><i class="bi bi-download"></i> Export</a>
+                            <!-- <a href="export-leave-history.php?<?php echo e(http_build_query($_GET)); ?>"
+                                class="primary-btn export-btn"><i class="bi bi-download"></i> Export</a> -->
                         </div>
                     </div>
 
@@ -1537,7 +1537,8 @@ $totalPages = max(1, (int)ceil($totalRecords / $perPage));
                     <div class="modal-body">
                         <div class="alert alert-warning mb-3">
                             <i class="bi bi-info-circle me-2"></i>
-                            Only pending leave requests can be edited. Sundays are excluded while recalculating total
+                            Only pending leave requests can be edited. Sundays are excluded
+                            while recalculating total
                             days.
                         </div>
 
@@ -1599,7 +1600,8 @@ $totalPages = max(1, (int)ceil($totalRecords / $perPage));
                     <input type="hidden" name="action" value="delete_leave">
                     <input type="hidden" name="leave_id" id="deleteLeaveId">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="deleteLeaveModalLabel">Delete Leave Request</h5>
+                        <h5 class="modal-title" id="deleteLeaveModalLabel">Delete Leave Request
+                        </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -1610,7 +1612,8 @@ $totalPages = max(1, (int)ceil($totalRecords / $perPage));
                         </div>
                         <div class="text-danger fw-bold small mt-3">
                             <i class="bi bi-exclamation-triangle"></i>
-                            This action cannot be undone. Only pending leave requests can be deleted.
+                            This action cannot be undone. Only pending leave requests can be
+                            deleted.
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -1624,63 +1627,74 @@ $totalPages = max(1, (int)ceil($totalRecords / $perPage));
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
+    </script>
     <script src="assets/js/sidebar-toggle.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         function setText(id, value) {
             const el = document.getElementById(id);
-            if (el) el.textContent = value && value.trim ? (value.trim() || '—') : (value || '—');
+            if (el) el.textContent = value && value.trim ? (value.trim() || '—') : (
+                value || '—');
         }
 
         document.querySelectorAll('.js-view-leave').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 setText('viewLeaveId', '#' + (this.dataset.id || ''));
-                setText('viewLeaveType', (this.dataset.leaveType || '') + ' - ' + (this.dataset
+                setText('viewLeaveType', (this.dataset.leaveType ||
+                    '') + ' - ' + (this.dataset
                     .leaveName || ''));
                 setText('viewProject', this.dataset.project || '—');
-                setText('viewProjectLocation', this.dataset.projectLocation || '—');
+                setText('viewProjectLocation', this.dataset
+                    .projectLocation || '—');
                 setText('viewFrom', this.dataset.from || '—');
                 setText('viewTo', this.dataset.to || '—');
-                setText('viewTotal', (this.dataset.total || '—') + ' day(s)');
+                setText('viewTotal', (this.dataset.total || '—') +
+                    ' day(s)');
                 setText('viewStatus', this.dataset.status || '—');
                 setText('viewApplied', this.dataset.applied || '—');
                 setText('viewApprover', this.dataset.approver || '—');
                 setText('viewContact', this.dataset.contact || '—');
                 setText('viewHandover', this.dataset.handover || '—');
                 setText('viewReason', this.dataset.reason || '—');
-                setText('viewApproverRemarks', this.dataset.approverRemarks || '—');
-                setText('viewRejectionReason', this.dataset.rejectionReason || '—');
+                setText('viewApproverRemarks', this.dataset
+                    .approverRemarks || '—');
+                setText('viewRejectionReason', this.dataset
+                    .rejectionReason || '—');
             });
         });
 
-        document.querySelectorAll('[data-bs-target="#editLeaveModal"]').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                const id = document.getElementById('editLeaveId');
-                const type = document.getElementById('editLeaveType');
-                const from = document.getElementById('editFromDate');
-                const to = document.getElementById('editToDate');
-                const contact = document.getElementById('editContact');
-                const handover = document.getElementById('editHandover');
-                const reason = document.getElementById('editReason');
+        document.querySelectorAll('[data-bs-target="#editLeaveModal"]').forEach(
+            function(btn) {
+                btn.addEventListener('click', function() {
+                    const id = document.getElementById('editLeaveId');
+                    const type = document.getElementById('editLeaveType');
+                    const from = document.getElementById('editFromDate');
+                    const to = document.getElementById('editToDate');
+                    const contact = document.getElementById('editContact');
+                    const handover = document.getElementById(
+                        'editHandover');
+                    const reason = document.getElementById('editReason');
 
-                if (id) id.value = this.dataset.id || '';
-                if (type) type.value = this.dataset.leaveType || 'CL';
-                if (from) from.value = this.dataset.fromRaw || '';
-                if (to) to.value = this.dataset.toRaw || '';
-                if (contact) contact.value = this.dataset.contact || '';
-                if (handover) handover.value = this.dataset.handover || '';
-                if (reason) reason.value = this.dataset.reason || '';
+                    if (id) id.value = this.dataset.id || '';
+                    if (type) type.value = this.dataset.leaveType || 'CL';
+                    if (from) from.value = this.dataset.fromRaw || '';
+                    if (to) to.value = this.dataset.toRaw || '';
+                    if (contact) contact.value = this.dataset.contact || '';
+                    if (handover) handover.value = this.dataset.handover ||
+                        '';
+                    if (reason) reason.value = this.dataset.reason || '';
+                });
             });
-        });
 
-        document.querySelectorAll('[data-bs-target="#deleteLeaveModal"]').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                const id = document.getElementById('deleteLeaveId');
-                if (id) id.value = this.dataset.id || '';
-                setText('deleteLeaveTitle', this.dataset.title || '—');
+        document.querySelectorAll('[data-bs-target="#deleteLeaveModal"]').forEach(
+            function(btn) {
+                btn.addEventListener('click', function() {
+                    const id = document.getElementById('deleteLeaveId');
+                    if (id) id.value = this.dataset.id || '';
+                    setText('deleteLeaveTitle', this.dataset.title || '—');
+                });
             });
-        });
     });
     </script>
 </body>
