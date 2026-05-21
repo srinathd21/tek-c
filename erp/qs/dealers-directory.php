@@ -154,6 +154,7 @@ $dealer_types = ['Electrical', 'Plumbing', 'Civil', 'Painting', 'Flooring', 'Roo
 ?>
 <!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -172,99 +173,373 @@ $dealer_types = ['Electrical', 'Plumbing', 'Civil', 'Painting', 'Flooring', 'Roo
     <link href="assets/css/footer.css" rel="stylesheet" />
 
     <style>
-        /* same styles as before */
-        .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-        .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px 16px 12px; height:100%; }
-        .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-        .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
-        .panel-menu{ width:36px; height:36px; border-radius:12px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:#6b7280; }
+    /* same styles as before */
+    .content-scroll {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 22px 22px 14px;
+    }
 
-        .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; }
-        .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
-        .stat-ic.blue{ background: var(--blue); }
-        .stat-ic.green{ background: #10b981; }
-        .stat-ic.yellow{ background: #f59e0b; }
-        .stat-ic.red{ background: #ef4444; }
-        .stat-ic.purple{ background: #8b5cf6; }
-        .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-        .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
+    .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 16px 16px 12px;
+        height: 100%;
+    }
 
-        .table-responsive { overflow-x: hidden !important; }
-        table.dataTable { width:100% !important; }
-        .table thead th{ font-size: 11px; color:#6b7280; font-weight:800; border-bottom:1px solid var(--border)!important; padding: 10px 10px !important; white-space: normal !important; }
-        .table td{ vertical-align: middle; border-color: var(--border); font-weight:650; color:#374151; padding: 10px 10px !important; white-space: normal !important; word-break: break-word; }
+    .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
 
-        .btn-action {
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 7px 10px;
-            color: var(--muted);
+    .panel-title {
+        font-weight: 900;
+        font-size: 18px;
+        color: #1f2937;
+        margin: 0;
+    }
+
+    .panel-menu {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: #fff;
+        display: grid;
+        place-items: center;
+        color: #6b7280;
+    }
+
+    .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 14px 16px;
+        height: 90px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .stat-ic {
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 20px;
+        flex: 0 0 auto;
+    }
+
+    .stat-ic.blue {
+        background: var(--blue);
+    }
+
+    .stat-ic.green {
+        background: #10b981;
+    }
+
+    .stat-ic.yellow {
+        background: #f59e0b;
+    }
+
+    .stat-ic.red {
+        background: #ef4444;
+    }
+
+    .stat-ic.purple {
+        background: #8b5cf6;
+    }
+
+    .stat-label {
+        color: #4b5563;
+        font-weight: 750;
+        font-size: 13px;
+    }
+
+    .stat-value {
+        font-size: 30px;
+        font-weight: 900;
+        line-height: 1;
+        margin-top: 2px;
+    }
+
+    .table-responsive {
+        overflow-x: hidden !important;
+    }
+
+    table.dataTable {
+        width: 100% !important;
+    }
+
+    .table thead th {
+        font-size: 11px;
+        color: #6b7280;
+        font-weight: 800;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 10px 10px !important;
+        white-space: normal !important;
+    }
+
+    .table td {
+        vertical-align: middle;
+        border-color: var(--border);
+        font-weight: 650;
+        color: #374151;
+        padding: 10px 10px !important;
+        white-space: normal !important;
+        word-break: break-word;
+    }
+
+    .btn-action {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 7px 10px;
+        color: var(--muted);
+        font-size: 12px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-weight: 900;
+    }
+
+    .btn-action:hover {
+        background: var(--bg);
+        color: var(--blue);
+    }
+
+    .btn-action.view {
+        border-color: rgba(45, 156, 219, .25);
+    }
+
+    .proj-title {
+        font-weight: 900;
+        font-size: 13px;
+        color: #1f2937;
+        margin-bottom: 2px;
+        line-height: 1.2;
+    }
+
+    .proj-sub {
+        font-size: 11px;
+        color: #6b7280;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    .alert {
+        border-radius: var(--radius);
+        border: none;
+        box-shadow: var(--shadow);
+        margin-bottom: 20px;
+    }
+
+
+    .dealer-actions {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .fw-700 {
+        font-weight: 900;
+        color: #111827;
+    }
+
+    .fw-800 {
+        font-weight: 900;
+    }
+
+    @media (max-width: 767.98px) {
+        .table-responsive {
+            overflow-x: visible !important;
+        }
+
+        #dealersTable {
+            border-collapse: separate !important;
+            border-spacing: 0 12px !important;
+            width: 100% !important;
+        }
+
+        #dealersTable thead {
+            display: none !important;
+        }
+
+        #dealersTable,
+        #dealersTable tbody,
+        #dealersTable tr,
+        #dealersTable td {
+            display: block !important;
+            width: 100% !important;
+        }
+
+        #dealersTable tbody tr {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, .055);
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        #dealersTable tbody td {
+            border: 0 !important;
+            padding: 8px 0 !important;
+            display: grid !important;
+            grid-template-columns: 105px minmax(0, 1fr);
+            gap: 10px;
+            align-items: start;
+            text-align: left !important;
             font-size: 12px;
-            text-decoration:none;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            gap:6px;
+            line-height: 1.35;
+            word-break: normal !important;
+            overflow-wrap: anywhere;
+        }
+
+        #dealersTable tbody td::before {
+            content: attr(data-label);
+            color: #64748b;
+            font-size: 10px;
             font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .2px;
+            padding-top: 2px;
         }
-        .btn-action:hover { background: var(--bg); color: var(--blue); }
-        .btn-action.view{ border-color: rgba(45,156,219,.25); }
 
-        .proj-title{ font-weight:900; font-size:13px; color:#1f2937; margin-bottom:2px; line-height:1.2; }
-        .proj-sub{ font-size:11px; color:#6b7280; font-weight:700; line-height:1.25; }
-
-        .alert { border-radius: var(--radius); border:none; box-shadow: var(--shadow); margin-bottom: 20px; }
-
-        @media (max-width: 991.98px){
-            .main{ margin-left: 0 !important; width: 100% !important; max-width: 100% !important; }
-            .sidebar{ position: fixed !important; transform: translateX(-100%); z-index: 1040 !important; }
-            .sidebar.open, .sidebar.active, .sidebar.show{ transform: translateX(0) !important; }
+        #dealersTable tbody td[data-label="Dealer"] {
+            grid-template-columns: 1fr;
+            gap: 4px;
+            padding-top: 0 !important;
+            padding-bottom: 10px !important;
+            border-bottom: 1px solid #eef2f7 !important;
         }
-        @media (max-width: 768px) {
-            .content-scroll { padding: 12px 10px 12px !important; }
-            .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
-            .panel { padding: 12px !important; margin-bottom: 12px; border-radius: 14px; }
-            .request-actions { flex-wrap: wrap; }
+
+        #dealersTable tbody td[data-label="Dealer"]::before {
+            display: none;
         }
+
+        #dealersTable .badge {
+            width: max-content;
+        }
+
+        #dealersTable .actions-cell {
+            padding-top: 10px !important;
+            border-top: 1px solid #eef2f7 !important;
+        }
+
+        #dealersTable .dealer-actions {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            width: 100%;
+        }
+
+        #dealersTable .dealer-actions form {
+            display: block !important;
+            width: 100%;
+        }
+
+        #dealersTable .btn-action {
+            width: 100%;
+            min-height: 34px;
+            padding: 7px 8px;
+            border-radius: 11px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+    }
+
+    @media (max-width: 991.98px) {
+        .main {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        .sidebar {
+            position: fixed !important;
+            transform: translateX(-100%);
+            z-index: 1040 !important;
+        }
+
+        .sidebar.open,
+        .sidebar.active,
+        .sidebar.show {
+            transform: translateX(0) !important;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .content-scroll {
+            padding: 12px 10px 12px !important;
+        }
+
+        .container-fluid.maxw {
+            padding-left: 6px !important;
+            padding-right: 6px !important;
+        }
+
+        .panel {
+            padding: 12px !important;
+            margin-bottom: 12px;
+            border-radius: 14px;
+        }
+
+        .request-actions {
+            flex-wrap: wrap;
+        }
+    }
     </style>
 </head>
+
 <body>
-<div class="app">
-    <?php include 'includes/sidebar.php'; ?>
-    <main class="main" aria-label="Main">
-        <?php include 'includes/topbar.php'; ?>
+    <div class="app">
+        <?php include 'includes/sidebar.php'; ?>
+        <main class="main" aria-label="Main">
+            <?php include 'includes/topbar.php'; ?>
 
-        <div id="contentScroll" class="content-scroll">
-            <div class="container-fluid maxw">
+            <div id="contentScroll" class="content-scroll">
+                <div class="container-fluid maxw">
 
-                <?php if ($success): ?>
+                    <?php if ($success): ?>
                     <div class="alert alert-success alert-dismissible fade show" role="alert">
                         <i class="bi bi-check-circle-fill me-2"></i> <?php echo e($success); ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
-                <?php endif; ?>
-                <?php if ($error): ?>
+                    <?php endif; ?>
+                    <?php if ($error): ?>
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
                         <i class="bi bi-exclamation-triangle-fill me-2"></i> <?php echo e($error); ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
-                <?php endif; ?>
+                    <?php endif; ?>
 
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <div>
-                        <h1 class="h3 fw-bold text-dark mb-1">Dealers Directory</h1>
-                        <p class="text-muted mb-0">Manage vendors and suppliers for quotations</p>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h1 class="h3 fw-bold text-dark mb-1">Dealers Directory</h1>
+                            <p class="text-muted mb-0">Manage vendors and suppliers for quotations</p>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal"
+                                data-bs-target="#addDealerModal">
+                                <i class="bi bi-plus-lg"></i> Add Dealer
+                            </button>
+                        </div>
                     </div>
-                    <div>
-                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDealerModal">
-                            <i class="bi bi-plus-lg"></i> Add Dealer
-                        </button>
-                    </div>
-                </div>
 
-                <!-- Stats -->
-                <?php
+                    <!-- Stats -->
+                    <?php
                 $active_count = 0;
                 $inactive_count = 0;
                 foreach ($dealers as $d) {
@@ -272,253 +547,302 @@ $dealer_types = ['Electrical', 'Plumbing', 'Civil', 'Painting', 'Flooring', 'Roo
                     else $inactive_count++;
                 }
                 ?>
-                <div class="row g-3 mb-3">
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic blue"><i class="bi bi-shop"></i></div>
-                            <div>
-                                <div class="stat-label">Total Dealers</div>
-                                <div class="stat-value"><?php echo count($dealers); ?></div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic blue"><i class="bi bi-shop"></i></div>
+                                <div>
+                                    <div class="stat-label">Total Dealers</div>
+                                    <div class="stat-value"><?php echo count($dealers); ?></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic green"><i class="bi bi-check-circle"></i></div>
+                                <div>
+                                    <div class="stat-label">Active</div>
+                                    <div class="stat-value"><?php echo $active_count; ?></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic red"><i class="bi bi-x-circle"></i></div>
+                                <div>
+                                    <div class="stat-label">Inactive</div>
+                                    <div class="stat-value"><?php echo $inactive_count; ?></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic purple"><i class="bi bi-star"></i></div>
+                                <div>
+                                    <div class="stat-label">Dealer Types</div>
+                                    <div class="stat-value"><?php echo count($dealer_types); ?></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic green"><i class="bi bi-check-circle"></i></div>
-                            <div>
-                                <div class="stat-label">Active</div>
-                                <div class="stat-value"><?php echo $active_count; ?></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic red"><i class="bi bi-x-circle"></i></div>
-                            <div>
-                                <div class="stat-label">Inactive</div>
-                                <div class="stat-value"><?php echo $inactive_count; ?></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic purple"><i class="bi bi-star"></i></div>
-                            <div>
-                                <div class="stat-label">Dealer Types</div>
-                                <div class="stat-value"><?php echo count($dealer_types); ?></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Directory -->
-                <div class="panel mb-4">
-                    <div class="panel-header">
-                        <h3 class="panel-title">All Dealers</h3>
-                        <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-                    </div>
-                    <div class="table-responsive">
-                        <table id="dealersTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
-                            <thead>
-                                32
-                                    <th>Code</th>
-                                    <th>Dealer Name</th>
-                                    <th>Contact Person</th>
-                                    <th>Mobile</th>
-                                    <th>Email</th>
-                                    <th>City</th>
-                                    <th>Status</th>
-                                    <th class="text-end">Actions</th>
+                    <!-- Directory -->
+                    <div class="panel mb-4">
+                        <div class="panel-header">
+                            <h3 class="panel-title">All Dealers</h3>
+                            <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="dealersTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
+                                <thead>
+                                    <tr>
+                                        <th>Code</th>
+                                        <th>Dealer Name</th>
+                                        <th>Contact Person</th>
+                                        <th>Mobile</th>
+                                        <th>Email</th>
+                                        <th>City</th>
+                                        <th>Status</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
                                 </thead>
-                            <tbody>
-                                <?php foreach ($dealers as $d): ?>
-                                <tr>
-                                    <td><span class="fw-800"><?php echo e($d['dealer_code']); ?></span></td>
-                                    <td>
-                                        <div class="fw-700"><?php echo e($d['dealer_name']); ?></div>
-                                        <?php if (!empty($d['dealer_type'])): ?>
+                                <tbody>
+                                    <?php foreach ($dealers as $d): ?>
+                                    <tr>
+                                        <td data-label="Code"><span
+                                                class="fw-800"><?php echo e($d['dealer_code']); ?></span></td>
+                                        <td data-label="Dealer">
+                                            <div class="fw-700"><?php echo e($d['dealer_name']); ?></div>
+                                            <?php if (!empty($d['dealer_type'])): ?>
                                             <div class="proj-sub"><?php echo e($d['dealer_type']); ?></div>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?php echo e($d['contact_person'] ?? '—'); ?></td>
-                                    <td><?php echo e($d['mobile_number']); ?></td>
-                                    <td><?php echo e($d['email'] ?? '—'); ?></td>
-                                    <td><?php echo e($d['city'] ?? '—'); ?></td>
-                                    <td><span class="badge <?php echo $d['status'] === 'Active' ? 'bg-success' : 'bg-secondary'; ?>"><?php echo e($d['status']); ?></span></td>
-                                    <td class="text-end">
-                                        <button class="btn-action view" data-bs-toggle="modal" data-bs-target="#viewDealerModal" 
-                                            data-id="<?php echo $d['id']; ?>"
-                                            data-code="<?php echo e($d['dealer_code']); ?>"
-                                            data-name="<?php echo e($d['dealer_name']); ?>"
-                                            data-contact="<?php echo e($d['contact_person']); ?>"
-                                            data-mobile="<?php echo e($d['mobile_number']); ?>"
-                                            data-alt="<?php echo e($d['alternate_phone']); ?>"
-                                            data-email="<?php echo e($d['email']); ?>"
-                                            data-gst="<?php echo e($d['gst_number']); ?>"
-                                            data-pan="<?php echo e($d['pan_number']); ?>"
-                                            data-address="<?php echo e($d['address']); ?>"
-                                            data-city="<?php echo e($d['city']); ?>"
-                                            data-state="<?php echo e($d['state']); ?>"
-                                            data-pincode="<?php echo e($d['pincode']); ?>"
-                                            data-types="<?php echo e($d['dealer_type']); ?>"
-                                            data-payment="<?php echo e($d['payment_terms']); ?>"
-                                            data-credit="<?php echo $d['credit_limit']; ?>"
-                                            data-status="<?php echo e($d['status']); ?>"
-                                            data-remarks="<?php echo e($d['remarks']); ?>">
-                                            <i class="bi bi-eye"></i> View
-                                        </button>
-                                        <button class="btn-action" data-bs-toggle="modal" data-bs-target="#editDealerModal" 
-                                            data-id="<?php echo $d['id']; ?>"
-                                            data-name="<?php echo e($d['dealer_name']); ?>"
-                                            data-contact="<?php echo e($d['contact_person']); ?>"
-                                            data-mobile="<?php echo e($d['mobile_number']); ?>"
-                                            data-alt="<?php echo e($d['alternate_phone']); ?>"
-                                            data-email="<?php echo e($d['email']); ?>"
-                                            data-gst="<?php echo e($d['gst_number']); ?>"
-                                            data-pan="<?php echo e($d['pan_number']); ?>"
-                                            data-address="<?php echo e($d['address']); ?>"
-                                            data-city="<?php echo e($d['city']); ?>"
-                                            data-state="<?php echo e($d['state']); ?>"
-                                            data-pincode="<?php echo e($d['pincode']); ?>"
-                                            data-types="<?php echo e($d['dealer_type']); ?>"
-                                            data-payment="<?php echo e($d['payment_terms']); ?>"
-                                            data-credit="<?php echo $d['credit_limit']; ?>"
-                                            data-status="<?php echo e($d['status']); ?>"
-                                            data-remarks="<?php echo e($d['remarks']); ?>">
-                                            <i class="bi bi-pencil"></i> Edit
-                                        </button>
-                                        <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this dealer? This action cannot be undone if no quotations exist.');">
-                                            <input type="hidden" name="action" value="delete_dealer">
-                                            <input type="hidden" name="id" value="<?php echo $d['id']; ?>">
-                                            <button type="submit" class="btn-action text-danger"><i class="bi bi-trash"></i> Delete</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td data-label="Contact Person"><?php echo e($d['contact_person'] ?? '—'); ?>
+                                        </td>
+                                        <td data-label="Mobile"><?php echo e($d['mobile_number']); ?></td>
+                                        <td data-label="Email"><?php echo e($d['email'] ?? '—'); ?></td>
+                                        <td data-label="City"><?php echo e($d['city'] ?? '—'); ?></td>
+                                        <td data-label="Status"><span
+                                                class="badge <?php echo $d['status'] === 'Active' ? 'bg-success' : 'bg-secondary'; ?>"><?php echo e($d['status']); ?></span>
+                                        </td>
+                                        <td data-label="Actions" class="text-end actions-cell">
+                                            <div class="dealer-actions">
+                                                <button class="btn-action view" data-bs-toggle="modal"
+                                                    data-bs-target="#viewDealerModal" data-id="<?php echo $d['id']; ?>"
+                                                    data-code="<?php echo e($d['dealer_code']); ?>"
+                                                    data-name="<?php echo e($d['dealer_name']); ?>"
+                                                    data-contact="<?php echo e($d['contact_person']); ?>"
+                                                    data-mobile="<?php echo e($d['mobile_number']); ?>"
+                                                    data-alt="<?php echo e($d['alternate_phone']); ?>"
+                                                    data-email="<?php echo e($d['email']); ?>"
+                                                    data-gst="<?php echo e($d['gst_number']); ?>"
+                                                    data-pan="<?php echo e($d['pan_number']); ?>"
+                                                    data-address="<?php echo e($d['address']); ?>"
+                                                    data-city="<?php echo e($d['city']); ?>"
+                                                    data-state="<?php echo e($d['state']); ?>"
+                                                    data-pincode="<?php echo e($d['pincode']); ?>"
+                                                    data-types="<?php echo e($d['dealer_type']); ?>"
+                                                    data-payment="<?php echo e($d['payment_terms']); ?>"
+                                                    data-credit="<?php echo $d['credit_limit']; ?>"
+                                                    data-status="<?php echo e($d['status']); ?>"
+                                                    data-remarks="<?php echo e($d['remarks']); ?>">
+                                                    <i class="bi bi-eye"></i> View
+                                                </button>
+                                                <button class="btn-action" data-bs-toggle="modal"
+                                                    data-bs-target="#editDealerModal" data-id="<?php echo $d['id']; ?>"
+                                                    data-name="<?php echo e($d['dealer_name']); ?>"
+                                                    data-contact="<?php echo e($d['contact_person']); ?>"
+                                                    data-mobile="<?php echo e($d['mobile_number']); ?>"
+                                                    data-alt="<?php echo e($d['alternate_phone']); ?>"
+                                                    data-email="<?php echo e($d['email']); ?>"
+                                                    data-gst="<?php echo e($d['gst_number']); ?>"
+                                                    data-pan="<?php echo e($d['pan_number']); ?>"
+                                                    data-address="<?php echo e($d['address']); ?>"
+                                                    data-city="<?php echo e($d['city']); ?>"
+                                                    data-state="<?php echo e($d['state']); ?>"
+                                                    data-pincode="<?php echo e($d['pincode']); ?>"
+                                                    data-types="<?php echo e($d['dealer_type']); ?>"
+                                                    data-payment="<?php echo e($d['payment_terms']); ?>"
+                                                    data-credit="<?php echo $d['credit_limit']; ?>"
+                                                    data-status="<?php echo e($d['status']); ?>"
+                                                    data-remarks="<?php echo e($d['remarks']); ?>">
+                                                    <i class="bi bi-pencil"></i> Edit
+                                                </button>
+                                                <form method="POST" style="display:inline;"
+                                                    onsubmit="return confirm('Delete this dealer? This action cannot be undone if no quotations exist.');">
+                                                    <input type="hidden" name="action" value="delete_dealer">
+                                                    <input type="hidden" name="id" value="<?php echo $d['id']; ?>">
+                                                    <button type="submit" class="btn-action text-danger"><i
+                                                            class="bi bi-trash"></i> Delete</button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <?php include 'includes/footer.php'; ?>
+        </main>
+    </div>
+
+    <!-- Add Dealer Modal -->
+    <div class="modal fade" id="addDealerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Add New Dealer</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="add_dealer">
+                        <div class="row">
+                            <div class="col-md-6 mb-3"><label class="form-label">Dealer Name *</label><input type="text"
+                                    name="dealer_name" class="form-control" required></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Contact Person</label><input
+                                    type="text" name="contact_person" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Mobile Number *</label><input
+                                    type="tel" name="mobile_number" class="form-control" required></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Alternate Phone</label><input
+                                    type="tel" name="alternate_phone" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Email</label><input type="email"
+                                    name="email" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">GST Number</label><input type="text"
+                                    name="gst_number" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">PAN Number</label><input type="text"
+                                    name="pan_number" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">City</label><input type="text"
+                                    name="city" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">State</label><input type="text"
+                                    name="state" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Pincode</label><input type="text"
+                                    name="pincode" class="form-control"></div>
+                            <div class="col-12 mb-3"><label class="form-label">Address</label><textarea name="address"
+                                    class="form-control" rows="2"></textarea></div>
+                            <div class="col-12 mb-3">
+                                <label class="form-label">Dealer Type</label>
+                                <input type="text" name="dealer_type" class="form-control"
+                                    placeholder="e.g., Electrical, Plumbing, Steel (comma separated)">
+                                <small class="text-muted">Enter multiple types separated by commas if needed.</small>
+                            </div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Payment Terms</label><input type="text"
+                                    name="payment_terms" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Credit Limit (₹)</label><input
+                                    type="number" step="0.01" name="credit_limit" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Status</label><select name="status"
+                                    class="form-select">
+                                    <option value="Active">Active</option>
+                                    <option value="Inactive">Inactive</option>
+                                </select></div>
+                            <div class="col-12 mb-3"><label class="form-label">Remarks</label><textarea name="remarks"
+                                    class="form-control" rows="2"></textarea></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Dealer</button>
+                    </div>
+                </form>
+            </div>
         </div>
+    </div>
 
-        <?php include 'includes/footer.php'; ?>
-    </main>
-</div>
+    <!-- Edit Dealer Modal -->
+    <div class="modal fade" id="editDealerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form method="POST">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Dealer</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="edit_dealer">
+                        <input type="hidden" name="id" id="edit_id">
+                        <div class="row">
+                            <div class="col-md-6 mb-3"><label class="form-label">Dealer Name *</label><input type="text"
+                                    name="dealer_name" id="edit_name" class="form-control" required></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Contact Person</label><input
+                                    type="text" name="contact_person" id="edit_contact" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Mobile Number *</label><input
+                                    type="tel" name="mobile_number" id="edit_mobile" class="form-control" required>
+                            </div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Alternate Phone</label><input
+                                    type="tel" name="alternate_phone" id="edit_alt" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Email</label><input type="email"
+                                    name="email" id="edit_email" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">GST Number</label><input type="text"
+                                    name="gst_number" id="edit_gst" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">PAN Number</label><input type="text"
+                                    name="pan_number" id="edit_pan" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">City</label><input type="text"
+                                    name="city" id="edit_city" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">State</label><input type="text"
+                                    name="state" id="edit_state" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Pincode</label><input type="text"
+                                    name="pincode" id="edit_pincode" class="form-control"></div>
+                            <div class="col-12 mb-3"><label class="form-label">Address</label><textarea name="address"
+                                    id="edit_address" class="form-control" rows="2"></textarea></div>
+                            <div class="col-12 mb-3">
+                                <label class="form-label">Dealer Type</label>
+                                <input type="text" name="dealer_type" id="edit_dealer_type" class="form-control"
+                                    placeholder="e.g., Electrical, Plumbing, Steel (comma separated)">
+                                <small class="text-muted">Enter multiple types separated by commas if needed.</small>
+                            </div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Payment Terms</label><input type="text"
+                                    name="payment_terms" id="edit_payment" class="form-control"></div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Credit Limit (₹)</label><input
+                                    type="number" step="0.01" name="credit_limit" id="edit_credit" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3"><label class="form-label">Status</label><select name="status"
+                                    id="edit_status" class="form-select">
+                                    <option value="Active">Active</option>
+                                    <option value="Inactive">Inactive</option>
+                                </select></div>
+                            <div class="col-12 mb-3"><label class="form-label">Remarks</label><textarea name="remarks"
+                                    id="edit_remarks" class="form-control" rows="2"></textarea></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Update Dealer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
-<!-- Add Dealer Modal -->
-<div class="modal fade" id="addDealerModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <form method="POST" enctype="multipart/form-data">
+    <!-- View Dealer Modal -->
+    <div class="modal fade" id="viewDealerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add New Dealer</h5>
+                    <h5 class="modal-title">Dealer Details</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" name="action" value="add_dealer">
-                    <div class="row">
-                        <div class="col-md-6 mb-3"><label class="form-label">Dealer Name *</label><input type="text" name="dealer_name" class="form-control" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Contact Person</label><input type="text" name="contact_person" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Mobile Number *</label><input type="tel" name="mobile_number" class="form-control" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Alternate Phone</label><input type="tel" name="alternate_phone" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Email</label><input type="email" name="email" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">GST Number</label><input type="text" name="gst_number" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">PAN Number</label><input type="text" name="pan_number" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">City</label><input type="text" name="city" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">State</label><input type="text" name="state" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Pincode</label><input type="text" name="pincode" class="form-control"></div>
-                        <div class="col-12 mb-3"><label class="form-label">Address</label><textarea name="address" class="form-control" rows="2"></textarea></div>
-                        <div class="col-12 mb-3">
-                            <label class="form-label">Dealer Type</label>
-                            <input type="text" name="dealer_type" class="form-control" placeholder="e.g., Electrical, Plumbing, Steel (comma separated)">
-                            <small class="text-muted">Enter multiple types separated by commas if needed.</small>
-                        </div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Payment Terms</label><input type="text" name="payment_terms" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Credit Limit (₹)</label><input type="number" step="0.01" name="credit_limit" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Status</label><select name="status" class="form-select"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
-                        <div class="col-12 mb-3"><label class="form-label">Remarks</label><textarea name="remarks" class="form-control" rows="2"></textarea></div>
-                    </div>
+                    <div class="row" id="viewDetails"></div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Dealer</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Edit Dealer Modal -->
-<div class="modal fade" id="editDealerModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <form method="POST">
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit Dealer</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" name="action" value="edit_dealer">
-                    <input type="hidden" name="id" id="edit_id">
-                    <div class="row">
-                        <div class="col-md-6 mb-3"><label class="form-label">Dealer Name *</label><input type="text" name="dealer_name" id="edit_name" class="form-control" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Contact Person</label><input type="text" name="contact_person" id="edit_contact" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Mobile Number *</label><input type="tel" name="mobile_number" id="edit_mobile" class="form-control" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Alternate Phone</label><input type="tel" name="alternate_phone" id="edit_alt" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Email</label><input type="email" name="email" id="edit_email" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">GST Number</label><input type="text" name="gst_number" id="edit_gst" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">PAN Number</label><input type="text" name="pan_number" id="edit_pan" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">City</label><input type="text" name="city" id="edit_city" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">State</label><input type="text" name="state" id="edit_state" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Pincode</label><input type="text" name="pincode" id="edit_pincode" class="form-control"></div>
-                        <div class="col-12 mb-3"><label class="form-label">Address</label><textarea name="address" id="edit_address" class="form-control" rows="2"></textarea></div>
-                        <div class="col-12 mb-3">
-                            <label class="form-label">Dealer Type</label>
-                            <input type="text" name="dealer_type" id="edit_dealer_type" class="form-control" placeholder="e.g., Electrical, Plumbing, Steel (comma separated)">
-                            <small class="text-muted">Enter multiple types separated by commas if needed.</small>
-                        </div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Payment Terms</label><input type="text" name="payment_terms" id="edit_payment" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Credit Limit (₹)</label><input type="number" step="0.01" name="credit_limit" id="edit_credit" class="form-control"></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Status</label><select name="status" id="edit_status" class="form-select"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
-                        <div class="col-12 mb-3"><label class="form-label">Remarks</label><textarea name="remarks" id="edit_remarks" class="form-control" rows="2"></textarea></div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Update Dealer</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- View Dealer Modal -->
-<div class="modal fade" id="viewDealerModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Dealer Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row" id="viewDetails"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="assets/js/sidebar-toggle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script src="assets/js/sidebar-toggle.js"></script>
 
-<script>
+    <script>
     function initTable() {
         const isDesktop = window.matchMedia('(min-width: 768px)').matches;
         const tbl = document.getElementById('dealersTable');
@@ -529,10 +853,22 @@ $dealer_types = ['Electrical', 'Plumbing', 'Civil', 'Painting', 'Flooring', 'Roo
                     responsive: true,
                     autoWidth: false,
                     pageLength: 10,
-                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-                    order: [[1, 'asc']],
-                    columnDefs: [{ targets: [7], orderable: false, searchable: false }],
-                    language: { zeroRecords: "No dealers found", info: "Showing _START_ to _END_ of _TOTAL_ dealers" }
+                    lengthMenu: [
+                        [10, 25, 50, 100, -1],
+                        [10, 25, 50, 100, 'All']
+                    ],
+                    order: [
+                        [1, 'asc']
+                    ],
+                    columnDefs: [{
+                        targets: [7],
+                        orderable: false,
+                        searchable: false
+                    }],
+                    language: {
+                        zeroRecords: "No dealers found",
+                        info: "Showing _START_ to _END_ of _TOTAL_ dealers"
+                    }
                 });
             }
         } else {
@@ -541,7 +877,7 @@ $dealer_types = ['Electrical', 'Plumbing', 'Civil', 'Painting', 'Flooring', 'Roo
             }
         }
     }
-    $(function () {
+    $(function() {
         initTable();
         window.addEventListener('resize', initTable);
     });
@@ -594,8 +930,9 @@ $dealer_types = ['Electrical', 'Plumbing', 'Civil', 'Painting', 'Flooring', 'Roo
             document.getElementById('viewDetails').innerHTML = html;
         });
     });
-</script>
+    </script>
 </body>
+
 </html>
 <?php
 if (isset($conn)) { mysqli_close($conn); }
