@@ -27,11 +27,11 @@
 
     <!-- Today Reports -->
     <a class="side-link" href="emp-reports.php">
-      <i class="bi bi-check2-square"></i><span class="label">Today Reports</span>
+      <i class="bi bi-check2-square"></i><span class="label">Reports Hub</span>
     </a>
 
     <!-- Time Management -->
-    <a class="side-link" data-bs-toggle="collapse" href="#tmMenu">
+    <!-- <a class="side-link" data-bs-toggle="collapse" href="#tmMenu">
       <i class="bi bi-clock-history"></i><span class="label">Time Management</span>
       <span class="ms-auto label"><i class="bi bi-chevron-down"></i></span>
     </a>
@@ -41,7 +41,7 @@
       <a class="side-link" href="ma.php"><i class="bi bi-calendar2-week"></i><span class="label">MA</span></a>
       <a class="side-link" href="mpt.php"><i class="bi bi-list-task"></i><span class="label">MPT</span></a>
       <a class="side-link" href="mom.php"><i class="bi bi-chat-left-text"></i><span class="label">MOM</span></a>
-    </div>
+    </div> -->
 
     <!-- Checklist -->
     <!--<a class="side-link" href="checklist.php">-->
@@ -51,8 +51,8 @@
     <!-- ----------------- Team Lead Options ----------------- -->
 
     <!-- QUOTATION MANAGEMENT - NEW SECTION FOR TEAM LEADS -->
-    <a class="side-link" data-bs-toggle="collapse" href="#quotationMenu">
-      <i class="bi bi-file-text"></i><span class="label">Quotations</span>
+    <a class="side-link" data-bs-toggle="collapse" href="#quotationMenu" title="Vendor Finalization Tender">
+      <i class="bi bi-file-text"></i><span class="label">Vendor Finalization Tender</span>
       <span class="ms-auto label position-relative">
         <i class="bi bi-chevron-down"></i>
         <!-- Notification badge for pending assignments -->
@@ -62,7 +62,7 @@
     <div class="collapse ps-2" id="quotationMenu">
       <!-- Assigned Quotations -->
       <a class="side-link" href="assigned-quotations.php">
-        <i class="bi bi-inbox"></i><span class="label">Quotation Request</span>
+        <i class="bi bi-inbox"></i><span class="label">VFT Request</span>
         <!-- <span class="ms-auto badge bg-warning" id="assignedCount" style="font-size: 0.7rem;">0</span> -->
       </a>
       
@@ -93,7 +93,7 @@
     <!--</a>-->
 
     <!-- Mail -->
-    <a class="side-link" data-bs-toggle="collapse" href="#mailMenu">
+    <!-- <a class="side-link" data-bs-toggle="collapse" href="#mailMenu">
       <i class="bi bi-envelope"></i><span class="label">Mail</span>
       <span class="ms-auto label"><i class="bi bi-chevron-down"></i></span>
     </a>
@@ -105,7 +105,7 @@
       <a class="side-link" href="scheduled.php"><i class="bi bi-calendar-event"></i><span class="label">Scheduled</span></a>
       <a class="side-link" href="spam.php"><i class="bi bi-exclamation-octagon"></i><span class="label">Spam</span></a>
       <a class="side-link" href="trash.php"><i class="bi bi-trash"></i><span class="label">Trash</span></a>
-    </div>
+    </div> -->
 
     <!-- Reports Hub -->
     <!--<a class="side-link" href="reports-hub.php">-->
@@ -157,10 +157,7 @@
       <a class="side-link" href="my-leave-history.php"><i class="bi bi-clock-history"></i><span class="label">My Leave History</span></a>
     </div>
 
-    <!-- Report -->
-    <a class="side-link" href="report.php">
-      <i class="bi bi-file-earmark-text"></i><span class="label">Report</span>
-    </a>
+
 
     <!-- Logout -->
     <a class="side-link" href="logout.php" id="logoutLink">

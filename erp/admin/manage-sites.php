@@ -421,7 +421,7 @@ if ($trashRes) {
               <a href="manage-sites.php?show_trash=1" class="primary-btn trash-btn"><i class="bi bi-trash"></i> Trash (<?php echo (int)$trashCount; ?>)</a>
             <?php endif; ?>
 
-            <button class="primary-btn export-btn" data-bs-toggle="modal" data-bs-target="#exportModal"><i class="bi bi-download"></i> Export</button>
+            <!-- <button class="primary-btn export-btn" data-bs-toggle="modal" data-bs-target="#exportModal"><i class="bi bi-download"></i> Export</button> -->
           </div>
         </div>
 

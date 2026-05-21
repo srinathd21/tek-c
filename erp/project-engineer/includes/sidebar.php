@@ -273,25 +273,7 @@
       </a>
     </div>
 
-    <!-- HR Master kept commented as in the original project-engineer sidebar -->
-    <!--<a class="side-link collapse-toggle" data-bs-toggle="collapse" href="#hrMasterMenu" role="button" aria-expanded="false" aria-controls="hrMasterMenu">-->
-    <!--  <i class="bi bi-database-gear"></i>-->
-    <!--  <span class="label">HR Master</span>-->
-    <!--  <span class="ms-auto label chevron-wrap">-->
-    <!--    <i class="bi bi-chevron-down chevron"></i>-->
-    <!--  </span>-->
-    <!--</a>-->
 
-    <!--<div class="collapse ps-2 side-submenu-collapse" id="hrMasterMenu">-->
-    <!--  <a class="side-link sub-link" href="manage-stakeholder-types.php">-->
-    <!--    <i class="bi bi-people-fill"></i>-->
-    <!--    <span class="label">Manage Stakeholder Types</span>-->
-    <!--  </a>-->
-    <!--  <a class="side-link sub-link" href="vfs_packages.php">-->
-    <!--    <i class="bi bi-box-seam"></i>-->
-    <!--    <span class="label">VFS Packages</span>-->
-    <!--  </a>-->
-    <!--</div>-->
 
     <!-- Logout -->
     <a class="side-link" href="logout.php" id="logoutLink">

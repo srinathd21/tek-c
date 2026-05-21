@@ -1,517 +1,836 @@
 <?php
-// attendance.php
-// ✅ Complete Attendance Management System
+// admin/attendance.php
+// Admin Attendance View - employees attendance only, no punch in / punch out
 
 session_start();
 require_once 'includes/db-config.php';
 
-// Helper functions
-function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
-
-function timeAgo($datetime) {
-    if (!$datetime) return 'Not punched';
-    $time = strtotime($datetime);
-    $now = time();
-    $diff = $now - $time;
-    
-    if ($diff < 60) return 'Just now';
-    if ($diff < 3600) return floor($diff/60).' mins ago';
-    if ($diff < 86400) return floor($diff/3600).' hours ago';
-    return date('d M, h:i A', $time);
-}
-
-function formatTime($datetime) {
-    return $datetime ? date('h:i A', strtotime($datetime)) : '--:--';
-}
-
-function calculateDistance($lat1, $lon1, $lat2, $lon2) {
-    if (!$lat1 || !$lon1 || !$lat2 || !$lon2) return null;
-    
-    $earthRadius = 6371000; // meters
-    $dLat = deg2rad($lat2 - $lat1);
-    $dLon = deg2rad($lon2 - $lon1);
-    
-    $a = sin($dLat/2) * sin($dLat/2) + 
-         cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * 
-         sin($dLon/2) * sin($dLon/2);
-    
-    $c = 2 * asin(sqrt($a));
-    return $earthRadius * $c;
-}
+date_default_timezone_set('Asia/Kolkata');
 
 $conn = get_db_connection();
-if (!$conn) { die("Database connection failed."); }
+if (!$conn) {
+    die("Database connection failed.");
+}
 
-$success = '';
-$error = '';
-$today = date('Y-m-d');
+function e($v) {
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+}
 
-// Handle Punch In/Out
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    
-    // Punch In
-    if (isset($_POST['punch_in'])) {
-        $employee_id = (int)$_POST['employee_id'];
-        $punch_lat = (float)$_POST['latitude'];
-        $punch_lng = (float)$_POST['longitude'];
-        $punch_location = e($_POST['location'] ?? '');
-        $punch_type = $_POST['punch_type']; // 'site' or 'office'
-        $site_id = isset($_POST['site_id']) ? (int)$_POST['site_id'] : null;
-        $office_id = isset($_POST['office_id']) ? (int)$_POST['office_id'] : null;
-        
-        // Check if already punched in today
-        $check = mysqli_query($conn, "SELECT id FROM attendance WHERE employee_id = $employee_id AND attendance_date = '$today'");
-        if (mysqli_num_rows($check) > 0) {
-            $error = "You have already punched in today.";
-        } else {
-            // Get employee details for validation
-            $emp_res = mysqli_query($conn, "SELECT * FROM employees WHERE id = $employee_id");
-            $employee = mysqli_fetch_assoc($emp_res);
-            
-            // Check if employee can punch at this location
-            $can_punch = false;
-            $validation_msg = '';
-            
-            if ($punch_type == 'site') {
-                // Check if employee is assigned to this site
-                $site_check = mysqli_query($conn, 
-                    "SELECT s.* FROM sites s 
-                     JOIN site_project_engineers spe ON s.id = spe.site_id 
-                     WHERE spe.employee_id = $employee_id AND s.id = $site_id");
-                
-                if (mysqli_num_rows($site_check) == 0) {
-                    $validation_msg = "You are not assigned to this site.";
-                } else {
-                    $site = mysqli_fetch_assoc($site_check);
-                    
-                    // Calculate distance
-                    $distance = calculateDistance($punch_lat, $punch_lng, $site['latitude'], $site['longitude']);
-                    
-                    if ($distance === null) {
-                        $validation_msg = "Site location not configured.";
-                    } elseif ($distance <= ($site['location_radius'] ?? 100)) {
-                        $can_punch = true;
-                    } else {
-                        $validation_msg = "You are " . round($distance) . "m away from site (allowed: " . ($site['location_radius'] ?? 100) . "m)";
-                    }
-                }
-            } elseif ($punch_type == 'office') {
-                // Check if employee is allowed to punch from office (Managers/Team Leads)
-                $allowed_designations = ['Manager', 'Team Lead', 'Director', 'Vice President', 'General Manager'];
-                if (in_array($employee['designation'], $allowed_designations)) {
-                    // Check office location
-                    $office_res = mysqli_query($conn, "SELECT * FROM office_locations WHERE id = $office_id AND is_active = 1");
-                    if (mysqli_num_rows($office_res) > 0) {
-                        $office = mysqli_fetch_assoc($office_res);
-                        $distance = calculateDistance($punch_lat, $punch_lng, $office['latitude'], $office['longitude']);
-                        
-                        if ($distance <= ($office['geo_fence_radius'] ?? 100)) {
-                            $can_punch = true;
-                        } else {
-                            $validation_msg = "You are " . round($distance) . "m away from office";
-                        }
-                    } else {
-                        $validation_msg = "Invalid office location.";
-                    }
-                } else {
-                    $validation_msg = "You are not authorized to punch from office.";
-                }
-            }
-            
-            if ($can_punch) {
-                $stmt = mysqli_prepare($conn, 
-                    "INSERT INTO attendance 
-                    (employee_id, attendance_date, punch_in_time, punch_in_location, 
-                     punch_in_latitude, punch_in_longitude, punch_in_type, 
-                     punch_in_site_id, punch_in_office_id, status) 
-                    VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, 'present')");
-                
-                mysqli_stmt_bind_param($stmt, "issdsdii", 
-                    $employee_id, $today, $punch_location, 
-                    $punch_lat, $punch_lng, $punch_type, 
-                    $site_id, $office_id);
-                
-                if (mysqli_stmt_execute($stmt)) {
-                    $success = "Punch In successful at " . date('h:i A');
-                } else {
-                    $error = "Error punching in: " . mysqli_stmt_error($stmt);
-                }
-                mysqli_stmt_close($stmt);
-            } else {
-                $error = $validation_msg;
-            }
-        }
+function safeDate($date, $format = 'd M Y') {
+    if (empty($date) || $date === '0000-00-00' || $date === '0000-00-00 00:00:00') {
+        return '-';
     }
-    
-    // Punch Out
-    elseif (isset($_POST['punch_out'])) {
-        $attendance_id = (int)$_POST['attendance_id'];
-        $punch_lat = (float)$_POST['latitude'];
-        $punch_lng = (float)$_POST['longitude'];
-        $punch_location = e($_POST['location'] ?? '');
-        
-        // Get attendance record
-        $att_res = mysqli_query($conn, "SELECT * FROM attendance WHERE id = $attendance_id");
-        $attendance = mysqli_fetch_assoc($att_res);
-        
-        if ($attendance) {
-            // Calculate total hours
-            $punch_in = strtotime($attendance['punch_in_time']);
-            $punch_out = time();
-            $total_hours = round(($punch_out - $punch_in) / 3600, 2);
-            
-            $stmt = mysqli_prepare($conn,
-                "UPDATE attendance SET 
-                 punch_out_time = NOW(),
-                 punch_out_location = ?,
-                 punch_out_latitude = ?,
-                 punch_out_longitude = ?,
-                 total_hours = ?
-                 WHERE id = ?");
-            
-            mysqli_stmt_bind_param($stmt, "sdddi", 
-                $punch_location, $punch_lat, $punch_lng, 
-                $total_hours, $attendance_id);
-            
-            if (mysqli_stmt_execute($stmt)) {
-                $success = "Punch Out successful. Total hours: " . $total_hours;
-            } else {
-                $error = "Error punching out: " . mysqli_stmt_error($stmt);
-            }
-            mysqli_stmt_close($stmt);
-        }
+    return date($format, strtotime($date));
+}
+
+function safeTime($datetime) {
+    if (empty($datetime) || $datetime === '0000-00-00 00:00:00') {
+        return '--:--';
+    }
+    return date('h:i A', strtotime($datetime));
+}
+
+function getInitials($name) {
+    $name = trim((string)$name);
+    if ($name === '') return 'U';
+    $parts = preg_split('/\s+/', $name);
+    if (count($parts) >= 2) {
+        return strtoupper(substr($parts[0], 0, 1) . substr(end($parts), 0, 1));
+    }
+    return strtoupper(substr($name, 0, 1));
+}
+
+function getStatusBadge($status) {
+    $status = strtolower(trim((string)$status));
+    switch ($status) {
+        case 'present':
+            return '<span class="status-badge status-present"><i class="bi bi-check-circle"></i> Present</span>';
+        case 'late':
+            return '<span class="status-badge status-late"><i class="bi bi-clock-history"></i> Late</span>';
+        case 'half-day':
+        case 'half day':
+            return '<span class="status-badge status-half"><i class="bi bi-hourglass-split"></i> Half Day</span>';
+        case 'absent':
+            return '<span class="status-badge status-absent"><i class="bi bi-x-circle"></i> Absent</span>';
+        default:
+            return '<span class="status-badge status-neutral"><i class="bi bi-dash-circle"></i> ' . e($status ?: 'No Record') . '</span>';
     }
 }
 
-// Get selected filters
-$filter_employee = isset($_GET['employee_id']) ? (int)$_GET['employee_id'] : 0;
-$filter_month = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('m');
-$filter_year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
+// ---------------- AUTH: ADMIN ONLY ----------------
+if (empty($_SESSION['employee_id'])) {
+    header("Location: ../login.php");
+    exit;
+}
 
-// Fetch all active employees
+$current_employee_id = (int)$_SESSION['employee_id'];
+$current_employee = null;
+
+$emp_stmt = mysqli_prepare($conn, "SELECT * FROM employees WHERE id = ? AND employee_status = 'active'");
+if ($emp_stmt) {
+    mysqli_stmt_bind_param($emp_stmt, "i", $current_employee_id);
+    mysqli_stmt_execute($emp_stmt);
+    $emp_res = mysqli_stmt_get_result($emp_stmt);
+    $current_employee = mysqli_fetch_assoc($emp_res);
+    mysqli_stmt_close($emp_stmt);
+}
+
+if (!$current_employee) {
+    die("Employee not found.");
+}
+
+$designation = strtolower(trim($current_employee['designation'] ?? ''));
+$department = strtolower(trim($current_employee['department'] ?? ''));
+$isAdmin = in_array($designation, ['admin', 'administrator', 'director'], true) || $department === 'admin';
+
+if (!$isAdmin) {
+    $_SESSION['flash_error'] = "You don't have permission to access attendance management.";
+    header("Location: ../dashboard.php");
+    exit;
+}
+
+// ---------------- FILTERS ----------------
+$today = date('Y-m-d');
+$filter_date = $_GET['date'] ?? $today;
+
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filter_date)) {
+    $filter_date = $today;
+}
+
+$filter_employee = isset($_GET['employee_id']) ? (int)$_GET['employee_id'] : 0;
+$filter_status = strtolower(trim($_GET['status'] ?? 'all'));
+$search = trim($_GET['search'] ?? '');
+
+$monthStart = date('Y-m-01', strtotime($filter_date));
+$monthEnd = date('Y-m-t', strtotime($filter_date));
+
+// ---------------- EMPLOYEE LIST ----------------
 $employees = [];
-$emp_res = mysqli_query($conn, "SELECT id, full_name, employee_code, designation FROM employees WHERE employee_status = 'active' ORDER BY full_name");
+$emp_res = mysqli_query($conn, "
+    SELECT id, full_name, employee_code, designation, department
+    FROM employees
+    WHERE employee_status = 'active'
+    ORDER BY full_name
+");
 if ($emp_res) {
     $employees = mysqli_fetch_all($emp_res, MYSQLI_ASSOC);
 }
 
-// Fetch today's attendance
-$today_attendance = [];
-$today_query = "SELECT a.*, e.full_name, e.employee_code, e.designation, e.photo,
-                       s.project_name as site_name, s.latitude as site_lat, s.longitude as site_lng,
-                       o.location_name as office_name
-                FROM attendance a
-                JOIN employees e ON a.employee_id = e.id
-                LEFT JOIN sites s ON a.punch_in_site_id = s.id
-                LEFT JOIN office_locations o ON a.punch_in_office_id = o.id
-                WHERE a.attendance_date = '$today'
-                ORDER BY a.punch_in_time DESC";
-
-$today_res = mysqli_query($conn, $today_query);
-if ($today_res) {
-    $today_attendance = mysqli_fetch_all($today_res, MYSQLI_ASSOC);
-}
-
-// Fetch monthly attendance summary
-$summary_query = "SELECT 
-                    e.id, e.full_name, e.employee_code, e.designation,
-                    COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present_days,
-                    COUNT(CASE WHEN a.status = 'late' THEN 1 END) as late_days,
-                    COUNT(CASE WHEN a.status = 'half-day' THEN 1 END) as half_days,
-                    COUNT(CASE WHEN a.status = 'absent' THEN 1 END) as absent_days,
-                    COUNT(CASE WHEN a.is_vacation = 1 THEN 1 END) as vacation_days,
-                    SEC_TO_TIME(SUM(TIME_TO_SEC(a.total_hours) * 3600)) as total_hours
-                  FROM employees e
-                  LEFT JOIN attendance a ON e.id = a.employee_id 
-                    AND MONTH(a.attendance_date) = $filter_month 
-                    AND YEAR(a.attendance_date) = $filter_year
-                  WHERE e.employee_status = 'active'
-                  GROUP BY e.id
-                  ORDER BY e.full_name";
+// ---------------- DAILY ATTENDANCE ----------------
+$where = "WHERE e.employee_status = 'active'";
+$params = [];
+$types = "";
 
 if ($filter_employee > 0) {
-    $summary_query = "SELECT 
-                        e.id, e.full_name, e.employee_code, e.designation,
-                        COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present_days,
-                        COUNT(CASE WHEN a.status = 'late' THEN 1 END) as late_days,
-                        COUNT(CASE WHEN a.status = 'half-day' THEN 1 END) as half_days,
-                        COUNT(CASE WHEN a.status = 'absent' THEN 1 END) as absent_days,
-                        COUNT(CASE WHEN a.is_vacation = 1 THEN 1 END) as vacation_days,
-                        SEC_TO_TIME(SUM(TIME_TO_SEC(a.total_hours) * 3600)) as total_hours
-                      FROM employees e
-                      LEFT JOIN attendance a ON e.id = a.employee_id 
-                        AND MONTH(a.attendance_date) = $filter_month 
-                        AND YEAR(a.attendance_date) = $filter_year
-                      WHERE e.id = $filter_employee
-                      GROUP BY e.id";
+    $where .= " AND e.id = ?";
+    $params[] = $filter_employee;
+    $types .= "i";
 }
 
-$summary_res = mysqli_query($conn, $summary_query);
-$monthly_summary = mysqli_fetch_all($summary_res, MYSQLI_ASSOC);
-
-// Fetch sites for punch in dropdown
-$sites = mysqli_query($conn, "SELECT id, project_name, project_code, latitude, longitude FROM sites WHERE latitude IS NOT NULL");
-
-// Fetch office locations
-$offices = mysqli_query($conn, "SELECT id, location_name, address, latitude, longitude FROM office_locations WHERE is_active = 1");
-
-// Get employee's assigned sites for current user (you'd get from session)
-$current_employee_id = 6; // Replace with session employee ID
-$assigned_sites = [];
-$assigned_res = mysqli_query($conn, 
-    "SELECT s.* FROM sites s 
-     JOIN site_project_engineers spe ON s.id = spe.site_id 
-     WHERE spe.employee_id = $current_employee_id");
-if ($assigned_res) {
-    $assigned_sites = mysqli_fetch_all($assigned_res, MYSQLI_ASSOC);
+if ($search !== '') {
+    $where .= " AND (
+        e.full_name LIKE ?
+        OR e.employee_code LIKE ?
+        OR e.designation LIKE ?
+        OR e.department LIKE ?
+    )";
+    $searchLike = '%' . $search . '%';
+    $params[] = $searchLike;
+    $params[] = $searchLike;
+    $params[] = $searchLike;
+    $params[] = $searchLike;
+    $types .= "ssss";
 }
 
-// Check if already punched in today
-$punched_today = null;
-$punch_check = mysqli_query($conn, "SELECT * FROM attendance WHERE employee_id = $current_employee_id AND attendance_date = '$today'");
-if ($punch_check && mysqli_num_rows($punch_check) > 0) {
-    $punched_today = mysqli_fetch_assoc($punch_check);
+$statusWhere = "";
+if ($filter_status !== 'all' && in_array($filter_status, ['present', 'late', 'half-day', 'absent', 'not-marked'], true)) {
+    if ($filter_status === 'not-marked') {
+        $statusWhere = " AND a.id IS NULL";
+    } elseif ($filter_status === 'absent') {
+        $statusWhere = " AND (a.status = 'absent' OR a.id IS NULL)";
+    } else {
+        $statusWhere = " AND a.status = ?";
+        $params[] = $filter_status;
+        $types .= "s";
+    }
 }
+
+$daily_sql = "
+    SELECT
+        e.id AS employee_id,
+        e.full_name,
+        e.employee_code,
+        e.designation,
+        e.department,
+        e.photo,
+        a.id AS attendance_id,
+        a.attendance_date,
+        a.punch_in_time,
+        a.punch_out_time,
+        a.punch_in_type,
+        a.punch_in_location,
+        a.punch_out_location,
+        a.total_hours,
+        a.status,
+        a.is_vacation,
+        s.project_name AS site_name,
+        o.location_name AS office_name
+    FROM employees e
+    LEFT JOIN attendance a
+        ON a.employee_id = e.id
+        AND a.attendance_date = ?
+    LEFT JOIN sites s ON a.punch_in_site_id = s.id
+    LEFT JOIN office_locations o ON a.punch_in_office_id = o.id
+    $where
+    $statusWhere
+    ORDER BY e.full_name ASC
+";
+
+$daily_params = array_merge([$filter_date], $params);
+$daily_types = "s" . $types;
+
+$daily_attendance = [];
+$stmt = mysqli_prepare($conn, $daily_sql);
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, $daily_types, ...$daily_params);
+    mysqli_stmt_execute($stmt);
+    $daily_res = mysqli_stmt_get_result($stmt);
+    while ($row = mysqli_fetch_assoc($daily_res)) {
+        $daily_attendance[] = $row;
+    }
+    mysqli_stmt_close($stmt);
+}
+
+// ---------------- MONTHLY SUMMARY ----------------
+$summary_where = "WHERE e.employee_status = 'active'";
+$summary_params = [$monthStart, $monthEnd];
+$summary_types = "ss";
+
+if ($filter_employee > 0) {
+    $summary_where .= " AND e.id = ?";
+    $summary_params[] = $filter_employee;
+    $summary_types .= "i";
+}
+
+if ($search !== '') {
+    $summary_where .= " AND (
+        e.full_name LIKE ?
+        OR e.employee_code LIKE ?
+        OR e.designation LIKE ?
+        OR e.department LIKE ?
+    )";
+    $searchLike = '%' . $search . '%';
+    $summary_params[] = $searchLike;
+    $summary_params[] = $searchLike;
+    $summary_params[] = $searchLike;
+    $summary_params[] = $searchLike;
+    $summary_types .= "ssss";
+}
+
+$summary_sql = "
+    SELECT
+        e.id,
+        e.full_name,
+        e.employee_code,
+        e.designation,
+        e.department,
+        COUNT(CASE WHEN a.status = 'present' THEN 1 END) AS present_days,
+        COUNT(CASE WHEN a.status = 'late' THEN 1 END) AS late_days,
+        COUNT(CASE WHEN a.status IN ('half-day', 'half day') THEN 1 END) AS half_days,
+        COUNT(CASE WHEN a.status = 'absent' THEN 1 END) AS absent_days,
+        COUNT(CASE WHEN a.is_vacation = 1 THEN 1 END) AS vacation_days,
+        COALESCE(SUM(a.total_hours), 0) AS total_hours
+    FROM employees e
+    LEFT JOIN attendance a
+        ON e.id = a.employee_id
+        AND a.attendance_date BETWEEN ? AND ?
+    $summary_where
+    GROUP BY e.id
+    ORDER BY e.full_name ASC
+";
+
+$monthly_summary = [];
+$summary_stmt = mysqli_prepare($conn, $summary_sql);
+if ($summary_stmt) {
+    mysqli_stmt_bind_param($summary_stmt, $summary_types, ...$summary_params);
+    mysqli_stmt_execute($summary_stmt);
+    $summary_res = mysqli_stmt_get_result($summary_stmt);
+    while ($row = mysqli_fetch_assoc($summary_res)) {
+        $monthly_summary[] = $row;
+    }
+    mysqli_stmt_close($summary_stmt);
+}
+
+// ---------------- STATS ----------------
+$totalEmployees = count($employees);
+$presentToday = 0;
+$workingNow = 0;
+$lateToday = 0;
+$notMarked = 0;
+
+foreach ($daily_attendance as $att) {
+    if (!empty($att['attendance_id'])) {
+        if (in_array(($att['status'] ?? ''), ['present', 'late'], true)) {
+            $presentToday++;
+        }
+
+        if (!empty($att['punch_in_time']) && empty($att['punch_out_time'])) {
+            $workingNow++;
+        }
+
+        if (($att['status'] ?? '') === 'late') {
+            $lateToday++;
+        } elseif (!empty($att['punch_in_time']) && strtotime($att['punch_in_time']) > strtotime($filter_date . ' 09:15:00')) {
+            $lateToday++;
+        }
+    } else {
+        $notMarked++;
+    }
+}
+
+$loggedName = $_SESSION['employee_name'] ?? ($current_employee['full_name'] ?? 'Admin');
 ?>
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Attendance Management - TEK-C</title>
+    <title>Employee Attendance - TEK-C</title>
 
     <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
 
-    <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-
-    <!-- DataTables -->
     <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
     <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
 
-    <!-- FullCalendar -->
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet" />
-
-    <!-- TEK-C Custom Styles -->
     <link href="assets/css/layout-styles.css" rel="stylesheet" />
     <link href="assets/css/topbar.css" rel="stylesheet" />
     <link href="assets/css/footer.css" rel="stylesheet" />
 
     <style>
-        .content-scroll { flex: 1 1 auto; overflow: auto; padding: 22px 22px 14px; }
+        :root {
+            --page-bg: #f5f7fb;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text: #111827;
+            --muted: #64748b;
+            --soft: #f8fafc;
+            --shadow: 0 10px 26px rgba(15, 23, 42, .055);
+            --radius: 15px;
+        }
 
-        .panel {
-            background: var(--surface);
+        body { background: var(--page-bg); }
+
+        .content-scroll {
+            flex: 1 1 auto;
+            overflow: auto;
+            padding: 16px;
+        }
+
+        .attendance-wrapper { width: 100%; }
+
+        .page-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .page-heading h1 {
+            font-size: 19px;
+            font-weight: 900;
+            color: var(--text);
+            margin: 0;
+        }
+
+        .page-heading p {
+            margin: 3px 0 0;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .primary-btn {
+            border: 0;
+            background: #111827;
+            color: #fff;
+            height: 36px;
+            padding: 0 14px;
+            border-radius: 11px;
+            font-size: 12px;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .primary-btn:hover { background: #020617; color: #fff; }
+
+        .secondary-btn {
+            border: 1px solid var(--border) !important;
+            background: #fff !important;
+            color: #334155 !important;
+            height: 36px;
+            padding: 0 14px;
+            border-radius: 11px;
+            font-size: 12px;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .secondary-btn:hover {
+            border-color: #cbd5e1 !important;
+            background: #f8fafc !important;
+            color: #111827 !important;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: var(--radius);
             box-shadow: var(--shadow);
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 12px 13px;
+            min-height: 78px;
+            display: flex;
+            align-items: center;
+            gap: 11px;
+        }
+
+        .stat-ic {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            font-size: 17px;
+            flex: 0 0 auto;
+        }
+
+        .blue { background: #2f80ed; }
+        .green { background: #27ae60; }
+        .orange { background: #f2994a; }
+        .red { background: #eb5757; }
+        .gray { background: #64748b; }
+
+        .stat-label {
+            color: var(--muted);
+            font-weight: 800;
+            font-size: 10.5px;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 950;
+            color: #111827;
+            line-height: 1;
+        }
+
+        .panel {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 13px;
+            margin-bottom: 14px;
         }
 
         .panel-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
+            gap: 10px;
         }
 
         .panel-title {
             font-weight: 900;
-            font-size: 18px;
-            color: #1f2937;
-            margin: 0;
-        }
-
-        .punch-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: var(--radius);
-            padding: 25px;
-            color: white;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .punch-card::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-            animation: pulse 4s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(1.1); opacity: 0.3; }
-        }
-
-        .punch-time {
-            font-size: 48px;
-            font-weight: 900;
-            line-height: 1;
-            margin-bottom: 5px;
-            position: relative;
-        }
-
-        .punch-date {
             font-size: 14px;
-            opacity: 0.9;
-            margin-bottom: 20px;
-            position: relative;
-        }
-
-        .punch-btn {
-            background: rgba(255,255,255,0.2);
-            border: 2px solid rgba(255,255,255,0.5);
-            color: white;
-            padding: 12px 30px;
-            border-radius: 50px;
-            font-weight: 800;
-            font-size: 16px;
-            backdrop-filter: blur(5px);
-            transition: all 0.3s;
-        }
-
-        .punch-btn:hover {
-            background: white;
-            color: #667eea;
-            border-color: white;
-        }
-
-        .punch-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 15px;
-            height: 100%;
-        }
-
-        .stat-value {
-            font-size: 28px;
-            font-weight: 900;
-            color: #1f2937;
-            line-height: 1;
-        }
-
-        .stat-label {
-            font-size: 12px;
-            color: #6b7280;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .attendance-badge {
-            padding: 3px 8px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 800;
-        }
-
-        .badge-present { background: rgba(16,185,129,0.1); color: #10b981; }
-        .badge-late { background: rgba(245,158,11,0.1); color: #f59e0b; }
-        .badge-half { background: rgba(139,92,246,0.1); color: #8b5cf6; }
-        .badge-absent { background: rgba(239,68,68,0.1); color: #ef4444; }
-        .badge-vacation { background: rgba(59,130,246,0.1); color: #3b82f6; }
-
-        .employee-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            color: #111827;
             display: flex;
             align-items: center;
-            justify-content: center;
-            color: white;
+            gap: 7px;
+        }
+
+        .panel-title i {
+            color: #2563eb;
+            font-size: 14px;
+        }
+
+        .panel-subtitle {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        .filter-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1 1 260px;
+            max-width: 430px;
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            font-size: 13px;
+        }
+
+        .search-box input,
+        .filter-select,
+        .filter-date {
+            height: 36px;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            background: #fff;
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--text);
+            outline: none;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0 12px 0 34px;
+            font-weight: 700;
+        }
+
+        .filter-select {
+            padding: 0 42px 0 12px;
+            min-width: 150px;
+        }
+
+        .filter-date {
+            padding: 0 12px;
+            min-width: 150px;
+        }
+
+        .search-box input:focus,
+        .filter-select:focus,
+        .filter-date:focus {
+            border-color: #bfdbfe;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+        }
+
+        .compact-table-wrap {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        .compact-table {
+            width: 100%;
+            margin: 0;
+            table-layout: auto;
+        }
+
+        .compact-table thead th {
+            background: var(--soft);
+            color: #64748b;
+            font-size: 10px;
+            text-transform: uppercase;
             font-weight: 900;
-            font-size: 16px;
+            border-bottom: 1px solid var(--border) !important;
+            padding: 8px 9px !important;
+            white-space: nowrap;
+        }
+
+        .compact-table tbody td {
+            padding: 9px !important;
+            vertical-align: middle;
+            border-color: #eef2f7;
+            color: #334155;
+            font-weight: 700;
+            font-size: 11.5px;
+        }
+
+        .compact-table tbody tr:hover { background: #fbfdff; }
+
+        .employee-cell {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .employee-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            background: #eff6ff;
+            color: #2563eb;
+            font-weight: 950;
+            font-size: 12px;
+            flex: 0 0 auto;
+            overflow: hidden;
         }
 
         .employee-avatar img {
             width: 100%;
             height: 100%;
-            border-radius: 8px;
             object-fit: cover;
         }
 
+        .employee-name {
+            color: #111827;
+            font-weight: 900;
+            font-size: 12px;
+        }
+
+        .employee-meta {
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 700;
+            margin-top: 1px;
+        }
+
+        .status-badge,
+        .attendance-badge,
         .location-badge {
-            background: #f3f4f6;
-            padding: 2px 8px;
-            border-radius: 20px;
-            font-size: 11px;
-            color: #4b5563;
+            border-radius: 999px;
+            padding: 5px 8px;
+            font-weight: 900;
+            font-size: 10px;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+            text-transform: uppercase;
         }
 
-        .filter-card {
-            background: #f9fafb;
-            border-radius: var(--radius);
-            padding: 15px;
+        .status-present,
+        .badge-present {
+            color: #15803d;
+            background: #dcfce7;
+            border-color: #bbf7d0;
+        }
+
+        .status-late,
+        .badge-late {
+            color: #b45309;
+            background: #ffedd5;
+            border-color: #fed7aa;
+        }
+
+        .status-half,
+        .badge-half {
+            color: #6d28d9;
+            background: #ede9fe;
+            border-color: #ddd6fe;
+        }
+
+        .status-absent,
+        .badge-absent {
+            color: #dc2626;
+            background: #fee2e2;
+            border-color: #fecaca;
+        }
+
+        .status-neutral,
+        .badge-vacation {
+            color: #475569;
+            background: #f1f5f9;
+            border-color: #e2e8f0;
+        }
+
+        .location-badge {
+            color: #475569;
+            background: #f8fafc;
+            border-color: #e2e8f0;
+            text-transform: none;
+        }
+
+        .action-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 9px;
             border: 1px solid var(--border);
+            background: #fff;
+            display: inline-grid;
+            place-items: center;
+            text-decoration: none;
+            color: #475569;
         }
 
-        #calendar {
-            max-width: 100%;
-            margin: 20px 0;
-            background: white;
+        .action-btn:hover {
+            border-color: #cbd5e1;
+            background: #f8fafc;
+            color: #111827;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #64748b;
+            padding: 30px 12px;
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .empty-state i {
+            font-size: 34px;
+            display: block;
+            margin-bottom: 8px;
+            opacity: .45;
+        }
+
+        .pagination-info {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            padding-top: 10px;
+        }
+
+        .alert {
             border-radius: var(--radius);
-            padding: 15px;
-        }
-
-        .fc-event {
-            cursor: pointer;
             border: none;
-            padding: 2px 4px;
+            box-shadow: var(--shadow);
+            margin-bottom: 14px;
         }
 
-        .fc-day-today {
-            background: rgba(102, 126, 234, 0.05) !important;
+        .dataTables_wrapper .row {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
         }
 
-        .modal-location-status {
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 13px;
+        .dataTables_filter input,
+        .dataTables_length select {
+            border: 1px solid var(--border) !important;
+            border-radius: 9px !important;
+            font-size: 12px !important;
+            font-weight: 700 !important;
         }
 
-        .status-valid { background: #d1fae5; color: #065f46; }
-        .status-invalid { background: #fee2e2; color: #991b1b; }
-        @media (max-width: 768px) {
-  .content-scroll {
-    padding: 12px 10px 12px !important;   /* was 22px */
-  }
+        @media(max-width:991.98px) {
+            .main {
+                margin-left: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
 
-  .container-fluid.maxw {
-    padding-left: 6px !important;
-    padding-right: 6px !important;
-  }
+            .sidebar {
+                position: fixed !important;
+                transform: translateX(-100%);
+                z-index: 1040 !important;
+            }
 
-  .panel {
-    padding: 12px !important;
-    margin-bottom: 12px;
-    border-radius: 14px;
-  }
+            .sidebar.open,
+            .sidebar.active,
+            .sidebar.show {
+                transform: translateX(0) !important;
+            }
+        }
 
-  .sec-head {
-    padding: 10px !important;
-    border-radius: 12px;
-  }
-}
+        @media(max-width:1199px) {
+            .compact-table-wrap {
+                border: 0;
+                border-radius: 0;
+                overflow: visible;
+                background: transparent;
+            }
+
+            .compact-table thead {
+                display: none;
+            }
+
+            .compact-table,
+            .compact-table tbody,
+            .compact-table tr,
+            .compact-table td {
+                display: block;
+                width: 100%;
+            }
+
+            .compact-table tbody tr {
+                background: #fff;
+                border: 1px solid var(--border);
+                border-radius: 14px;
+                box-shadow: 0 8px 22px rgba(15, 23, 42, .045);
+                padding: 12px;
+                margin-bottom: 12px;
+                overflow: hidden;
+            }
+
+            .compact-table tbody td {
+                border: 0 !important;
+                display: grid !important;
+                grid-template-columns: 95px minmax(0, 1fr);
+                column-gap: 10px;
+                align-items: flex-start;
+                padding: 8px 0 !important;
+                text-align: left !important;
+            }
+
+            .compact-table tbody td::before {
+                content: attr(data-label);
+                color: #64748b;
+                font-size: 10px;
+                font-weight: 950;
+                text-transform: uppercase;
+                line-height: 1.25;
+                padding-top: 2px;
+            }
+        }
+
+        @media(max-width:768px) {
+            .content-scroll {
+                padding: 12px 10px !important;
+            }
+
+            .page-heading {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .filter-bar {
+                align-items: stretch;
+            }
+
+            .search-box,
+            .filter-select,
+            .filter-date,
+            .primary-btn,
+            .secondary-btn {
+                width: 100%;
+                max-width: none;
+            }
+
+            .panel {
+                padding: 12px;
+            }
+
+            .compact-table tbody td {
+                grid-template-columns: 86px minmax(0, 1fr);
+            }
+        }
     </style>
 </head>
 <body>
@@ -522,186 +841,255 @@ if ($punch_check && mysqli_num_rows($punch_check) > 0) {
         <?php include 'includes/topbar.php'; ?>
 
         <div id="contentScroll" class="content-scroll">
-            <div class="container-fluid">
+            <div class="container-fluid attendance-wrapper px-0">
 
-                <!-- Header -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="page-heading">
                     <div>
-                        <h1 class="h3 fw-bold text-dark mb-1">Attendance Management</h1>
-                        <p class="text-muted mb-0">Track employee attendance and working hours</p>
+                        <h1>Employee Attendance</h1>
+                        <p>Admin view for employee attendance records and working hours</p>
                     </div>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#attendanceReportModal">
-                            <i class="bi bi-download"></i> Export Report
+                    <!-- <div class="d-flex gap-2 flex-wrap">
+                        <button class="secondary-btn" data-bs-toggle="modal" data-bs-target="#attendanceReportModal">
+                            <i class="bi bi-download"></i>
+                            Export Report
                         </button>
-                    </div>
+                    </div> -->
                 </div>
 
-                <!-- Alerts -->
-                <?php if ($success): ?>
-                    <div class="alert alert-success alert-dismissible fade show" role="alert">
-                        <i class="bi bi-check-circle-fill me-2"></i>
-                        <?php echo e($success); ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ($error): ?>
+                <?php if (!empty($_SESSION['flash_error'])): ?>
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
                         <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                        <?php echo e($error); ?>
+                        <?php echo e($_SESSION['flash_error']); unset($_SESSION['flash_error']); ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 <?php endif; ?>
 
-                <!-- Quick Punch Card -->
-                <div class="row mb-4">
-                    <div class="col-12">
-                        <div class="punch-card">
-                            <div class="row align-items-center">
-                                <div class="col-md-8">
-                                    <div class="punch-time" id="currentTime"></div>
-                                    <div class="punch-date" id="currentDate"></div>
-                                    
-                                    <?php if ($punched_today): ?>
-                                        <?php if (!$punched_today['punch_out_time']): ?>
-                                            <div class="mb-2">
-                                                <i class="bi bi-check-circle-fill me-2"></i>
-                                                Punched In at <?php echo date('h:i A', strtotime($punched_today['punch_in_time'])); ?>
-                                            </div>
-                                            <form method="POST" id="punchOutForm">
-                                                <input type="hidden" name="punch_out" value="1">
-                                                <input type="hidden" name="attendance_id" value="<?php echo $punched_today['id']; ?>">
-                                                <input type="hidden" name="latitude" id="punchOutLat">
-                                                <input type="hidden" name="longitude" id="punchOutLng">
-                                                <input type="hidden" name="location" id="punchOutLocation">
-                                                <button type="submit" class="punch-btn" id="punchOutBtn">
-                                                    <i class="bi bi-box-arrow-right me-2"></i>Punch Out
-                                                </button>
-                                            </form>
-                                        <?php else: ?>
-                                            <div class="mb-2">
-                                                <i class="bi bi-check-circle-fill me-2"></i>
-                                                Completed: <?php echo date('h:i A', strtotime($punched_today['punch_in_time'])); ?> - 
-                                                <?php echo date('h:i A', strtotime($punched_today['punch_out_time'])); ?>
-                                                (<?php echo $punched_today['total_hours']; ?> hrs)
-                                            </div>
-                                        <?php endif; ?>
-                                    <?php else: ?>
-                                        <div class="mb-3">Ready to start your work day?</div>
-                                        <button class="punch-btn" data-bs-toggle="modal" data-bs-target="#punchInModal">
-                                            <i class="bi bi-box-arrow-in-right me-2"></i>Punch In
-                                        </button>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="col-md-4 text-md-end">
-                                    <i class="bi bi-fingerprint" style="font-size: 80px; opacity: 0.3;"></i>
-                                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-ic blue"><i class="bi bi-people"></i></div>
+                            <div>
+                                <div class="stat-label">Total Employees</div>
+                                <div class="stat-value"><?php echo (int)$totalEmployees; ?></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-ic green"><i class="bi bi-check2-circle"></i></div>
+                            <div>
+                                <div class="stat-label">Present</div>
+                                <div class="stat-value"><?php echo (int)$presentToday; ?></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-ic orange"><i class="bi bi-clock-history"></i></div>
+                            <div>
+                                <div class="stat-label">Late</div>
+                                <div class="stat-value"><?php echo (int)$lateToday; ?></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-ic red"><i class="bi bi-dash-circle"></i></div>
+                            <div>
+                                <div class="stat-label">Not Marked</div>
+                                <div class="stat-value"><?php echo (int)$notMarked; ?></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Today's Attendance Stats -->
-                <div class="row g-3 mb-4">
-                    <div class="col-md-3">
-                        <div class="stat-card">
-                            <div class="stat-value"><?php echo count($today_attendance); ?></div>
-                            <div class="stat-label">Present Today</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-card">
-                            <div class="stat-value">
-                                <?php 
-                                $punched_in = array_filter($today_attendance, function($a) { return !$a['punch_out_time']; });
-                                echo count($punched_in);
-                                ?>
-                            </div>
-                            <div class="stat-label">Currently Working</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-card">
-                            <div class="stat-value">
-                                <?php 
-                                $on_time = array_filter($today_attendance, function($a) { 
-                                    return strtotime($a['punch_in_time']) <= strtotime('09:15:00'); 
-                                });
-                                echo count($on_time);
-                                ?>
-                            </div>
-                            <div class="stat-label">On Time</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-card">
-                            <div class="stat-value">
-                                <?php 
-                                $late = array_filter($today_attendance, function($a) { 
-                                    return strtotime($a['punch_in_time']) > strtotime('09:15:00'); 
-                                });
-                                echo count($late);
-                                ?>
-                            </div>
-                            <div class="stat-label">Late Arrivals</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Filter Section -->
-                <div class="filter-card mb-4">
-                    <form method="GET" class="row g-3 align-items-end">
-                        <div class="col-md-4">
-                            <label class="form-label">Employee</label>
-                            <select class="form-control" name="employee_id">
-                                <option value="0">All Employees</option>
-                                <?php foreach ($employees as $emp): ?>
-                                    <option value="<?php echo $emp['id']; ?>" <?php echo $filter_employee == $emp['id'] ? 'selected' : ''; ?>>
-                                        <?php echo e($emp['full_name']); ?> (<?php echo e($emp['employee_code']); ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Month</label>
-                            <select class="form-control" name="month">
-                                <?php for ($m = 1; $m <= 12; $m++): ?>
-                                    <option value="<?php echo $m; ?>" <?php echo $filter_month == $m ? 'selected' : ''; ?>>
-                                        <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
-                                    </option>
-                                <?php endfor; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Year</label>
-                            <select class="form-control" name="year">
-                                <?php for ($y = date('Y') - 2; $y <= date('Y') + 1; $y++): ?>
-                                    <option value="<?php echo $y; ?>" <?php echo $filter_year == $y ? 'selected' : ''; ?>>
-                                        <?php echo $y; ?>
-                                    </option>
-                                <?php endfor; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="bi bi-filter"></i> Apply
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Monthly Summary Table -->
                 <div class="panel">
                     <div class="panel-header">
-                        <h3 class="panel-title">Monthly Attendance Summary</h3>
-                        <span class="badge bg-light text-dark">
-                            <?php echo date('F Y', mktime(0, 0, 0, $filter_month, 1, $filter_year)); ?>
+                        <div>
+                            <h3 class="panel-title">
+                                <i class="bi bi-calendar-check"></i>
+                                Employees Attendance
+                            </h3>
+                            <div class="panel-subtitle">
+                                Showing attendance for <?php echo e(safeDate($filter_date)); ?>
+                            </div>
+                        </div>
+                        <span class="location-badge">
+                            <i class="bi bi-person-badge"></i>
+                            Admin
                         </span>
                     </div>
 
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle" id="summaryTable">
+                    <form method="GET" class="filter-bar">
+                        <div class="search-box">
+                            <i class="bi bi-search"></i>
+                            <input type="text" name="search" placeholder="Search employee, code, designation..." value="<?php echo e($search); ?>">
+                        </div>
+
+                        <input type="date" name="date" class="filter-date" value="<?php echo e($filter_date); ?>">
+
+                        <select class="filter-select" name="employee_id">
+                            <option value="0">All Employees</option>
+                            <?php foreach ($employees as $emp): ?>
+                                <option value="<?php echo (int)$emp['id']; ?>" <?php echo $filter_employee === (int)$emp['id'] ? 'selected' : ''; ?>>
+                                    <?php echo e($emp['full_name']); ?><?php echo !empty($emp['employee_code']) ? ' - ' . e($emp['employee_code']) : ''; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+
+                        <select class="filter-select" name="status">
+                            <option value="all" <?php echo $filter_status === 'all' ? 'selected' : ''; ?>>All Status</option>
+                            <option value="present" <?php echo $filter_status === 'present' ? 'selected' : ''; ?>>Present</option>
+                            <option value="late" <?php echo $filter_status === 'late' ? 'selected' : ''; ?>>Late</option>
+                            <option value="half-day" <?php echo $filter_status === 'half-day' ? 'selected' : ''; ?>>Half Day</option>
+                            <option value="absent" <?php echo $filter_status === 'absent' ? 'selected' : ''; ?>>Absent</option>
+                            <option value="not-marked" <?php echo $filter_status === 'not-marked' ? 'selected' : ''; ?>>Not Marked</option>
+                        </select>
+
+                        <button type="submit" class="primary-btn">
+                            <i class="bi bi-funnel"></i>
+                            Filter
+                        </button>
+
+                        <a href="attendance.php" class="secondary-btn">
+                            <i class="bi bi-x-circle"></i>
+                            Clear
+                        </a>
+                    </form>
+
+                    <div class="compact-table-wrap">
+                        <table class="table compact-table align-middle" id="dailyAttendanceTable">
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Department</th>
+                                    <th>Punch In</th>
+                                    <th>Punch Out</th>
+                                    <th>Total Hours</th>
+                                    <th>Location</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($daily_attendance)): ?>
+                                    <tr>
+                                        <td colspan="7">
+                                            <div class="empty-state">
+                                                <i class="bi bi-inbox"></i>
+                                                No attendance records found.
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($daily_attendance as $att): ?>
+                                        <?php
+                                            $hasRecord = !empty($att['attendance_id']);
+                                            $displayStatus = $hasRecord ? ($att['status'] ?: 'present') : 'not marked';
+                                            $locationName = '-';
+
+                                            if ($hasRecord) {
+                                                if (($att['punch_in_type'] ?? '') === 'site') {
+                                                    $locationName = $att['site_name'] ?: 'Site';
+                                                } elseif (($att['punch_in_type'] ?? '') === 'office') {
+                                                    $locationName = $att['office_name'] ?: 'Office';
+                                                } elseif (!empty($att['punch_in_location'])) {
+                                                    $locationName = $att['punch_in_location'];
+                                                }
+                                            }
+                                        ?>
+                                        <tr>
+                                            <td data-label="Employee">
+                                                <div class="employee-cell">
+                                                    <div class="employee-avatar">
+                                                        <?php if (!empty($att['photo'])): ?>
+                                                            <img src="../<?php echo e($att['photo']); ?>" alt="Photo">
+                                                        <?php else: ?>
+                                                            <?php echo e(getInitials($att['full_name'])); ?>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <div>
+                                                        <div class="employee-name"><?php echo e($att['full_name']); ?></div>
+                                                        <div class="employee-meta"><?php echo e($att['employee_code']); ?> • <?php echo e($att['designation']); ?></div>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <td data-label="Department">
+                                                <?php echo e($att['department'] ?: '-'); ?>
+                                            </td>
+
+                                            <td data-label="Punch In">
+                                                <div class="employee-name"><?php echo $hasRecord ? e(safeTime($att['punch_in_time'])) : '--:--'; ?></div>
+                                                <?php if ($hasRecord): ?>
+                                                    <div class="employee-meta"><?php echo e(safeDate($att['punch_in_time'])); ?></div>
+                                                <?php endif; ?>
+                                            </td>
+
+                                            <td data-label="Punch Out">
+                                                <div class="employee-name"><?php echo $hasRecord ? e(safeTime($att['punch_out_time'])) : '--:--'; ?></div>
+                                                <?php if ($hasRecord && empty($att['punch_out_time'])): ?>
+                                                    <span class="attendance-badge badge-late">Working</span>
+                                                <?php endif; ?>
+                                            </td>
+
+                                            <td data-label="Total Hours">
+                                                <strong>
+                                                    <?php
+                                                        if ($hasRecord && $att['total_hours'] !== null && $att['total_hours'] !== '') {
+                                                            echo e(number_format((float)$att['total_hours'], 2)) . ' hrs';
+                                                        } else {
+                                                            echo '0.00 hrs';
+                                                        }
+                                                    ?>
+                                                </strong>
+                                            </td>
+
+                                            <td data-label="Location">
+                                                <span class="location-badge">
+                                                    <i class="bi bi-geo-alt"></i>
+                                                    <?php echo e($locationName); ?>
+                                                </span>
+                                            </td>
+
+                                            <td data-label="Status">
+                                                <?php
+                                                    if (!$hasRecord) {
+                                                        echo '<span class="status-badge status-neutral"><i class="bi bi-dash-circle"></i> Not Marked</span>';
+                                                    } else {
+                                                        echo getStatusBadge($displayStatus);
+                                                    }
+                                                ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination-info">
+                        Showing <?php echo count($daily_attendance); ?> employee attendance row(s)
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h3 class="panel-title">
+                                <i class="bi bi-calendar3"></i>
+                                Monthly Attendance Summary
+                            </h3>
+                            <div class="panel-subtitle">
+                                <?php echo e(date('F Y', strtotime($monthStart))); ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="compact-table-wrap">
+                        <table class="table compact-table align-middle" id="summaryTable">
                             <thead>
                                 <tr>
                                     <th>Employee</th>
@@ -715,102 +1103,41 @@ if ($punch_check && mysqli_num_rows($punch_check) > 0) {
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($monthly_summary as $summary): ?>
+                                <?php if (empty($monthly_summary)): ?>
                                     <tr>
-                                        <td>
-                                            <div class="d-flex align-items-center gap-2">
-                                                <div class="employee-avatar">
-                                                    <?php echo strtoupper(substr($summary['full_name'], 0, 1)); ?>
-                                                </div>
-                                                <div>
-                                                    <div class="fw-bold"><?php echo e($summary['full_name']); ?></div>
-                                                    <small class="text-muted"><?php echo e($summary['employee_code']); ?></small>
-                                                </div>
+                                        <td colspan="8">
+                                            <div class="empty-state">
+                                                <i class="bi bi-inbox"></i>
+                                                No monthly summary found.
                                             </div>
                                         </td>
-                                        <td><span class="attendance-badge badge-present"><?php echo $summary['present_days'] ?? 0; ?></span></td>
-                                        <td><span class="attendance-badge badge-late"><?php echo $summary['late_days'] ?? 0; ?></span></td>
-                                        <td><span class="attendance-badge badge-half"><?php echo $summary['half_days'] ?? 0; ?></span></td>
-                                        <td><span class="attendance-badge badge-absent"><?php echo $summary['absent_days'] ?? 0; ?></span></td>
-                                        <td><span class="attendance-badge badge-vacation"><?php echo $summary['vacation_days'] ?? 0; ?></span></td>
-                                        <td><strong><?php echo $summary['total_hours'] ? substr($summary['total_hours'], 0, 5) : '0.0'; ?></strong></td>
-                                        <td>
-                                            <a href="employee-attendance.php?id=<?php echo $summary['id']; ?>" class="btn-action">
-                                                <i class="bi bi-calendar-week"></i>
-                                            </a>
-                                        </td>
                                     </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Today's Attendance List -->
-                <div class="panel mt-4">
-                    <div class="panel-header">
-                        <h3 class="panel-title">Today's Attendance</h3>
-                        <span class="text-muted"><?php echo date('d M Y'); ?></span>
-                    </div>
-
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle" id="todayTable">
-                            <thead>
-                                <tr>
-                                    <th>Employee</th>
-                                    <th>Punch In</th>
-                                    <th>Punch Out</th>
-                                    <th>Location</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($today_attendance as $att): ?>
-                                    <tr>
-                                        <td>
-                                            <div class="d-flex align-items-center gap-2">
-                                                <div class="employee-avatar">
-                                                    <?php echo strtoupper(substr($att['full_name'], 0, 1)); ?>
+                                <?php else: ?>
+                                    <?php foreach ($monthly_summary as $summary): ?>
+                                        <tr>
+                                            <td data-label="Employee">
+                                                <div class="employee-cell">
+                                                    <div class="employee-avatar"><?php echo e(getInitials($summary['full_name'])); ?></div>
+                                                    <div>
+                                                        <div class="employee-name"><?php echo e($summary['full_name']); ?></div>
+                                                        <div class="employee-meta"><?php echo e($summary['employee_code']); ?> • <?php echo e($summary['designation']); ?></div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div class="fw-bold"><?php echo e($att['full_name']); ?></div>
-                                                    <small class="text-muted"><?php echo e($att['designation']); ?></small>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div class="fw-bold"><?php echo date('h:i A', strtotime($att['punch_in_time'])); ?></div>
-                                            <small class="text-muted"><?php echo timeAgo($att['punch_in_time']); ?></small>
-                                        </td>
-                                        <td>
-                                            <?php if ($att['punch_out_time']): ?>
-                                                <div class="fw-bold"><?php echo date('h:i A', strtotime($att['punch_out_time'])); ?></div>
-                                                <small class="text-muted"><?php echo $att['total_hours']; ?> hrs</small>
-                                            <?php else: ?>
-                                                <span class="badge bg-warning">Working</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <span class="location-badge">
-                                                <i class="bi bi-geo-alt"></i>
-                                                <?php 
-                                                if ($att['punch_in_type'] == 'site') echo $att['site_name'] ?? 'Site';
-                                                else echo $att['office_name'] ?? 'Office';
-                                                ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <?php if (strtotime($att['punch_in_time']) > strtotime('09:15:00')): ?>
-                                                <span class="attendance-badge badge-late">Late</span>
-                                            <?php else: ?>
-                                                <span class="attendance-badge badge-present">On Time</span>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                
-                                <?php if (empty($today_attendance)): ?>
-                                    
+                                            </td>
+
+                                            <td data-label="Present"><span class="attendance-badge badge-present"><?php echo (int)($summary['present_days'] ?? 0); ?></span></td>
+                                            <td data-label="Late"><span class="attendance-badge badge-late"><?php echo (int)($summary['late_days'] ?? 0); ?></span></td>
+                                            <td data-label="Half Day"><span class="attendance-badge badge-half"><?php echo (int)($summary['half_days'] ?? 0); ?></span></td>
+                                            <td data-label="Absent"><span class="attendance-badge badge-absent"><?php echo (int)($summary['absent_days'] ?? 0); ?></span></td>
+                                            <td data-label="Vacation"><span class="attendance-badge badge-vacation"><?php echo (int)($summary['vacation_days'] ?? 0); ?></span></td>
+                                            <td data-label="Total Hours"><strong><?php echo e(number_format((float)($summary['total_hours'] ?? 0), 2)); ?> hrs</strong></td>
+                                            <td data-label="Actions">
+                                                <a href="employee-attendance.php?id=<?php echo (int)$summary['id']; ?>&date=<?php echo e($filter_date); ?>" class="action-btn" title="View">
+                                                    <i class="bi bi-calendar-week"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -824,100 +1151,16 @@ if ($punch_check && mysqli_num_rows($punch_check) > 0) {
     </main>
 </div>
 
-<!-- Punch In Modal -->
-<div class="modal fade" id="punchInModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title fw-bold">Punch In</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" id="punchInForm">
-                <input type="hidden" name="punch_in" value="1">
-                <input type="hidden" name="employee_id" value="<?php echo $current_employee_id; ?>">
-                <input type="hidden" name="latitude" id="punchLat">
-                <input type="hidden" name="longitude" id="punchLng">
-                <input type="hidden" name="location" id="punchAddress">
-                <input type="hidden" name="punch_type" id="punchType" value="site">
-                
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Punch Location Type</label>
-                        <div class="d-flex gap-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="punch_type_radio" id="punchTypeSite" value="site" checked>
-                                <label class="form-check-label" for="punchTypeSite">
-                                    <i class="bi bi-building"></i> Site
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="punch_type_radio" id="punchTypeOffice" value="office">
-                                <label class="form-check-label" for="punchTypeOffice">
-                                    <i class="bi bi-briefcase"></i> Office
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3" id="siteSelectDiv">
-                        <label class="form-label">Select Site</label>
-                        <select class="form-control" name="site_id" id="siteSelect">
-                            <option value="">Select your site</option>
-                            <?php foreach ($assigned_sites as $site): ?>
-                                <option value="<?php echo $site['id']; ?>" 
-                                        data-lat="<?php echo $site['latitude']; ?>"
-                                        data-lng="<?php echo $site['longitude']; ?>"
-                                        data-radius="<?php echo $site['location_radius']; ?>">
-                                    <?php echo e($site['project_name']); ?> (<?php echo e($site['project_code']); ?>)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div class="mb-3" id="officeSelectDiv" style="display: none;">
-                        <label class="form-label">Select Office</label>
-                        <select class="form-control" name="office_id" id="officeSelect">
-                            <option value="">Select office location</option>
-                            <?php while ($office = mysqli_fetch_assoc($offices)): ?>
-                                <option value="<?php echo $office['id']; ?>" 
-                                        data-lat="<?php echo $office['latitude']; ?>"
-                                        data-lng="<?php echo $office['longitude']; ?>">
-                                    <?php echo e($office['location_name']); ?>
-                                </option>
-                            <?php endwhile; ?>
-                        </select>
-                    </div>
-
-                    <div id="locationStatus" class="modal-location-status">
-                        <i class="bi bi-geo-alt-fill me-2"></i>
-                        Getting your location...
-                    </div>
-
-                    <div class="mt-3 text-muted small">
-                        <i class="bi bi-info-circle"></i>
-                        Make sure your location services are enabled
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="punchInSubmit" disabled>
-                        <i class="bi bi-box-arrow-in-right"></i> Confirm Punch In
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <!-- Export Report Modal -->
 <div class="modal fade" id="attendanceReportModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title fw-bold">Export Attendance Report</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
             <form method="POST" action="export-attendance.php">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Export Attendance Report</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Report Type</label>
@@ -927,6 +1170,7 @@ if ($punch_check && mysqli_num_rows($punch_check) > 0) {
                             <option value="employee">Employee Wise Report</option>
                         </select>
                     </div>
+
                     <div class="mb-3">
                         <label class="form-label">Format</label>
                         <select class="form-control" name="format" required>
@@ -934,21 +1178,27 @@ if ($punch_check && mysqli_num_rows($punch_check) > 0) {
                             <option value="pdf">PDF</option>
                         </select>
                     </div>
+
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">From Date</label>
-                            <input type="date" class="form-control" name="from_date" value="<?php echo date('Y-m-01'); ?>">
+                            <input type="date" class="form-control" name="from_date" value="<?php echo e($monthStart); ?>">
                         </div>
+
                         <div class="col-md-6">
                             <label class="form-label">To Date</label>
-                            <input type="date" class="form-control" name="to_date" value="<?php echo date('Y-m-t'); ?>">
+                            <input type="date" class="form-control" name="to_date" value="<?php echo e($monthEnd); ?>">
                         </div>
                     </div>
+
+                    <input type="hidden" name="employee_id" value="<?php echo (int)$filter_employee; ?>">
                 </div>
+
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-download"></i> Export
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="primary-btn">
+                        <i class="bi bi-download"></i>
+                        Export
                     </button>
                 </div>
             </form>
@@ -956,7 +1206,6 @@ if ($punch_check && mysqli_num_rows($punch_check) > 0) {
     </div>
 </div>
 
-<!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
@@ -965,274 +1214,29 @@ if ($punch_check && mysqli_num_rows($punch_check) > 0) {
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-// Update current time
-function updateTime() {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        second: '2-digit',
-        hour12: true 
-    });
-    const dateStr = now.toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-    });
-    
-    document.getElementById('currentTime').textContent = timeStr;
-    document.getElementById('currentDate').textContent = dateStr;
-}
-
-setInterval(updateTime, 1000);
-updateTime();
-
-// DataTables initialization
 $(document).ready(function() {
-    $('#summaryTable').DataTable({
-        pageLength: 10,
+    $('#dailyAttendanceTable').DataTable({
+        responsive: true,
+        autoWidth: false,
+        pageLength: 25,
         order: [[0, 'asc']],
-        language: { searchPlaceholder: "Search employees..." }
-    });
-    
-    $('#todayTable').DataTable({
-        pageLength: 10,
-        order: [[1, 'desc']],
-        language: { searchPlaceholder: "Search..." }
-    });
-});
-
-// Punch In location handling
-document.addEventListener('DOMContentLoaded', function() {
-    const punchTypeSite = document.getElementById('punchTypeSite');
-    const punchTypeOffice = document.getElementById('punchTypeOffice');
-    const siteSelectDiv = document.getElementById('siteSelectDiv');
-    const officeSelectDiv = document.getElementById('officeSelectDiv');
-    const siteSelect = document.getElementById('siteSelect');
-    const officeSelect = document.getElementById('officeSelect');
-    const locationStatus = document.getElementById('locationStatus');
-    const punchInSubmit = document.getElementById('punchInSubmit');
-    const punchType = document.getElementById('punchType');
-    
-    let currentLat = null;
-    let currentLng = null;
-    let currentAddress = '';
-    
-    // Toggle between site and office
-    punchTypeSite.addEventListener('change', function() {
-        siteSelectDiv.style.display = 'block';
-        officeSelectDiv.style.display = 'none';
-        punchType.value = 'site';
-        validateLocation();
-    });
-    
-    punchTypeOffice.addEventListener('change', function() {
-        siteSelectDiv.style.display = 'none';
-        officeSelectDiv.style.display = 'block';
-        punchType.value = 'office';
-        validateLocation();
-    });
-    
-    // Get user's location
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            function(position) {
-                currentLat = position.coords.latitude;
-                currentLng = position.coords.longitude;
-                
-                document.getElementById('punchLat').value = currentLat;
-                document.getElementById('punchLng').value = currentLng;
-                
-                // Get address from coordinates (reverse geocoding)
-                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentLat}&lon=${currentLng}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        currentAddress = data.display_name || 'Location detected';
-                        document.getElementById('punchAddress').value = currentAddress;
-                        locationStatus.innerHTML = '<i class="bi bi-check-circle-fill text-success me-2"></i> Location detected: ' + currentAddress.substring(0, 100) + '...';
-                        validateLocation();
-                    })
-                    .catch(() => {
-                        currentAddress = `Lat: ${currentLat.toFixed(6)}, Lng: ${currentLng.toFixed(6)}`;
-                        document.getElementById('punchAddress').value = currentAddress;
-                        locationStatus.innerHTML = '<i class="bi bi-check-circle-fill text-success me-2"></i> Location detected';
-                        validateLocation();
-                    });
-            },
-            function(error) {
-                let errorMsg = 'Unable to get your location. ';
-                switch(error.code) {
-                    case error.PERMISSION_DENIED:
-                        errorMsg += 'Please enable location services.';
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        errorMsg += 'Location information unavailable.';
-                        break;
-                    case error.TIMEOUT:
-                        errorMsg += 'Location request timed out.';
-                        break;
-                }
-                locationStatus.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger me-2"></i> ' + errorMsg;
-                locationStatus.className = 'modal-location-status status-invalid';
-            }
-        );
-    } else {
-        locationStatus.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger me-2"></i> Geolocation is not supported by your browser';
-        locationStatus.className = 'modal-location-status status-invalid';
-    }
-    
-    // Validate location against selected site/office
-    function validateLocation() {
-        if (!currentLat || !currentLng) {
-            punchInSubmit.disabled = true;
-            return;
+        language: {
+            searchPlaceholder: "Search attendance...",
+            zeroRecords: "No matching attendance records found"
         }
-        
-        if (punchTypeSite.checked) {
-            const selectedOption = siteSelect.options[siteSelect.selectedIndex];
-            if (!selectedOption.value) {
-                locationStatus.innerHTML = '<i class="bi bi-info-circle-fill text-warning me-2"></i> Please select a site';
-                locationStatus.className = 'modal-location-status';
-                punchInSubmit.disabled = true;
-                return;
-            }
-            
-            const siteLat = parseFloat(selectedOption.dataset.lat);
-            const siteLng = parseFloat(selectedOption.dataset.lng);
-            const radius = parseInt(selectedOption.dataset.radius) || 100;
-            
-            if (!siteLat || !siteLng) {
-                locationStatus.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger me-2"></i> Site location not configured';
-                locationStatus.className = 'modal-location-status status-invalid';
-                punchInSubmit.disabled = true;
-                return;
-            }
-            
-            // Calculate distance (simplified)
-            const distance = calculateDistance(currentLat, currentLng, siteLat, siteLng);
-            
-            if (distance <= radius) {
-                locationStatus.innerHTML = `<i class="bi bi-check-circle-fill text-success me-2"></i> You are within ${Math.round(distance)}m of the site (allowed: ${radius}m)`;
-                locationStatus.className = 'modal-location-status status-valid';
-                punchInSubmit.disabled = false;
-            } else {
-                locationStatus.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-danger me-2"></i> You are ${Math.round(distance)}m away from site (allowed: ${radius}m)`;
-                locationStatus.className = 'modal-location-status status-invalid';
-                punchInSubmit.disabled = true;
-            }
-        } else {
-            const selectedOption = officeSelect.options[officeSelect.selectedIndex];
-            if (!selectedOption.value) {
-                locationStatus.innerHTML = '<i class="bi bi-info-circle-fill text-warning me-2"></i> Please select an office';
-                locationStatus.className = 'modal-location-status';
-                punchInSubmit.disabled = true;
-                return;
-            }
-            
-            const officeLat = parseFloat(selectedOption.dataset.lat);
-            const officeLng = parseFloat(selectedOption.dataset.lng);
-            
-            const distance = calculateDistance(currentLat, currentLng, officeLat, officeLng);
-            
-            if (distance <= 100) {
-                locationStatus.innerHTML = `<i class="bi bi-check-circle-fill text-success me-2"></i> You are within ${Math.round(distance)}m of the office`;
-                locationStatus.className = 'modal-location-status status-valid';
-                punchInSubmit.disabled = false;
-            } else {
-                locationStatus.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-danger me-2"></i> You are ${Math.round(distance)}m away from office`;
-                locationStatus.className = 'modal-location-status status-invalid';
-                punchInSubmit.disabled = true;
-            }
+    });
+
+    $('#summaryTable').DataTable({
+        responsive: true,
+        autoWidth: false,
+        pageLength: 25,
+        order: [[0, 'asc']],
+        language: {
+            searchPlaceholder: "Search summary...",
+            zeroRecords: "No matching summary found"
         }
-    }
-    
-    // Calculate distance between two coordinates
-    function calculateDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371e3; // metres
-        const φ1 = lat1 * Math.PI/180;
-        const φ2 = lat2 * Math.PI/180;
-        const Δφ = (lat2-lat1) * Math.PI/180;
-        const Δλ = (lon2-lon1) * Math.PI/180;
-
-        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ/2) * Math.sin(Δλ/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-        return R * c;
-    }
-    
-    siteSelect.addEventListener('change', validateLocation);
-    officeSelect.addEventListener('change', validateLocation);
-});
-
-// Punch Out location handling
-document.getElementById('punchOutForm')?.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            function(position) {
-                document.getElementById('punchOutLat').value = position.coords.latitude;
-                document.getElementById('punchOutLng').value = position.coords.longitude;
-                
-                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        document.getElementById('punchOutLocation').value = data.display_name || 'Location detected';
-                        document.getElementById('punchOutForm').submit();
-                    })
-                    .catch(() => {
-                        document.getElementById('punchOutLocation').value = `Lat: ${position.coords.latitude.toFixed(6)}, Lng: ${position.coords.longitude.toFixed(6)}`;
-                        document.getElementById('punchOutForm').submit();
-                    });
-            },
-            function() {
-                alert('Unable to get your location. Please enable location services.');
-            }
-        );
-    } else {
-        alert('Geolocation is not supported by your browser');
-    }
+    });
 });
 </script>
-
-<style>
-.btn-action {
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 5px 8px;
-    color: var(--muted);
-    font-size: 12px;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.btn-action:hover {
-    background: var(--bg);
-    color: var(--blue);
-}
-
-.dataTables_wrapper .row {
-    margin: 0;
-}
-
-.dataTables_filter input {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 12px;
-}
-
-.table thead th {
-    background: #f8fafc;
-    font-weight: 800;
-    font-size: 12px;
-    color: #475569;
-}
-</style>
 </body>
 </html>

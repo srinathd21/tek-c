@@ -364,19 +364,8 @@ if ($result && mysqli_num_rows($result) > 0) {
   $company = mysqli_fetch_assoc($result);
 }
 
-// ---------------- Fetch Edit Division ----------------
+// ---------------- Division edit is handled with Bootstrap modal on this same page ----------------
 $editDivision = null;
-$editDivisionId = isset($_GET['edit_division']) ? (int)$_GET['edit_division'] : 0;
-if ($editDivisionId > 0) {
-  $stmt = mysqli_prepare($conn, "SELECT * FROM company_divisions WHERE id = ? AND company_id = 1 LIMIT 1");
-  if ($stmt) {
-    mysqli_stmt_bind_param($stmt, "i", $editDivisionId);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
-    $editDivision = mysqli_fetch_assoc($res);
-    mysqli_stmt_close($stmt);
-  }
-}
 
 // ---------------- Fetch Divisions ----------------
 $divisions = [];
@@ -581,6 +570,15 @@ foreach ($divisions as $d) {
       color:#111827;
       font-size:13px;
     }
+
+    .modal .btn-primary-tek,
+    .modal .btn-outline-tek{ border-width:0; }
+    .modal .btn-outline-tek{ border:2px solid var(--blue); background:#fff; }
+    .js-edit-division{ cursor:pointer; }
+    .fw-black{ font-weight:1000; }
+    .modal-backdrop{ z-index:1050; }
+    .modal{ z-index:1060; }
+
     @media (max-width: 768px) {
       .content-scroll { padding: 12px 10px 12px !important; }
       .container-fluid.maxw { padding-left: 6px !important; padding-right: 6px !important; }
@@ -713,80 +711,18 @@ foreach ($divisions as $d) {
             </div>
           </div>
         </form>
-
-        <!-- DIVISION ADD / EDIT PANEL -->
+        <!-- DIVISION ACTION PANEL -->
         <div class="panel" id="divisionFormPanel">
           <div class="sec-head">
             <div class="sec-ic"><i class="bi bi-diagram-3"></i></div>
-            <div>
-              <p class="sec-title mb-0"><?php echo $editDivision ? 'Edit Division' : 'Add Division'; ?></p>
-              <p class="sec-sub mb-0">Add company divisions such as PMC, QS, HR, Accounts, PM, CM, IFM, or other business units</p>
+            <div class="flex-grow-1">
+              <p class="sec-title mb-0">Divisions Management</p>
+              <p class="sec-sub mb-0">Add and edit company divisions using the popup form</p>
             </div>
+            <button type="button" class="btn-primary-tek js-add-division" data-bs-toggle="modal" data-bs-target="#divisionModal">
+              <i class="bi bi-plus-circle"></i> Add Division
+            </button>
           </div>
-
-          <form method="POST" id="divisionForm">
-            <input type="hidden" name="save_division" value="1">
-            <input type="hidden" name="division_id" value="<?php echo (int)($editDivision['id'] ?? 0); ?>">
-
-            <div class="grid-3">
-              <div>
-                <label class="form-label">Division Name <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" name="division_name"
-                       value="<?php echo e($editDivision['division_name'] ?? ''); ?>"
-                       placeholder="Example: PMC / QS / HR" required>
-              </div>
-              <div>
-                <label class="form-label">Division Code</label>
-                <input type="text" class="form-control" name="division_code"
-                       value="<?php echo e($editDivision['division_code'] ?? ''); ?>"
-                       placeholder="Example: PMC">
-              </div>
-              <div>
-                <label class="form-label">Division Head</label>
-                <input type="text" class="form-control" name="division_head"
-                       value="<?php echo e($editDivision['division_head'] ?? ''); ?>"
-                       placeholder="Division head name">
-              </div>
-            </div>
-
-            <div class="grid-3 mt-2">
-              <div>
-                <label class="form-label">Division Phone</label>
-                <input type="text" class="form-control" name="division_phone"
-                       value="<?php echo e($editDivision['division_phone'] ?? ''); ?>"
-                       placeholder="Phone number">
-              </div>
-              <div>
-                <label class="form-label">Division Email</label>
-                <input type="email" class="form-control" name="division_email"
-                       value="<?php echo e($editDivision['division_email'] ?? ''); ?>"
-                       placeholder="division@example.com">
-              </div>
-              <div class="d-flex align-items-end">
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="1"
-                         <?php echo (!$editDivision || (int)($editDivision['is_active'] ?? 1) === 1) ? 'checked' : ''; ?>>
-                  <label class="form-check-label fw-bold" for="is_active">Active Division</label>
-                </div>
-              </div>
-            </div>
-
-            <div class="mt-2">
-              <label class="form-label">Division Address / Notes</label>
-              <textarea class="form-control" name="division_address" rows="2" placeholder="Optional address or notes"><?php echo e($editDivision['division_address'] ?? ''); ?></textarea>
-            </div>
-
-            <div class="d-flex justify-content-end gap-2 mt-3 flex-wrap">
-              <?php if ($editDivision): ?>
-                <a href="company-settings.php#divisionFormPanel" class="btn-outline-tek">
-                  <i class="bi bi-x-circle"></i> Cancel Edit
-                </a>
-              <?php endif; ?>
-              <button type="submit" class="btn-primary-tek">
-                <i class="bi bi-save"></i> <?php echo $editDivision ? 'Update Division' : 'Add Division'; ?>
-              </button>
-            </div>
-          </form>
         </div>
 
         <!-- DIVISIONS LIST PANEL -->
@@ -839,9 +775,21 @@ foreach ($divisions as $d) {
                     </div>
 
                     <div class="d-flex gap-2 mt-3">
-                      <a class="btn-icon" href="company-settings.php?edit_division=<?php echo (int)$d['id']; ?>#divisionFormPanel" title="Edit">
+                      <button type="button"
+                              class="btn-icon js-edit-division"
+                              title="Edit"
+                              data-bs-toggle="modal"
+                              data-bs-target="#divisionModal"
+                              data-id="<?php echo (int)$d['id']; ?>"
+                              data-name="<?php echo e($d['division_name']); ?>"
+                              data-code="<?php echo e($d['division_code']); ?>"
+                              data-head="<?php echo e($d['division_head']); ?>"
+                              data-phone="<?php echo e($d['division_phone']); ?>"
+                              data-email="<?php echo e($d['division_email']); ?>"
+                              data-address="<?php echo e($d['division_address']); ?>"
+                              data-active="<?php echo (int)$d['is_active']; ?>">
                         <i class="bi bi-pencil"></i>
-                      </a>
+                      </button>
                       <form method="POST" onsubmit="return confirm('Delete this division?');">
                         <input type="hidden" name="delete_division" value="1">
                         <input type="hidden" name="division_id" value="<?php echo (int)$d['id']; ?>">
@@ -902,9 +850,21 @@ foreach ($divisions as $d) {
                       </td>
                       <td class="text-end">
                         <div class="d-flex justify-content-end gap-2">
-                          <a class="btn-icon" href="company-settings.php?edit_division=<?php echo (int)$d['id']; ?>#divisionFormPanel" title="Edit">
-                            <i class="bi bi-pencil"></i>
-                          </a>
+                          <button type="button"
+                              class="btn-icon js-edit-division"
+                              title="Edit"
+                              data-bs-toggle="modal"
+                              data-bs-target="#divisionModal"
+                              data-id="<?php echo (int)$d['id']; ?>"
+                              data-name="<?php echo e($d['division_name']); ?>"
+                              data-code="<?php echo e($d['division_code']); ?>"
+                              data-head="<?php echo e($d['division_head']); ?>"
+                              data-phone="<?php echo e($d['division_phone']); ?>"
+                              data-email="<?php echo e($d['division_email']); ?>"
+                              data-address="<?php echo e($d['division_address']); ?>"
+                              data-active="<?php echo (int)$d['is_active']; ?>">
+                        <i class="bi bi-pencil"></i>
+                      </button>
                           <form method="POST" onsubmit="return confirm('Delete this division?');">
                             <input type="hidden" name="delete_division" value="1">
                             <input type="hidden" name="division_id" value="<?php echo (int)$d['id']; ?>">
@@ -920,6 +880,81 @@ foreach ($divisions as $d) {
               </table>
             </div>
           <?php endif; ?>
+        </div>
+
+
+        <!-- DIVISION MODAL -->
+        <div class="modal fade" id="divisionModal" tabindex="-1" aria-labelledby="divisionModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius:18px; border:0; overflow:hidden;">
+              <form method="POST" id="divisionForm">
+                <input type="hidden" name="save_division" value="1">
+                <input type="hidden" name="division_id" id="modal_division_id" value="0">
+
+                <div class="modal-header" style="background:#f9fafb; border-bottom:1px solid #eef2f7;">
+                  <div>
+                    <h5 class="modal-title fw-black" id="divisionModalLabel" style="font-weight:1000;">Add Division</h5>
+                    <div class="small-muted">Fill division details and save</div>
+                  </div>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                  <div class="grid-3">
+                    <div>
+                      <label class="form-label">Division Name <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control" name="division_name" id="modal_division_name"
+                             placeholder="Example: PMC / QS / HR" required>
+                    </div>
+                    <div>
+                      <label class="form-label">Division Code</label>
+                      <input type="text" class="form-control" name="division_code" id="modal_division_code"
+                             placeholder="Example: PMC">
+                    </div>
+                    <div>
+                      <label class="form-label">Division Head</label>
+                      <input type="text" class="form-control" name="division_head" id="modal_division_head"
+                             placeholder="Division head name">
+                    </div>
+                  </div>
+
+                  <div class="grid-3 mt-2">
+                    <div>
+                      <label class="form-label">Division Phone</label>
+                      <input type="text" class="form-control" name="division_phone" id="modal_division_phone"
+                             placeholder="Phone number">
+                    </div>
+                    <div>
+                      <label class="form-label">Division Email</label>
+                      <input type="email" class="form-control" name="division_email" id="modal_division_email"
+                             placeholder="division@example.com">
+                    </div>
+                    <div class="d-flex align-items-end">
+                      <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="is_active" id="modal_is_active" value="1" checked>
+                        <label class="form-check-label fw-bold" for="modal_is_active">Active Division</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mt-2">
+                    <label class="form-label">Division Address / Notes</label>
+                    <textarea class="form-control" name="division_address" id="modal_division_address" rows="2"
+                              placeholder="Optional address or notes"></textarea>
+                  </div>
+                </div>
+
+                <div class="modal-footer" style="border-top:1px solid #eef2f7;">
+                  <button type="button" class="btn-outline-tek" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                  </button>
+                  <button type="submit" class="btn-primary-tek" id="divisionModalSubmit">
+                    <i class="bi bi-save"></i> Save Division
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
 
         <!-- LOGO UPLOAD PANEL -->
@@ -1098,9 +1133,44 @@ document.getElementById('companyForm')?.addEventListener('submit', function(e) {
   }
 });
 
+const divisionModalEl = document.getElementById('divisionModal');
+
+function resetDivisionModal() {
+  document.getElementById('divisionModalLabel').textContent = 'Add Division';
+  document.getElementById('divisionModalSubmit').innerHTML = '<i class="bi bi-save"></i> Save Division';
+  document.getElementById('modal_division_id').value = '0';
+  document.getElementById('modal_division_name').value = '';
+  document.getElementById('modal_division_code').value = '';
+  document.getElementById('modal_division_head').value = '';
+  document.getElementById('modal_division_phone').value = '';
+  document.getElementById('modal_division_email').value = '';
+  document.getElementById('modal_division_address').value = '';
+  document.getElementById('modal_is_active').checked = true;
+}
+
+document.querySelectorAll('.js-add-division').forEach(function(btn) {
+  btn.addEventListener('click', resetDivisionModal);
+});
+
+document.querySelectorAll('.js-edit-division').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.getElementById('divisionModalLabel').textContent = 'Edit Division';
+    document.getElementById('divisionModalSubmit').innerHTML = '<i class="bi bi-save"></i> Update Division';
+
+    document.getElementById('modal_division_id').value = this.dataset.id || '0';
+    document.getElementById('modal_division_name').value = this.dataset.name || '';
+    document.getElementById('modal_division_code').value = this.dataset.code || '';
+    document.getElementById('modal_division_head').value = this.dataset.head || '';
+    document.getElementById('modal_division_phone').value = this.dataset.phone || '';
+    document.getElementById('modal_division_email').value = this.dataset.email || '';
+    document.getElementById('modal_division_address').value = this.dataset.address || '';
+    document.getElementById('modal_is_active').checked = (String(this.dataset.active || '1') === '1');
+  });
+});
+
 document.getElementById('divisionForm')?.addEventListener('submit', function(e) {
-  const divisionName = document.querySelector('[name="division_name"]').value.trim();
-  const divisionEmail = document.querySelector('[name="division_email"]').value.trim();
+  const divisionName = document.getElementById('modal_division_name').value.trim();
+  const divisionEmail = document.getElementById('modal_division_email').value.trim();
 
   let errors = [];
 

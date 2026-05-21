@@ -5,7 +5,7 @@
 // Set PHP timezone to IST (+05:30)
 date_default_timezone_set('Asia/Kolkata');
 
-define('DB_HOST', 'srv2204.hstgr.io');
+define('DB_HOST', 'localhost');
 define('DB_USER', 'u209621005_tekc');
 define('DB_PASS', 'Ariharan@2025');
 define('DB_NAME', 'u209621005_tekc');
