@@ -111,7 +111,7 @@ if ($employeeId > 0) {
   if ($conn) {
     $topbarUnreadCount = getUnreadNotificationCount($conn, $employeeId);
     $topbarNotifications = getEmployeeNotifications($conn, $employeeId, 5);
-    mysqli_close($conn);
+  
   }
 }
 
@@ -123,39 +123,40 @@ $logoutUrl = '../logout.php';
 
 <!-- Topbar -->
 <div class="topbar">
-  <div class="top-left">
-    <button id="menuBtn" class="hamburger" aria-label="Toggle sidebar" title="Toggle sidebar">
-      <i class="bi bi-list"></i>
-    </button>
+    <div class="top-left">
+        <button id="menuBtn" class="hamburger" aria-label="Toggle sidebar" title="Toggle sidebar">
+            <i class="bi bi-list"></i>
+        </button>
 
-  </div>
+    </div>
 
-  <div class="top-right">
+    <div class="top-right">
 
-    <!-- Notifications -->
-    <div class="topbar-dropdown-wrap">
-      <button id="notificationBtn" class="icon-btn notification-btn" aria-label="Notifications" title="Notifications" type="button">
-        <i class="bi bi-bell"></i>
-        <?php if ($topbarUnreadCount > 0): ?>
-          <span class="notify-count-badge">
-            <?php echo $topbarUnreadCount > 99 ? '99+' : (int)$topbarUnreadCount; ?>
-          </span>
-        <?php endif; ?>
-      </button>
+        <!-- Notifications -->
+        <div class="topbar-dropdown-wrap">
+            <button id="notificationBtn" class="icon-btn notification-btn" aria-label="Notifications"
+                title="Notifications" type="button">
+                <i class="bi bi-bell"></i>
+                <?php if ($topbarUnreadCount > 0): ?>
+                <span class="notify-count-badge">
+                    <?php echo $topbarUnreadCount > 99 ? '99+' : (int)$topbarUnreadCount; ?>
+                </span>
+                <?php endif; ?>
+            </button>
 
-      <div id="notificationDropdown" class="topbar-dropdown notification-dropdown">
-        <div class="dropdown-head">
-          <div>
-            <div class="dropdown-title">Notifications</div>
-            <div class="dropdown-subtitle">Latest messages for you</div>
-          </div>
-          <span class="dropdown-count"><?php echo (int)$topbarUnreadCount; ?></span>
-        </div>
+            <div id="notificationDropdown" class="topbar-dropdown notification-dropdown">
+                <div class="dropdown-head">
+                    <div>
+                        <div class="dropdown-title">Notifications</div>
+                        <div class="dropdown-subtitle">Latest messages for you</div>
+                    </div>
+                    <span class="dropdown-count"><?php echo (int)$topbarUnreadCount; ?></span>
+                </div>
 
-        <div class="notification-list">
-          <?php if (!empty($topbarNotifications)): ?>
-            <?php foreach ($topbarNotifications as $notification): ?>
-              <?php
+                <div class="notification-list">
+                    <?php if (!empty($topbarNotifications)): ?>
+                    <?php foreach ($topbarNotifications as $notification): ?>
+                    <?php
                 [$iconColor, $iconName] = notificationIconClass($notification['module'] ?? '', $notification['type'] ?? '');
                 $notificationLink = trim((string)($notification['link'] ?? ''));
                 $notificationModule = strtolower(trim((string)($notification['module'] ?? '')));
@@ -182,126 +183,123 @@ $logoutUrl = '../logout.php';
 
                 $isUnread = isset($notification['is_read']) && (int)$notification['is_read'] === 0;
               ?>
-              <a href="<?php echo e($notificationLink); ?>"
-                 class="notification-item <?php echo $isUnread ? 'unread' : ''; ?>">
-                <div class="notification-icon <?php echo e($iconColor); ?>">
-                  <i class="bi <?php echo e($iconName); ?>"></i>
+                    <a href="<?php echo e($notificationLink); ?>"
+                        class="notification-item <?php echo $isUnread ? 'unread' : ''; ?>">
+                        <div class="notification-icon <?php echo e($iconColor); ?>">
+                            <i class="bi <?php echo e($iconName); ?>"></i>
+                        </div>
+                        <div class="notification-content">
+                            <div class="notification-title">
+                                <?php echo e($notification['title'] ?? 'Notification'); ?>
+                            </div>
+                            <div class="notification-text">
+                                <?php echo e($notification['message'] ?? ''); ?>
+                            </div>
+                            <div class="notification-time">
+                                <?php echo e(notificationTimeAgo($notification['created_at'] ?? '')); ?>
+                            </div>
+                        </div>
+                    </a>
+                    <?php endforeach; ?>
+                    <?php else: ?>
+                    <div class="notification-empty">
+                        <i class="bi bi-bell"></i>
+                        <div>No notifications</div>
+                        <small>New messages will appear here.</small>
+                    </div>
+                    <?php endif; ?>
                 </div>
-                <div class="notification-content">
-                  <div class="notification-title">
-                    <?php echo e($notification['title'] ?? 'Notification'); ?>
-                  </div>
-                  <div class="notification-text">
-                    <?php echo e($notification['message'] ?? ''); ?>
-                  </div>
-                  <div class="notification-time">
-                    <?php echo e(notificationTimeAgo($notification['created_at'] ?? '')); ?>
-                  </div>
+
+                <div class="dropdown-footer">
+                    <a href="notifications.php" class="see-more-btn">See more</a>
                 </div>
-              </a>
-            <?php endforeach; ?>
-          <?php else: ?>
-            <div class="notification-empty">
-              <i class="bi bi-bell"></i>
-              <div>No notifications</div>
-              <small>New messages will appear here.</small>
             </div>
-          <?php endif; ?>
         </div>
 
-        <div class="dropdown-footer">
-          <a href="notifications.php" class="see-more-btn">See more</a>
-        </div>
-      </div>
-    </div>
+        <!-- Profile Dropdown -->
+        <div class="topbar-dropdown-wrap">
+            <button id="profileBtn" class="pill profile-btn" title="<?php echo e($loggedName); ?>" type="button">
+                <div class="avatar" style="overflow:hidden; display:flex; align-items:center; justify-content:center;">
+                    <?php if ($showPhoto): ?>
+                    <img src="<?php echo e($photoSrc); ?>" alt="<?php echo e($loggedName); ?>"
+                        style="width:100%;height:100%;object-fit:cover;display:block;"
+                        onerror="this.style.display='none'; this.parentElement.textContent='<?php echo e($avatarText); ?>';">
+                    <?php else: ?>
+                    <?php echo e($avatarText); ?>
+                    <?php endif; ?>
+                </div>
 
-    <!-- Profile Dropdown -->
-    <div class="topbar-dropdown-wrap">
-      <button id="profileBtn" class="pill profile-btn" title="<?php echo e($loggedName); ?>" type="button">
-        <div class="avatar" style="overflow:hidden; display:flex; align-items:center; justify-content:center;">
-          <?php if ($showPhoto): ?>
-            <img src="<?php echo e($photoSrc); ?>"
-                 alt="<?php echo e($loggedName); ?>"
-                 style="width:100%;height:100%;object-fit:cover;display:block;"
-                 onerror="this.style.display='none'; this.parentElement.textContent='<?php echo e($avatarText); ?>';">
-          <?php else: ?>
-            <?php echo e($avatarText); ?>
-          <?php endif; ?>
-        </div>
+                <div class="user-meta d-none d-sm-block">
+                    <div class="name"><?php echo e($loggedName); ?></div>
+                    <div class="mail"><?php echo e($displayMail); ?></div>
+                </div>
 
-        <div class="user-meta d-none d-sm-block">
-          <div class="name"><?php echo e($loggedName); ?></div>
-          <div class="mail"><?php echo e($displayMail); ?></div>
-        </div>
+                <i class="bi bi-chevron-down profile-chevron"></i>
+            </button>
 
-        <i class="bi bi-chevron-down profile-chevron"></i>
-      </button>
+            <div id="profileDropdown" class="topbar-dropdown profile-dropdown">
+                <div class="profile-card-head">
+                    <div class="profile-big-avatar">
+                        <?php if ($showPhoto): ?>
+                        <img src="<?php echo e($photoSrc); ?>" alt="<?php echo e($loggedName); ?>"
+                            onerror="this.style.display='none'; this.parentElement.textContent='<?php echo e($avatarText); ?>';">
+                        <?php else: ?>
+                        <?php echo e($avatarText); ?>
+                        <?php endif; ?>
+                    </div>
 
-      <div id="profileDropdown" class="topbar-dropdown profile-dropdown">
-        <div class="profile-card-head">
-          <div class="profile-big-avatar">
-            <?php if ($showPhoto): ?>
-              <img src="<?php echo e($photoSrc); ?>"
-                   alt="<?php echo e($loggedName); ?>"
-                   onerror="this.style.display='none'; this.parentElement.textContent='<?php echo e($avatarText); ?>';">
-            <?php else: ?>
-              <?php echo e($avatarText); ?>
-            <?php endif; ?>
-          </div>
+                    <div>
+                        <div class="profile-name"><?php echo e($loggedName); ?></div>
+                        <div class="profile-email"><?php echo e($displayMail); ?></div>
+                    </div>
+                </div>
 
-          <div>
-            <div class="profile-name"><?php echo e($loggedName); ?></div>
-            <div class="profile-email"><?php echo e($displayMail); ?></div>
-          </div>
-        </div>
+                <div class="profile-menu">
+                    <a href="my-profile.php" class="profile-menu-item">
+                        <i class="bi bi-person"></i>
+                        <span>My Profile</span>
+                    </a>
 
-        <div class="profile-menu">
-          <a href="my-profile.php" class="profile-menu-item">
-            <i class="bi bi-person"></i>
-            <span>My Profile</span>
-          </a>
+                    <a href="my-attendance.php" class="profile-menu-item">
+                        <i class="bi bi-calendar2-check"></i>
+                        <span>My Attendance</span>
+                    </a>
 
-          <a href="my-attendance.php" class="profile-menu-item">
-            <i class="bi bi-calendar2-check"></i>
-            <span>My Attendance</span>
-          </a>
+                    <a href="apply-leave.php" class="profile-menu-item">
+                        <i class="bi bi-calendar-plus"></i>
+                        <span>Apply Leave</span>
+                    </a>
 
-          <a href="apply-leave.php" class="profile-menu-item">
-            <i class="bi bi-calendar-plus"></i>
-            <span>Apply Leave</span>
-          </a>
-
-          <!-- <a href="settings.php" class="profile-menu-item">
+                    <!-- <a href="settings.php" class="profile-menu-item">
             <i class="bi bi-gear"></i>
             <span>Settings</span>
           </a> -->
 
-          <a href="logout.php"
-             class="profile-menu-item logout-item"
-             onclick="return confirm('Do you want to logout?');">
-            <i class="bi bi-box-arrow-right"></i>
-            <span>Logout</span>
-          </a>
+                    <a href="logout.php" class="profile-menu-item logout-item"
+                        onclick="return confirm('Do you want to logout?');">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span>Logout</span>
+                    </a>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
 
-  </div>
+    </div>
 </div>
 
 <style>
-  .topbar-dropdown-wrap {
+.topbar-dropdown-wrap {
     position: relative;
     display: inline-flex;
     align-items: center;
-  }
+}
 
-  .notification-btn {
+.notification-btn {
     position: relative;
     overflow: visible;
-  }
+}
 
-  .notify-count-badge {
+.notify-count-badge {
     position: absolute;
     top: -6px;
     right: -6px;
@@ -320,23 +318,23 @@ $logoutUrl = '../logout.php';
     justify-content: center;
     box-shadow: 0 4px 10px rgba(239, 68, 68, .28);
     z-index: 2;
-  }
+}
 
-  .profile-btn {
+.profile-btn {
     border: 0;
     cursor: pointer;
-  }
+}
 
-  .profile-chevron {
+.profile-chevron {
     color: #6b7280;
     transition: transform .2s ease;
-  }
+}
 
-  .profile-btn.active .profile-chevron {
+.profile-btn.active .profile-chevron {
     transform: rotate(180deg);
-  }
+}
 
-  .topbar-dropdown {
+.topbar-dropdown {
     position: absolute;
     top: calc(100% + 12px);
     right: 0;
@@ -351,37 +349,37 @@ $logoutUrl = '../logout.php';
     transform: translateY(8px);
     transition: .18s ease;
     overflow: hidden;
-  }
+}
 
-  .topbar-dropdown.show {
+.topbar-dropdown.show {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
-  }
+}
 
-  .dropdown-head {
+.dropdown-head {
     padding: 14px 15px;
     border-bottom: 1px solid #f1f5f9;
     display: flex;
     align-items: center;
     justify-content: space-between;
-  }
+}
 
-  .dropdown-title {
+.dropdown-title {
     font-size: 14px;
     font-weight: 900;
     color: #111827;
     line-height: 1.2;
-  }
+}
 
-  .dropdown-subtitle {
+.dropdown-subtitle {
     font-size: 11px;
     font-weight: 700;
     color: #64748b;
     margin-top: 2px;
-  }
+}
 
-  .dropdown-count {
+.dropdown-count {
     min-width: 24px;
     height: 24px;
     border-radius: 999px;
@@ -392,31 +390,31 @@ $logoutUrl = '../logout.php';
     display: inline-flex;
     align-items: center;
     justify-content: center;
-  }
+}
 
-  .notification-list {
+.notification-list {
     max-height: 310px;
     overflow-y: auto;
-  }
+}
 
-  .notification-item {
+.notification-item {
     display: flex;
     gap: 10px;
     padding: 12px 15px;
     text-decoration: none;
     border-bottom: 1px solid #f8fafc;
     transition: .15s ease;
-  }
+}
 
-  .notification-item:hover {
+.notification-item:hover {
     background: #f8fafc;
-  }
+}
 
-  .notification-item.unread {
+.notification-item.unread {
     background: #f8fbff;
-  }
+}
 
-  .notification-item.unread .notification-title::after {
+.notification-item.unread .notification-title::after {
     content: "";
     width: 6px;
     height: 6px;
@@ -425,32 +423,32 @@ $logoutUrl = '../logout.php';
     display: inline-block;
     margin-left: 6px;
     vertical-align: middle;
-  }
+}
 
-  .notification-empty {
+.notification-empty {
     padding: 24px 14px;
     text-align: center;
     color: #64748b;
     font-size: 12px;
     font-weight: 850;
-  }
+}
 
-  .notification-empty i {
+.notification-empty i {
     display: block;
     font-size: 28px;
     opacity: .45;
     margin-bottom: 7px;
-  }
+}
 
-  .notification-empty small {
+.notification-empty small {
     display: block;
     margin-top: 2px;
     font-size: 10.5px;
     font-weight: 700;
     color: #94a3b8;
-  }
+}
 
-  .notification-icon {
+.notification-icon {
     width: 34px;
     height: 34px;
     border-radius: 12px;
@@ -458,56 +456,56 @@ $logoutUrl = '../logout.php';
     place-items: center;
     flex: 0 0 auto;
     font-size: 15px;
-  }
+}
 
-  .notification-icon.blue {
+.notification-icon.blue {
     background: #eff6ff;
     color: #2563eb;
-  }
+}
 
-  .notification-icon.green {
+.notification-icon.green {
     background: #ecfdf5;
     color: #16a34a;
-  }
+}
 
-  .notification-icon.orange {
+.notification-icon.orange {
     background: #fff7ed;
     color: #ea580c;
-  }
+}
 
-  .notification-content {
+.notification-content {
     min-width: 0;
-  }
+}
 
-  .notification-title {
+.notification-title {
     font-size: 12px;
     font-weight: 900;
     color: #111827;
     line-height: 1.25;
-  }
+}
 
-  .notification-text {
+.notification-text {
     font-size: 11px;
     font-weight: 650;
     color: #64748b;
     margin-top: 2px;
     line-height: 1.35;
-  }
+}
 
-  .notification-time {
+.notification-time {
     font-size: 10px;
     font-weight: 800;
     color: #94a3b8;
     margin-top: 4px;
-  }
+}
 
-  .dropdown-footer {
+.dropdown-footer {
     padding: 10px;
     border-top: 1px solid #f1f5f9;
     background: #fff;
-  }
+}
 
-  .see-more-btn {
+.see-more-btn {
     width: 100%;
     height: 34px;
     border-radius: 11px;
@@ -520,27 +518,27 @@ $logoutUrl = '../logout.php';
     align-items: center;
     justify-content: center;
     transition: .15s ease;
-  }
+}
 
-  .see-more-btn:hover {
+.see-more-btn:hover {
     background: #020617;
     color: #fff;
-  }
+}
 
-  .profile-dropdown {
+.profile-dropdown {
     width: 280px;
-  }
+}
 
-  .profile-card-head {
+.profile-card-head {
     padding: 15px;
     display: flex;
     align-items: center;
     gap: 11px;
     border-bottom: 1px solid #f1f5f9;
     background: #fbfdff;
-  }
+}
 
-  .profile-big-avatar {
+.profile-big-avatar {
     width: 44px;
     height: 44px;
     border-radius: 15px;
@@ -552,23 +550,23 @@ $logoutUrl = '../logout.php';
     font-weight: 900;
     overflow: hidden;
     flex: 0 0 auto;
-  }
+}
 
-  .profile-big-avatar img {
+.profile-big-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
-  }
+}
 
-  .profile-name {
+.profile-name {
     font-size: 13px;
     font-weight: 900;
     color: #111827;
     line-height: 1.2;
-  }
+}
 
-  .profile-email {
+.profile-email {
     font-size: 11px;
     font-weight: 700;
     color: #64748b;
@@ -577,13 +575,13 @@ $logoutUrl = '../logout.php';
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
+}
 
-  .profile-menu {
+.profile-menu {
     padding: 8px;
-  }
+}
 
-  .profile-menu-item {
+.profile-menu-item {
     min-height: 38px;
     border-radius: 11px;
     display: flex;
@@ -595,56 +593,56 @@ $logoutUrl = '../logout.php';
     font-size: 12px;
     font-weight: 850;
     transition: .15s ease;
-  }
+}
 
-  .profile-menu-item i {
+.profile-menu-item i {
     font-size: 15px;
     width: 18px;
     text-align: center;
     color: #64748b;
-  }
+}
 
-  .profile-menu-item:hover {
+.profile-menu-item:hover {
     background: #f8fafc;
     color: #111827;
-  }
+}
 
-  .logout-item {
+.logout-item {
     color: #dc2626;
-  }
+}
 
-  .logout-item i {
+.logout-item i {
     color: #dc2626;
-  }
+}
 
-  .logout-item:hover {
+.logout-item:hover {
     background: #fef2f2;
     color: #b91c1c;
-  }
+}
 
-  @media (max-width: 575.98px) {
+@media (max-width: 575.98px) {
     .notify-count-badge {
-      top: -5px;
-      right: -5px;
+        top: -5px;
+        right: -5px;
     }
 
     .topbar-dropdown {
-      position: fixed;
-      top: 70px;
-      right: 12px;
-      left: 12px;
-      width: auto;
+        position: fixed;
+        top: 70px;
+        right: 12px;
+        left: 12px;
+        width: auto;
     }
 
     .profile-dropdown,
     .notification-dropdown {
-      width: auto;
+        width: auto;
     }
-  }
+}
 </style>
 
 <script>
-  document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", function() {
     const notificationBtn = document.getElementById("notificationBtn");
     const notificationDropdown = document.getElementById("notificationDropdown");
 
@@ -652,60 +650,60 @@ $logoutUrl = '../logout.php';
     const profileDropdown = document.getElementById("profileDropdown");
 
     function closeTopbarDropdowns() {
-      if (notificationDropdown) notificationDropdown.classList.remove("show");
-      if (profileDropdown) profileDropdown.classList.remove("show");
-      if (profileBtn) profileBtn.classList.remove("active");
+        if (notificationDropdown) notificationDropdown.classList.remove("show");
+        if (profileDropdown) profileDropdown.classList.remove("show");
+        if (profileBtn) profileBtn.classList.remove("active");
     }
 
     if (notificationBtn && notificationDropdown) {
-      notificationBtn.addEventListener("click", function (e) {
-        e.stopPropagation();
+        notificationBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
 
-        const isOpen = notificationDropdown.classList.contains("show");
+            const isOpen = notificationDropdown.classList.contains("show");
 
-        closeTopbarDropdowns();
+            closeTopbarDropdowns();
 
-        if (!isOpen) {
-          notificationDropdown.classList.add("show");
-        }
-      });
+            if (!isOpen) {
+                notificationDropdown.classList.add("show");
+            }
+        });
     }
 
     if (profileBtn && profileDropdown) {
-      profileBtn.addEventListener("click", function (e) {
-        e.stopPropagation();
+        profileBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
 
-        const isOpen = profileDropdown.classList.contains("show");
+            const isOpen = profileDropdown.classList.contains("show");
 
-        closeTopbarDropdowns();
+            closeTopbarDropdowns();
 
-        if (!isOpen) {
-          profileDropdown.classList.add("show");
-          profileBtn.classList.add("active");
-        }
-      });
+            if (!isOpen) {
+                profileDropdown.classList.add("show");
+                profileBtn.classList.add("active");
+            }
+        });
     }
 
-    document.addEventListener("click", function () {
-      closeTopbarDropdowns();
+    document.addEventListener("click", function() {
+        closeTopbarDropdowns();
     });
 
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") {
-        closeTopbarDropdowns();
-      }
+    document.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") {
+            closeTopbarDropdowns();
+        }
     });
 
     if (notificationDropdown) {
-      notificationDropdown.addEventListener("click", function (e) {
-        e.stopPropagation();
-      });
+        notificationDropdown.addEventListener("click", function(e) {
+            e.stopPropagation();
+        });
     }
 
     if (profileDropdown) {
-      profileDropdown.addEventListener("click", function (e) {
-        e.stopPropagation();
-      });
+        profileDropdown.addEventListener("click", function(e) {
+            e.stopPropagation();
+        });
     }
-  });
+});
 </script>

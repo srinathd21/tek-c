@@ -431,589 +431,568 @@ mysqli_stmt_close($stmt);
 
 <!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Edit Quotation Request - TEK-C Dashboard</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Edit Quotation Request - TEK-C Dashboard</title>
 
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
-  <link rel="manifest" href="assets/fav/site.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
+    <link rel="manifest" href="assets/fav/site.webmanifest">
 
-  <!-- Bootstrap 5 -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-  <!-- Flatpickr for date picker -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <!-- Select2 for better dropdowns -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css"
+        rel="stylesheet" />
+    <!-- Flatpickr for date picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
 
-  <!-- TEK-C Custom Styles -->
-  <link href="assets/css/layout-styles.css" rel="stylesheet" />
-  <link href="assets/css/topbar.css" rel="stylesheet" />
-  <link href="assets/css/footer.css" rel="stylesheet" />
-  
-  <style>
-    :root{
-      --page-bg:#f5f7fb;
-      --card-bg:#ffffff;
-      --border:#e5e7eb;
-      --text:#111827;
-      --muted:#6b7280;
-      --soft:#f8fafc;
-      --shadow:0 10px 26px rgba(15,23,42,.055);
-      --radius:15px;
-      --blue:#2f80ed;
-      --green:#27ae60;
-      --orange:#f2994a;
-      --red:#eb5757;
-      --purple:#7c3aed;
+    <!-- TEK-C Custom Styles -->
+    <link href="assets/css/layout-styles.css" rel="stylesheet" />
+    <link href="assets/css/topbar.css" rel="stylesheet" />
+    <link href="assets/css/footer.css" rel="stylesheet" />
+
+    <style>
+    .content-scroll {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 22px 22px 14px;
     }
 
-    body{ background:var(--page-bg); }
-
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px; }
-    .projects-wrapper{ width:100%; }
-
-    .page-heading{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:12px;
-      margin-bottom:14px;
+    .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 24px;
+        height: 100%;
     }
 
-    .page-heading h1{
-      font-size:19px;
-      font-weight:950;
-      color:var(--text);
-      margin:0;
+    .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
     }
 
-    .page-heading p{
-      margin:3px 0 0;
-      color:var(--muted);
-      font-size:12px;
-      font-weight:650;
+    .panel-title {
+        font-weight: 900;
+        font-size: 20px;
+        color: #1f2937;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
 
-    .primary-btn,.secondary-btn,.success-btn,.danger-btn{
-      min-height:36px;
-      padding:0 14px;
-      border-radius:11px;
-      font-size:12px;
-      font-weight:900;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:7px;
-      text-decoration:none;
-      white-space:nowrap;
-      border:0;
-      line-height:1;
+    .panel-title i {
+        color: var(--blue);
+        font-size: 24px;
     }
 
-    .primary-btn{ background:#111827; color:#fff; }
-    .primary-btn:hover{ background:#020617; color:#fff; }
-
-    .success-btn{ background:#16a34a; color:#fff; }
-    .success-btn:hover{ background:#15803d; color:#fff; }
-
-    .secondary-btn{
-      border:1px solid var(--border);
-      background:#fff;
-      color:#334155;
+    .form-section {
+        margin-bottom: 30px;
     }
 
-    .secondary-btn:hover{
-      border-color:#cbd5e1;
-      background:#f8fafc;
-      color:#111827;
+    .form-section-title {
+        font-weight: 850;
+        font-size: 16px;
+        color: #374151;
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
-    .panel{
-      background:var(--card-bg);
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:13px;
-      margin-bottom:14px;
-      height:auto;
+    .form-section-title i {
+        color: var(--blue);
+        font-size: 18px;
     }
 
-    .panel-header{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      margin-bottom:12px;
+    .form-label {
+        font-weight: 800;
+        color: #4b5563;
+        font-size: 13px;
+        margin-bottom: 6px;
     }
 
-    .panel-title{
-      font-weight:950;
-      font-size:14px;
-      color:var(--text);
-      margin:0;
-      display:flex;
-      align-items:center;
-      gap:8px;
+    .form-control,
+    .form-select {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-weight: 600;
+        color: #1f2937;
+        background-color: #fff;
     }
 
-    .panel-title i{ color:var(--blue); font-size:16px; }
-    .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
-
-    .form-section{
-      border:1px solid #eef2f7;
-      background:#fff;
-      border-radius:14px;
-      padding:13px;
-      margin-bottom:13px;
+    .form-control:focus,
+    .form-select:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(45, 156, 219, .15);
+        outline: none;
     }
 
-    .form-section-title{
-      font-weight:950;
-      font-size:13px;
-      color:#111827;
-      margin-bottom:12px;
-      padding-bottom:8px;
-      border-bottom:1px solid #eef2f7;
-      display:flex;
-      align-items:center;
-      gap:8px;
+    .required:after {
+        content: " *";
+        color: var(--red);
+        font-weight: 900;
     }
 
-    .form-section-title i{ color:var(--blue); font-size:15px; }
-
-    .form-label{
-      font-size:11px;
-      font-weight:900;
-      color:#475569;
-      text-transform:uppercase;
-      margin-bottom:6px;
+    .btn {
+        padding: 10px 20px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid transparent;
+        transition: all .15s;
     }
 
-    .form-control,.form-select{
-      min-height:38px;
-      border:1px solid var(--border);
-      border-radius:11px;
-      font-size:12px;
-      font-weight:800;
-      color:#111827;
-      padding:8px 11px;
-      background:#fff;
+    .btn-primary {
+        background: var(--blue);
+        color: #fff;
+        border-color: var(--blue);
     }
 
-    .form-control:focus,.form-select:focus{
-      border-color:#bfdbfe;
-      box-shadow:0 0 0 3px rgba(59,130,246,.10);
+    .btn-primary:hover {
+        background: #1f7ab0;
+        border-color: #1f7ab0;
     }
 
-    textarea.form-control{ min-height:88px; }
-
-    .required:after{ content:" *"; color:var(--red); font-weight:950; }
-
-    .badge-pill{
-      border-radius:999px;
-      padding:5px 8px;
-      font-weight:900;
-      font-size:10px;
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      border:1px solid transparent;
-      text-decoration:none;
-      white-space:nowrap;
+    .btn-outline-secondary {
+        background: #fff;
+        border-color: var(--border);
+        color: #4b5563;
     }
 
-    .ontrack{ color:#15803d; background:#dcfce7; border-color:#bbf7d0; }
-    .progressing{ color:#2563eb; background:#dbeafe; border-color:#bfdbfe; }
-    .pending{ color:#6d28d9; background:#ede9fe; border-color:#ddd6fe; }
-    .atrisk{ color:#b91c1c; background:#fee2e2; border-color:#fecaca; }
-    .neutral{ color:#475569; background:#f1f5f9; border-color:#e2e8f0; }
-    .warning{ color:#b45309; background:#ffedd5; border-color:#fed7aa; }
-
-    .file-upload{
-      border:1.5px dashed #cbd5e1;
-      border-radius:14px;
-      padding:18px;
-      text-align:center;
-      background:#f8fafc;
-      cursor:pointer;
-      transition:.15s ease;
+    .btn-outline-secondary:hover {
+        background: #f3f4f6;
+        border-color: #d1d5db;
     }
 
-    .file-upload:hover{
-      border-color:#93c5fd;
-      background:#eff6ff;
+    .btn-warning {
+        background: #f59e0b;
+        color: #fff;
+        border-color: #f59e0b;
     }
 
-    .file-upload i{
-      font-size:30px;
-      color:#94a3b8;
-      margin-bottom:8px;
+    .btn-warning:hover {
+        background: #d97706;
     }
 
-    .file-upload p{
-      margin:0;
-      font-weight:900;
-      color:#475569;
-      font-size:12px;
+    .alert {
+        border-radius: 12px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+        border: none;
     }
 
-    .file-upload small{
-      color:#94a3b8;
-      font-weight:700;
-      font-size:10.5px;
+    .alert-danger {
+        background: #f8d7da;
+        color: #721c24;
     }
 
-    .file-list{ margin-top:12px; }
-
-    .file-item{
-      display:flex;
-      align-items:center;
-      gap:9px;
-      padding:8px 10px;
-      background:#f8fafc;
-      border:1px solid #eef2f7;
-      border-radius:11px;
-      margin-bottom:8px;
-      font-size:11px;
+    .alert-info {
+        background: #d1ecf1;
+        color: #0c5460;
     }
 
-    .file-item i{ color:var(--blue); }
-    .file-item .file-name{ flex:1; font-weight:900; color:#334155; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .file-item .file-size{ color:#64748b; font-weight:800; font-size:10px; }
-    .file-item .remove-file{ color:var(--red); cursor:pointer; }
-
-    .info-note{
-      background:#eff6ff;
-      border:1px solid #bfdbfe;
-      border-radius:13px;
-      padding:11px 13px;
-      margin-top:14px;
-      display:flex;
-      align-items:center;
-      gap:10px;
+    .alert-success {
+        background: #d4edda;
+        color: #155724;
     }
 
-    .info-note i{ color:#2563eb; font-size:18px; }
-    .info-note p{ margin:0; color:#1e293b; font-weight:750; font-size:11.5px; }
-
-    .alert{
-      border-radius:14px;
-      border:1px solid transparent;
-      box-shadow:var(--shadow);
-      font-size:12px;
-      font-weight:850;
-      margin-bottom:14px;
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 800;
     }
 
-    .alert-danger{ background:#fee2e2; border-color:#fecaca; color:#991b1b; }
-    .alert-info{ background:#eff6ff; border-color:#bfdbfe; color:#1e40af; }
-    .alert-success{ background:#dcfce7; border-color:#bbf7d0; color:#166534; }
-
-    @media(max-width:991.98px){
-      .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
-      .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
-      .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
+    .status-draft {
+        background: #e5e7eb;
+        color: #374151;
     }
 
-    @media(max-width:768px){
-      .content-scroll{ padding:12px 10px!important; }
-      .container-fluid.projects-wrapper{ padding-left:0!important; padding-right:0!important; }
-      .page-heading{ align-items:flex-start; flex-direction:column; }
-      .panel,.form-section{ padding:12px; }
-      .primary-btn,.secondary-btn,.success-btn{ width:100%; }
-      .form-actions{ flex-direction:column-reverse; align-items:stretch!important; }
-      .file-item{ align-items:flex-start; }
+    .status-pending-assignment {
+        background: #fef3c7;
+        color: #92400e;
     }
-  </style>
+
+    .info-note {
+        background: #f0f9ff;
+        border: 1px solid #b8e0ff;
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin-top: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .info-note i {
+        color: var(--blue);
+        font-size: 20px;
+    }
+
+    .info-note p {
+        margin: 0;
+        color: #1f2937;
+        font-weight: 650;
+        font-size: 13px;
+    }
+
+    @media (max-width: 768px) {
+        .content-scroll {
+            padding: 12px 10px 12px !important;
+        }
+
+        .panel {
+            padding: 12px !important;
+        }
+    }
+    </style>
 </head>
 
 <body>
-<div class="app">
-  <?php include 'includes/sidebar.php'; ?>
-  <main class="main" aria-label="Main">
-    <?php include 'includes/topbar.php'; ?>
+    <div class="app">
+        <?php include 'includes/sidebar.php'; ?>
+        <main class="main" aria-label="Main">
+            <?php include 'includes/topbar.php'; ?>
 
-    <div id="contentScroll" class="content-scroll">
-      <div class="container-fluid projects-wrapper px-0">
+            <div id="contentScroll" class="content-scroll">
+                <div class="container-fluid maxw">
 
-        <!-- Page Header -->
-        <div class="page-heading">
-          <div>
-            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
-              <h1>Edit Quotation Request</h1>
-              <?php echo getStatusBadge($request['status']); ?>
-            </div>
-            <p>
-              Request #<?php echo e($request['request_no']); ?> • Update and submit to Pending Assignment
-            </p>
-          </div>
-          <div class="d-flex gap-2 flex-wrap">
-            <a href="my-quotation-requests.php" class="secondary-btn">
-              <i class="bi bi-arrow-left"></i> Back to Requests
-            </a>
-          </div>
-        </div>
-
-        <!-- Error Alert -->
-        <?php if ($error): ?>
-          <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <?php echo e($error); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-        <?php endif; ?>
-
-        <!-- Info Alert -->
-        <div class="alert alert-info alert-dismissible fade show" role="alert">
-          <i class="bi bi-info-circle-fill me-2"></i>
-          <strong>Note:</strong> You can edit only <strong>Draft</strong> or <strong>Pending Assignment</strong> requests. Draft save is removed; this page will submit the request to <strong>Pending Assignment</strong>.
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-
-        <!-- Main Form Panel -->
-        <div class="panel">
-          <div class="panel-header">
-            <div>
-              <h3 class="panel-title"><i class="bi bi-pencil-square"></i> Update Request</h3>
-              <div class="panel-subtitle">Edit request details and submit for TL approval workflow</div>
-            </div>
-            <?php echo getPriorityBadge($request['priority']); ?>
-          </div>
-
-          <form method="POST" action="edit-quotation-request.php?id=<?php echo $request_id; ?>" enctype="multipart/form-data">
-            
-            <!-- Basic Information Section -->
-            <div class="form-section">
-              <div class="form-section-title">
-                <i class="bi bi-info-circle"></i> Basic Information
-              </div>
-              
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label class="form-label required">Site/Project</label>
-                  <select class="form-select" name="site_id" id="site_id" required>
-                    <option value="" disabled>Select site</option>
-                    <?php if (!empty($sites)): ?>
-                      <?php foreach ($sites as $site): ?>
-                        <option value="<?php echo $site['id']; ?>" <?php echo $site['id'] == $request['site_id'] ? 'selected' : ''; ?>>
-                          <?php echo e($site['project_name']); ?>
-                          <?php if (!empty($site['project_code'])): ?>
-                            (<?php echo e($site['project_code']); ?>)
-                          <?php endif; ?>
-                        </option>
-                      <?php endforeach; ?>
-                    <?php endif; ?>
-                  </select>
-                </div>
-                
-                <div class="col-md-6">
-                  <label class="form-label required">Request Title</label>
-                  <input type="text" class="form-control" name="title" value="<?php echo e($request['title']); ?>" placeholder="e.g., Electrical materials for Tower A" required>
-                </div>
-                
-                <!-- Quotation Type - TEXT INPUT (matching create form) -->
-                <div class="col-md-6">
-                  <label class="form-label required">Quotation Type</label>
-                  <input type="text" class="form-control" name="quotation_type" value="<?php echo e($request['quotation_type']); ?>" placeholder="e.g., Electrical, Plumbing, Civil, Painting, etc." required>
-                  <small class="text-muted">Enter the type of materials/services needed for quotation</small>
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label required">Priority</label>
-                  <select class="form-select" name="priority" required>
-                    <option value="Low" <?php echo $request['priority'] === 'Low' ? 'selected' : ''; ?>>Low</option>
-                    <option value="Medium" <?php echo $request['priority'] === 'Medium' ? 'selected' : ''; ?>>Medium</option>
-                    <option value="High" <?php echo $request['priority'] === 'High' ? 'selected' : ''; ?>>High</option>
-                    <option value="Urgent" <?php echo $request['priority'] === 'Urgent' ? 'selected' : ''; ?>>Urgent</option>
-                  </select>
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label required">Request Date</label>
-                  <input type="text" class="form-control datepicker" name="request_date" value="<?php echo e($request['request_date']); ?>" required>
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label">Required By Date</label>
-                  <input type="text" class="form-control datepicker" name="required_by_date" value="<?php echo e($request['required_by_date'] ?: ''); ?>" placeholder="Select date">
-                </div>
-              </div>
-            </div>
-
-            <!-- Description & Specifications Section -->
-            <div class="form-section">
-              <div class="form-section-title">
-                <i class="bi bi-file-text"></i> Description & Specifications
-              </div>
-              
-              <div class="row g-3">
-                <div class="col-12">
-                  <label class="form-label required">Description</label>
-                  <textarea class="form-control" name="description" rows="3" placeholder="Describe what you need quotations for..." required><?php echo e($request['description']); ?></textarea>
-                </div>
-
-                <div class="col-12">
-                  <label class="form-label">Specifications (Optional)</label>
-                  <textarea class="form-control" name="specifications" rows="2" placeholder="Technical specifications, quality requirements, etc."><?php echo e($request['specifications']); ?></textarea>
-                </div>
-              </div>
-            </div>
-
-            <!-- Drawing & Documents Section -->
-            <div class="form-section">
-              <div class="form-section-title">
-                <i class="bi bi-file-earmark-image"></i> Drawing & Documents
-              </div>
-              
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label class="form-label">Drawing Number (Optional)</label>
-                  <input type="text" class="form-control" name="drawing_number" value="<?php echo e($request['drawing_number']); ?>" placeholder="e.g., DWG-2024-001">
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label">Drawing File (Optional)</label>
-                  <input type="file" class="form-control" name="drawing_file" accept=".pdf,.dwg,.dxf,.jpg,.png">
-                  <?php if ($request['drawing_file']): ?>
-                    <small class="text-muted d-block mt-1">
-                      Current: <a href="<?php echo e($request['drawing_file']); ?>" target="_blank">View Current Drawing</a>
-                    </small>
-                  <?php endif; ?>
-                </div>
-
-                <div class="col-12">
-                  <label class="form-label">Additional Documents (Optional)</label>
-                  <div class="file-upload" id="fileUploadArea">
-                    <i class="bi bi-cloud-upload"></i>
-                    <p>Click or drag files to upload</p>
-                    <small>Supported formats: PDF, DWG, DXF, JPG, PNG (Max: 25MB each)</small>
-                    <input type="file" id="fileInput" name="additional_files[]" multiple style="display:none;">
-                  </div>
-                  
-                  <!-- File List -->
-                  <div class="file-list" id="fileList"></div>
-                  
-                  <?php if ($request['additional_documents_json'] && $request['additional_documents_json'] !== '[]'): ?>
-                    <div class="mt-2">
-                      <small class="text-muted">Existing additional documents will be preserved.</small>
+                    <!-- Page Header -->
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                        <div>
+                            <h1 class="h3 fw-900 text-dark mb-1">Edit Quotation Request</h1>
+                            <p class="text-muted fw-650 mb-0">
+                                Request #<?php echo e($request['request_no']); ?>
+                                <span
+                                    class="status-badge status-<?php echo strtolower(str_replace(' ', '-', $request['status'])); ?> ms-2">
+                                    <i
+                                        class="bi bi-<?php echo $request['status'] === 'Draft' ? 'pencil' : 'clock'; ?>"></i>
+                                    <?php echo e($request['status']); ?>
+                                </span>
+                            </p>
+                        </div>
+                        <div>
+                            <a href="my-quotation-requests.php" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to Requests
+                            </a>
+                        </div>
                     </div>
-                  <?php endif; ?>
+
+                    <!-- Error Alert -->
+                    <?php if ($error): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <?php echo e($error); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- Info Alert -->
+                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>Note:</strong> You can edit this request as long as it's in <strong>Draft</strong> or
+                        <strong>Pending Assignment</strong> status.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+
+                    <!-- Main Form Panel -->
+                    <div class="panel">
+                        <form method="POST" action="edit-quotation-request.php?id=<?php echo $request_id; ?>"
+                            enctype="multipart/form-data">
+
+                            <!-- Basic Information Section -->
+                            <div class="form-section">
+                                <div class="form-section-title">
+                                    <i class="bi bi-info-circle"></i> Basic Information
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label required">Site/Project</label>
+                                        <select class="form-select" name="site_id" id="site_id" required>
+                                            <option value="" disabled>Select site</option>
+                                            <?php if (!empty($sites)): ?>
+                                            <?php foreach ($sites as $site): ?>
+                                            <option value="<?php echo $site['id']; ?>"
+                                                <?php echo $site['id'] == $request['site_id'] ? 'selected' : ''; ?>>
+                                                <?php echo e($site['project_name']); ?>
+                                                <?php if (!empty($site['project_code'])): ?>
+                                                (<?php echo e($site['project_code']); ?>)
+                                                <?php endif; ?>
+                                            </option>
+                                            <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label required">Request Title</label>
+                                        <input type="text" class="form-control" name="title"
+                                            value="<?php echo e($request['title']); ?>"
+                                            placeholder="e.g., Electrical materials for Tower A" required>
+                                    </div>
+
+                                    <!-- Quotation Type - TEXT INPUT (matching create form) -->
+                                    <div class="col-md-6">
+                                        <label class="form-label required">Quotation Type</label>
+                                        <input type="text" class="form-control" name="quotation_type"
+                                            value="<?php echo e($request['quotation_type']); ?>"
+                                            placeholder="e.g., Electrical, Plumbing, Civil, Painting, etc." required>
+                                        <small class="text-muted">Enter the type of materials/services needed for
+                                            quotation</small>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label required">Priority</label>
+                                        <select class="form-select" name="priority" required>
+                                            <option value="Low"
+                                                <?php echo $request['priority'] === 'Low' ? 'selected' : ''; ?>>Low
+                                            </option>
+                                            <option value="Medium"
+                                                <?php echo $request['priority'] === 'Medium' ? 'selected' : ''; ?>>
+                                                Medium</option>
+                                            <option value="High"
+                                                <?php echo $request['priority'] === 'High' ? 'selected' : ''; ?>>High
+                                            </option>
+                                            <option value="Urgent"
+                                                <?php echo $request['priority'] === 'Urgent' ? 'selected' : ''; ?>>
+                                                Urgent</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label required">Request Date</label>
+                                        <input type="text" class="form-control datepicker" name="request_date"
+                                            value="<?php echo e($request['request_date']); ?>" required>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label">Required By Date</label>
+                                        <input type="text" class="form-control datepicker" name="required_by_date"
+                                            value="<?php echo e($request['required_by_date'] ?: ''); ?>"
+                                            placeholder="Select date">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Description & Specifications Section -->
+                            <div class="form-section">
+                                <div class="form-section-title">
+                                    <i class="bi bi-file-text"></i> Description & Specifications
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label class="form-label required">Description</label>
+                                        <textarea class="form-control" name="description" rows="3"
+                                            placeholder="Describe what you need quotations for..."
+                                            required><?php echo e($request['description']); ?></textarea>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label">Specifications (Optional)</label>
+                                        <textarea class="form-control" name="specifications" rows="2"
+                                            placeholder="Technical specifications, quality requirements, etc."><?php echo e($request['specifications']); ?></textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Drawing & Documents Section -->
+                            <div class="form-section">
+                                <div class="form-section-title">
+                                    <i class="bi bi-file-earmark-image"></i> Drawing & Documents
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Drawing Number (Optional)</label>
+                                        <input type="text" class="form-control" name="drawing_number"
+                                            value="<?php echo e($request['drawing_number']); ?>"
+                                            placeholder="e.g., DWG-2024-001">
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label">Drawing File (Optional)</label>
+                                        <input type="file" class="form-control" name="drawing_file"
+                                            accept=".pdf,.dwg,.dxf,.jpg,.png">
+                                        <?php if ($request['drawing_file']): ?>
+                                        <small class="text-muted d-block mt-1">
+                                            Current: <a href="<?php echo e($request['drawing_file']); ?>"
+                                                target="_blank">View Current Drawing</a>
+                                        </small>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label">Additional Documents (Optional)</label>
+                                        <div class="file-upload" id="fileUploadArea">
+                                            <i class="bi bi-cloud-upload"></i>
+                                            <p>Click or drag files to upload</p>
+                                            <small>Supported formats: PDF, DWG, DXF, JPG, PNG (Max: 25MB each)</small>
+                                            <input type="file" id="fileInput" name="additional_files[]" multiple
+                                                style="display:none;">
+                                        </div>
+
+                                        <!-- File List -->
+                                        <div class="file-list" id="fileList"></div>
+
+                                        <?php if ($request['additional_documents_json'] && $request['additional_documents_json'] !== '[]'): ?>
+                                        <div class="mt-2">
+                                            <small class="text-muted">Existing additional documents will be
+                                                preserved.</small>
+                                        </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Info Note -->
+                            <div class="info-note">
+                                <i class="bi bi-info-circle-fill"></i>
+                                <p>After submission, this request will be assigned to the Project Engineer (TL) who will
+                                    contact dealers and obtain quotations based on the provided drawings.</p>
+                            </div>
+
+                            <!-- Form Actions -->
+                            <div class="d-flex gap-2 justify-content-end mt-4">
+                                <button type="button" class="btn btn-outline-secondary"
+                                    onclick="window.location.href='my-quotation-requests.php'">
+                                    <i class="bi bi-x-lg"></i> Cancel
+                                </button>
+
+                                <button type="submit" name="submit_action" value="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg"></i> Update & Submit
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
                 </div>
-              </div>
             </div>
 
-            <!-- Info Note -->
-            <div class="info-note">
-              <i class="bi bi-info-circle-fill"></i>
-              <p>After update, this request will move to Pending Assignment and notify the project workflow for TL review.</p>
-            </div>
-
-            <!-- Form Actions -->
-            <div class="d-flex gap-2 justify-content-end align-items-center mt-4 form-actions">
-              <button type="button" class="secondary-btn" onclick="window.location.href='my-quotation-requests.php'">
-                <i class="bi bi-x-lg"></i> Cancel
-              </button>
-              <button type="submit" name="submit_action" value="submit" class="primary-btn">
-                <i class="bi bi-check2-circle"></i> Update & Submit
-              </button>
-            </div>
-          </form>
-        </div>
-
-      </div>
+            <?php include 'includes/footer.php'; ?>
+        </main>
     </div>
 
-    <?php include 'includes/footer.php'; ?>
-  </main>
-</div>
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="assets/js/sidebar-toggle.js"></script>
 
-<!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="assets/js/sidebar-toggle.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize Select2 for better dropdowns
+        $('.form-select').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Select an option'
+        });
 
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    if (typeof flatpickr !== 'undefined') {
-      flatpickr(".datepicker", {
-        dateFormat: "Y-m-d",
-        allowInput: true
-      });
-    }
+        // Initialize Flatpickr for date pickers
+        flatpickr(".datepicker", {
+            dateFormat: "Y-m-d",
+            allowInput: true
+        });
 
-    const fileUploadArea = document.getElementById('fileUploadArea');
-    const fileInput = document.getElementById('fileInput');
-    const fileList = document.getElementById('fileList');
-    let filesArray = [];
+        // File upload handling (same as create form)
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        let filesArray = [];
 
-    if (fileUploadArea && fileInput) {
-      fileUploadArea.addEventListener('click', () => fileInput.click());
+        if (fileUploadArea) {
+            fileUploadArea.addEventListener('click', () => {
+                fileInput.click();
+            });
 
-      fileUploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        fileUploadArea.style.borderColor = '#93c5fd';
-        fileUploadArea.style.background = '#eff6ff';
-      });
+            fileUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileUploadArea.style.borderColor = 'var(--blue)';
+                fileUploadArea.style.background = '#f0f9ff';
+            });
 
-      fileUploadArea.addEventListener('dragleave', () => {
-        fileUploadArea.style.borderColor = '#cbd5e1';
-        fileUploadArea.style.background = '#f8fafc';
-      });
+            fileUploadArea.addEventListener('dragleave', () => {
+                fileUploadArea.style.borderColor = 'var(--border)';
+                fileUploadArea.style.background = '#f9fafb';
+            });
 
-      fileUploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        fileUploadArea.style.borderColor = '#cbd5e1';
-        fileUploadArea.style.background = '#f8fafc';
-        handleFiles(e.dataTransfer.files);
-      });
+            fileUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileUploadArea.style.borderColor = 'var(--border)';
+                fileUploadArea.style.background = '#f9fafb';
 
-      fileInput.addEventListener('change', (e) => {
-        handleFiles(e.target.files);
-      });
-    }
-
-    function handleFiles(files) {
-      for (let file of files) {
-        if (file.size > 25 * 1024 * 1024) {
-          alert(`File ${file.name} is too large. Max size is 25MB.`);
-          continue;
+                const files = e.dataTransfer.files;
+                handleFiles(files);
+            });
         }
 
-        filesArray.push(file);
-        displayFileItem(file);
-      }
-    }
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+        }
 
-    function displayFileItem(file) {
-      if (!fileList) return;
+        function handleFiles(files) {
+            for (let file of files) {
+                if (file.size > 25 * 1024 * 1024) {
+                    alert(`File ${file.name} is too large. Max size is 25MB.`);
+                    continue;
+                }
 
-      const fileItem = document.createElement('div');
-      fileItem.className = 'file-item';
+                filesArray.push(file);
+                displayFileItem(file);
+            }
+        }
 
-      const sizeKb = file.size / 1024;
-      const displaySize = sizeKb > 1024 ? (sizeKb / 1024).toFixed(1) : sizeKb.toFixed(1);
-      const sizeUnit = sizeKb > 1024 ? 'MB' : 'KB';
+        function displayFileItem(file) {
+            if (!fileList) return;
 
-      fileItem.innerHTML = `
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+
+            const fileSize = (file.size / 1024).toFixed(1);
+            const sizeUnit = fileSize > 1024 ? 'MB' : 'KB';
+            const displaySize = fileSize > 1024 ? (fileSize / 1024).toFixed(1) : fileSize;
+
+            fileItem.innerHTML = `
         <i class="bi bi-file-earmark"></i>
         <span class="file-name"></span>
         <span class="file-size">${displaySize} ${sizeUnit}</span>
         <i class="bi bi-x-circle remove-file"></i>
       `;
 
-      fileItem.querySelector('.file-name').textContent = file.name;
-      fileItem.querySelector('.remove-file').addEventListener('click', () => {
-        fileItem.remove();
-        filesArray = filesArray.filter(f => f.name !== file.name);
-      });
+            fileItem.querySelector('.remove-file').addEventListener('click', () => {
+                fileItem.remove();
+                filesArray = filesArray.filter(f => f.name !== file.name);
+            });
 
-      fileList.appendChild(fileItem);
-    }
-  });
-</script>
+            fileList.appendChild(fileItem);
+        }
+    });
+    </script>
 
 </body>
+
 </html>
