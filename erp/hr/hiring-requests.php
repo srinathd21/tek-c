@@ -2,7 +2,6 @@
 // hr/hiring-requests.php - Hiring Request Management (TEK-C Style)
 session_start();
 require_once 'includes/db-config.php';
-require_once 'includes/activity-logger.php';
 
 date_default_timezone_set('Asia/Kolkata');
 
@@ -10,6 +9,172 @@ $conn = get_db_connection();
 if (!$conn) {
     die("Database connection failed.");
 }
+
+function hrTableExists($conn, string $table): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function hrColumnExists($conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $col = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$col'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function logHiringActivityCurrentDb($conn, int $employeeId, string $activityType, string $description, int $referenceId, array $newData = []): bool {
+    if (!$conn || !hrTableExists($conn, 'activity_logs')) return false;
+
+    $newJson = $newData ? json_encode($newData, JSON_UNESCAPED_UNICODE) : null;
+    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? 'System';
+    $username = $_SESSION['username'] ?? '';
+    $designation = $_SESSION['designation'] ?? '';
+    $department = $_SESSION['department'] ?? '';
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+    $map = [
+        'employee_id'   => ['i', $employeeId],
+        'employee_name' => ['s', $employeeName],
+        'username'      => ['s', $username],
+        'designation'   => ['s', $designation],
+        'department'    => ['s', $department],
+        'activity_type' => ['s', $activityType],
+        'module'        => ['s', 'hiring_request'],
+        'description'   => ['s', $description],
+        'reference_id'  => ['i', $referenceId],
+        'new_data'      => ['s', $newJson],
+        'ip_address'    => ['s', $ipAddress],
+    ];
+
+    $cols = [];
+    $types = '';
+    $values = [];
+
+    foreach ($map as $column => $pair) {
+        if (hrColumnExists($conn, 'activity_logs', $column)) {
+            $cols[] = "`$column`";
+            $types .= $pair[0];
+            $values[] = $pair[1];
+        }
+    }
+
+    if (!$cols) return false;
+
+    $sql = "INSERT INTO activity_logs (" . implode(',', $cols) . ") VALUES (" . implode(',', array_fill(0, count($cols), '?')) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$values);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return $ok;
+}
+
+function createNotificationCurrentDb($conn, int $employeeId, string $title, string $message, string $module, int $referenceId, string $link, string $type = 'hiring'): bool {
+    if ($employeeId <= 0 || !$conn || !hrTableExists($conn, 'notifications')) return false;
+
+    $map = [
+        'employee_id'  => ['i', $employeeId],
+        'title'        => ['s', $title],
+        'message'      => ['s', $message],
+        'type'         => ['s', $type],
+        'module'       => ['s', $module],
+        'reference_id' => ['i', $referenceId],
+        'link'         => ['s', $link],
+        'priority'     => ['s', 'normal'],
+        'is_read'      => ['i', 0],
+        'created_at'   => ['raw', 'NOW()'],
+    ];
+
+    $cols = [];
+    $placeholders = [];
+    $types = '';
+    $values = [];
+
+    foreach ($map as $column => $pair) {
+        if (hrColumnExists($conn, 'notifications', $column)) {
+            $cols[] = "`$column`";
+            if ($pair[0] === 'raw') {
+                $placeholders[] = $pair[1];
+            } else {
+                $placeholders[] = '?';
+                $types .= $pair[0];
+                $values[] = $pair[1];
+            }
+        }
+    }
+
+    if (!$cols) return false;
+
+    $sql = "INSERT INTO notifications (" . implode(',', $cols) . ") VALUES (" . implode(',', $placeholders) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    if ($values) {
+        mysqli_stmt_bind_param($stmt, $types, ...$values);
+    }
+
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    return $ok;
+}
+
+function getHiringRequestBeforeAction($conn, int $requestId): ?array {
+    $stmt = mysqli_prepare($conn, "
+        SELECT id, request_no, position_title, requested_by, requested_by_name, status
+        FROM hiring_requests
+        WHERE id = ?
+        LIMIT 1
+    ");
+    if (!$stmt) return null;
+
+    mysqli_stmt_bind_param($stmt, "i", $requestId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+
+    return $row ?: null;
+}
+
+function notifyHiringRequestManager($conn, array $request, int $actorId, string $status, string $remarks = ''): void {
+    $managerId = (int)($request['requested_by'] ?? 0);
+    if ($managerId <= 0 || $managerId === $actorId) {
+        return;
+    }
+
+    $requestNo = (string)($request['request_no'] ?? '');
+    $positionTitle = (string)($request['position_title'] ?? '');
+
+    $title = $status === 'Approved'
+        ? 'Hiring request approved'
+        : 'Hiring request rejected';
+
+    $message = 'Your hiring request ' . $requestNo . ' for ' . $positionTitle . ' has been ' . strtolower($status) . ' by HR.';
+    if ($remarks !== '') {
+        $message .= ' Remarks: ' . $remarks;
+    }
+
+    createNotificationCurrentDb(
+        $conn,
+        $managerId,
+        $title,
+        $message,
+        'hiring_request',
+        (int)$request['id'],
+        'view-hiring-request.php?id=' . (int)$request['id'],
+        'hiring'
+    );
+}
+
 
 // ---------------- AUTH (HR/Manager) ----------------
 if (empty($_SESSION['employee_id'])) {
@@ -49,63 +214,100 @@ if (!$isHr && !$isManager && !$isAdmin) {
 $message = '';
 $messageType = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $isHr) {
-    $request_id = (int)$_POST['request_id'];
-    $remarks = mysqli_real_escape_string($conn, $_POST['remarks'] ?? '');
-    
-    if ($_POST['action'] === 'approve') {
-        $update_stmt = mysqli_prepare($conn, "
-            UPDATE hiring_requests 
-            SET status = 'Approved', approved_by = ?, approved_by_name = ?, approved_at = NOW(), approver_remarks = ?
-            WHERE id = ?
-        ");
-        mysqli_stmt_bind_param($update_stmt, "issi", $current_employee_id, $current_employee['full_name'], $remarks, $request_id);
-        
-        if (mysqli_stmt_execute($update_stmt)) {
-            logActivity(
-                $conn,
-                'UPDATE',
-                'hiring_request',
-                "Approved hiring request ID: {$request_id}",
-                $request_id,
-                null,
-                null,
-                json_encode(['remarks' => $remarks])
-            );
-            
-            $message = "Hiring request approved successfully!";
-            $messageType = "success";
-        }
-    } elseif ($_POST['action'] === 'reject') {
-        $update_stmt = mysqli_prepare($conn, "
-            UPDATE hiring_requests 
-            SET status = 'Rejected', rejected_by = ?, rejected_at = NOW(), rejection_reason = ?
-            WHERE id = ?
-        ");
-        mysqli_stmt_bind_param($update_stmt, "isi", $current_employee_id, $remarks, $request_id);
-        
-        if (mysqli_stmt_execute($update_stmt)) {
-            logActivity(
-                $conn,
-                'UPDATE',
-                'hiring_request',
-                "Rejected hiring request ID: {$request_id}",
-                $request_id,
-                null,
-                null,
-                json_encode(['reason' => $remarks])
-            );
-            
-            $message = "Hiring request rejected successfully!";
-            $messageType = "success";
-        }
-    }
-    
-    if (isset($update_stmt) && mysqli_stmt_execute($update_stmt)) {
-        // Message already set above
-    } else {
-        $message = "Error processing request: " . mysqli_error($conn);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && ($isHr || $isAdmin)) {
+    $request_id = (int)($_POST['request_id'] ?? 0);
+    $remarks = trim((string)($_POST['remarks'] ?? ''));
+
+    if ($request_id <= 0) {
+        $message = "Invalid request selected.";
         $messageType = "danger";
+    } else {
+        $requestBeforeAction = getHiringRequestBeforeAction($conn, $request_id);
+
+        if (!$requestBeforeAction) {
+            $message = "Hiring request not found.";
+            $messageType = "danger";
+        } elseif (($requestBeforeAction['status'] ?? '') !== 'Pending') {
+            $message = "Only pending hiring requests can be processed.";
+            $messageType = "danger";
+        } elseif ($_POST['action'] === 'approve') {
+            $update_stmt = mysqli_prepare($conn, "
+                UPDATE hiring_requests
+                SET status = 'Approved',
+                    approved_by = ?,
+                    approved_by_name = ?,
+                    approved_at = NOW(),
+                    approver_remarks = ?
+                WHERE id = ?
+                  AND status = 'Pending'
+            ");
+
+            if ($update_stmt) {
+                mysqli_stmt_bind_param($update_stmt, "issi", $current_employee_id, $current_employee['full_name'], $remarks, $request_id);
+
+                if (mysqli_stmt_execute($update_stmt)) {
+                    logHiringActivityCurrentDb(
+                        $conn,
+                        (int)$current_employee_id,
+                        'UPDATE',
+                        "Approved hiring request ID: {$request_id}",
+                        $request_id,
+                        ['remarks' => $remarks, 'status' => 'Approved']
+                    );
+
+                    notifyHiringRequestManager($conn, $requestBeforeAction, (int)$current_employee_id, 'Approved', $remarks);
+
+                    $message = "Hiring request approved successfully!";
+                    $messageType = "success";
+                } else {
+                    $message = "Error approving request: " . mysqli_stmt_error($update_stmt);
+                    $messageType = "danger";
+                }
+
+                mysqli_stmt_close($update_stmt);
+            } else {
+                $message = "Error preparing approval: " . mysqli_error($conn);
+                $messageType = "danger";
+            }
+        } elseif ($_POST['action'] === 'reject') {
+            $update_stmt = mysqli_prepare($conn, "
+                UPDATE hiring_requests
+                SET status = 'Rejected',
+                    rejected_by = ?,
+                    rejected_at = NOW(),
+                    rejection_reason = ?
+                WHERE id = ?
+                  AND status = 'Pending'
+            ");
+
+            if ($update_stmt) {
+                mysqli_stmt_bind_param($update_stmt, "isi", $current_employee_id, $remarks, $request_id);
+
+                if (mysqli_stmt_execute($update_stmt)) {
+                    logHiringActivityCurrentDb(
+                        $conn,
+                        (int)$current_employee_id,
+                        'UPDATE',
+                        "Rejected hiring request ID: {$request_id}",
+                        $request_id,
+                        ['reason' => $remarks, 'status' => 'Rejected']
+                    );
+
+                    notifyHiringRequestManager($conn, $requestBeforeAction, (int)$current_employee_id, 'Rejected', $remarks);
+
+                    $message = "Hiring request rejected successfully!";
+                    $messageType = "success";
+                } else {
+                    $message = "Error rejecting request: " . mysqli_stmt_error($update_stmt);
+                    $messageType = "danger";
+                }
+
+                mysqli_stmt_close($update_stmt);
+            } else {
+                $message = "Error preparing rejection: " . mysqli_error($conn);
+                $messageType = "danger";
+            }
+        }
     }
 }
 
@@ -126,7 +328,7 @@ $query = "
 ";
 
 // Managers see only their own requests, HR sees all
-if (!$isHr && $isManager) {
+if (!$isHr && !$isAdmin && $isManager) {
     $query .= " AND h.requested_by = {$current_employee_id}";
 }
 
@@ -162,7 +364,14 @@ $query .= " GROUP BY h.id ORDER BY
     END, 
     h.created_at DESC";
 
-$requests = mysqli_query($conn, $query);
+$requests_result = mysqli_query($conn, $query);
+$requests = [];
+if ($requests_result) {
+    while ($row = mysqli_fetch_assoc($requests_result)) {
+        $requests[] = $row;
+    }
+    mysqli_free_result($requests_result);
+}
 
 // Get counts for dashboard
 $stats_query = "
@@ -175,7 +384,7 @@ $stats_query = "
         SUM(vacancies) as total_vacancies
     FROM hiring_requests
 ";
-if (!$isHr && $isManager) {
+if (!$isHr && !$isAdmin && $isManager) {
     $stats_query .= " WHERE requested_by = {$current_employee_id}";
 }
 $stats_result = mysqli_query($conn, $stats_query);
@@ -195,31 +404,29 @@ function safeDate($date, $format = 'd M Y')
 }
 
 function getStatusBadge($status) {
-    $classes = [
-        'Pending' => 'status-screening',
-        'Approved' => 'status-selected',
-        'In Progress' => 'status-interview',
-        'Rejected' => 'status-rejected',
-        'Closed' => 'status-joined',
-        'Cancelled' => 'status-declined'
+    $status = trim((string)$status);
+    $map = [
+        'Pending'     => ['pending', 'bi-clock'],
+        'Approved'    => ['ontrack', 'bi-check-circle'],
+        'In Progress' => ['progressing', 'bi-gear'],
+        'Rejected'    => ['atrisk', 'bi-x-circle'],
+        'Closed'      => ['ontrack', 'bi-check2-circle'],
+        'Cancelled'   => ['neutral', 'bi-x']
     ];
-    $class = $classes[$status] ?? 'status-new';
-    return "<span class='status-badge {$class}'><i class='bi bi-circle-fill' style='font-size:8px;'></i> {$status}</span>";
+    $item = $map[$status] ?? ['neutral', 'bi-info-circle'];
+    return "<span class='badge-pill {$item[0]}'><i class='bi {$item[1]}'></i> " . e($status ?: '—') . "</span>";
 }
 
 function getPriorityBadge($priority) {
-    switch($priority) {
-        case 'Urgent':
-            return '<span class="status-badge status-rejected"><i class="bi bi-exclamation-triangle-fill"></i> Urgent</span>';
-        case 'High':
-            return '<span class="status-badge status-hold"><i class="bi bi-arrow-up-circle-fill"></i> High</span>';
-        case 'Medium':
-            return '<span class="status-badge status-interview"><i class="bi bi-dash-circle-fill"></i> Medium</span>';
-        case 'Low':
-            return '<span class="status-badge status-screening"><i class="bi bi-arrow-down-circle-fill"></i> Low</span>';
-        default:
-            return '<span class="status-badge">' . e($priority) . '</span>';
-    }
+    $priority = trim((string)$priority);
+    $map = [
+        'Urgent' => ['atrisk', 'bi-exclamation-triangle-fill'],
+        'High'   => ['warning', 'bi-arrow-up-circle-fill'],
+        'Medium' => ['progressing', 'bi-dash-circle-fill'],
+        'Low'    => ['neutral', 'bi-arrow-down-circle-fill']
+    ];
+    $item = $map[$priority] ?? ['neutral', 'bi-info-circle'];
+    return "<span class='badge-pill {$item[0]}'><i class='bi {$item[1]}'></i> " . e($priority ?: '—') . "</span>";
 }
 
 function getProgressIndicator($vacancies, $selected, $joined) {
@@ -270,9 +477,6 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     
-    <!-- DataTables -->
-    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
 
     <!-- TEK-C Custom Styles -->
     <link href="assets/css/layout-styles.css" rel="stylesheet" />
@@ -280,321 +484,115 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
     <link href="assets/css/footer.css" rel="stylesheet" />
 
     <style>
-        .content-scroll { flex: 1 1 auto; overflow: auto; padding: 22px; }
-        
-        .panel {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 16px;
-            height: 100%;
+        :root{
+            --page-bg:#f5f7fb;
+            --card-bg:#ffffff;
+            --border:#e5e7eb;
+            --text:#111827;
+            --muted:#6b7280;
+            --soft:#f8fafc;
+            --shadow:0 10px 26px rgba(15,23,42,.055);
+            --radius:15px;
+            --blue:#2f80ed;
+            --green:#27ae60;
+            --orange:#f2994a;
+            --red:#eb5757;
+            --purple:#7c3aed;
         }
-        
-        .panel-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
+        body{background:var(--page-bg);}
+        .content-scroll{flex:1 1 auto;overflow:auto;padding:16px;}
+        .projects-wrapper{width:100%;}
+        .page-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;}
+        .page-heading h1{font-size:19px;font-weight:950;color:var(--text);margin:0;}
+        .page-heading p{margin:3px 0 0;color:var(--muted);font-size:12px;font-weight:650;}
+        .primary-btn,.secondary-btn,.btn-action,.success-btn,.danger-btn{min-height:36px;padding:0 14px;border-radius:11px;font-size:12px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;white-space:nowrap;line-height:1;border:0;}
+        .primary-btn{background:#111827;color:#fff;}
+        .primary-btn:hover{background:#020617;color:#fff;}
+        .success-btn{background:#16a34a;color:#fff;}
+        .success-btn:hover{background:#15803d;color:#fff;}
+        .danger-btn{background:#dc2626;color:#fff;}
+        .danger-btn:hover{background:#b91c1c;color:#fff;}
+        .secondary-btn,.btn-action{border:1px solid var(--border);background:#fff;color:#334155;}
+        .secondary-btn:hover,.btn-action:hover{border-color:#cbd5e1;background:#f8fafc;color:#111827;}
+        .panel,.filter-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:13px;margin-bottom:14px;height:auto;}
+        .panel-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+        .panel-title{font-weight:950;font-size:14px;color:var(--text);margin:0;display:flex;align-items:center;gap:8px;}
+        .panel-title i{color:var(--blue);font-size:16px;}
+        .panel-subtitle{color:var(--muted);font-size:11px;font-weight:700;margin-top:2px;}
+        .panel-menu{width:34px;height:34px;border-radius:11px;border:1px solid var(--border);background:#fff;display:grid;place-items:center;color:#64748b;flex:0 0 auto;}
+        .stat-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 13px;min-height:78px;display:flex;align-items:center;gap:11px;transition:.15s ease;}
+        .stat-card:hover{transform:translateY(-1px);box-shadow:0 14px 32px rgba(15,23,42,.09);}
+        .stat-ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:17px;flex:0 0 auto;}
+        .stat-ic.blue{background:var(--blue);}
+        .stat-ic.green{background:var(--green);}
+        .stat-ic.yellow{background:var(--orange);}
+        .stat-ic.purple{background:var(--purple);}
+        .stat-ic.red{background:var(--red);}
+        .stat-label{color:#64748b;font-weight:850;font-size:10.5px;text-transform:uppercase;}
+        .stat-value{font-size:24px;font-weight:950;line-height:1;color:#111827;margin-top:2px;}
+        .form-label{font-size:11px;font-weight:900;color:#475569;text-transform:uppercase;margin-bottom:6px;}
+        .form-control,.form-select{min-height:38px;border:1px solid var(--border);border-radius:11px;font-size:12px;font-weight:800;color:#111827;padding:8px 11px;background:#fff;}
+        .form-control:focus,.form-select:focus{border-color:#bfdbfe;box-shadow:0 0 0 3px rgba(59,130,246,.10);}
+        textarea.form-control{min-height:86px;}
+        .badge-pill{border-radius:999px;padding:5px 8px;font-weight:900;font-size:10px;display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;text-decoration:none;white-space:nowrap;}
+        .ontrack{color:#15803d;background:#dcfce7;border-color:#bbf7d0;}
+        .progressing{color:#2563eb;background:#dbeafe;border-color:#bfdbfe;}
+        .pending{color:#6d28d9;background:#ede9fe;border-color:#ddd6fe;}
+        .atrisk{color:#b91c1c;background:#fee2e2;border-color:#fecaca;}
+        .neutral{color:#475569;background:#f1f5f9;border-color:#e2e8f0;}
+        .warning{color:#b45309;background:#ffedd5;border-color:#fed7aa;}
+        .compact-table-wrap{width:100%;border:1px solid var(--border);border-radius:13px;overflow:hidden;background:#fff;}
+        .compact-table{width:100%;margin:0;table-layout:auto;}
+        .compact-table thead th{background:var(--soft);color:#64748b;font-size:10px;text-transform:uppercase;font-weight:900;border-bottom:1px solid var(--border)!important;padding:8px 9px;white-space:nowrap;}
+        .compact-table tbody td{padding:8px 9px;vertical-align:middle;border-color:#eef2f7;color:#334155;font-weight:700;font-size:11.5px;}
+        .compact-table tbody tr:hover{background:#fbfdff;}
+        .request-no{font-weight:950;font-size:12px;color:#2563eb;}
+        .position-title{font-weight:950;font-size:12px;color:#111827;margin-bottom:2px;line-height:1.25;}
+        .designation-text,.request-date{font-size:10.5px;color:#64748b;font-weight:750;}
+        .requester-name{font-weight:900;font-size:11.5px;color:#111827;}
+        .progress{height:7px;background-color:#e5e7eb;border-radius:999px;overflow:hidden;}
+        .progress-bar-filled{height:7px;background:#16a34a;float:left;}
+        .progress-bar-progress{height:7px;background:#f59e0b;float:left;}
+        .btn-action{min-height:31px;min-width:31px;padding:0 9px;border-radius:10px;margin:0 2px;}
+        .btn-action.view:hover,.btn-action.people:hover{color:#2563eb;border-color:#bfdbfe;background:#eff6ff;}
+        .btn-action.success:hover{color:#15803d;border-color:#86efac;background:#dcfce7;}
+        .btn-action.danger:hover{color:#b91c1c;border-color:#fecaca;background:#fee2e2;}
+        .actions-col{width:170px;white-space:nowrap!important;}
+        .empty-state{text-align:center;padding:30px 12px;color:#64748b;font-size:12px;font-weight:900;}
+        .empty-state i{display:block;font-size:34px;opacity:.45;margin-bottom:8px;}
+        .modal-content{border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 55px rgba(15,23,42,.18);}
+        .modal-header{border-bottom:1px solid #eef2f7;padding:14px 16px;}
+        .modal-title{font-size:15px;font-weight:950;color:#111827;}
+        .modal-body{padding:16px;}
+        .modal-footer{border-top:1px solid #eef2f7;padding:14px 16px;}
+        .required:after{content:" *";color:#ef4444;}
+        .alert{border-radius:14px;border:1px solid transparent;box-shadow:var(--shadow);margin-bottom:14px;font-size:12px;font-weight:850;}
+        .alert-success{background:#dcfce7;border-color:#bbf7d0;color:#166534;}
+        .alert-danger{background:#fee2e2;border-color:#fecaca;color:#991b1b;}
+        .alert-warning{background:#fffbeb;border-color:#fde68a;color:#92400e;}
+        @media(max-width:991.98px){
+            .main{margin-left:0!important;width:100%!important;max-width:100%!important;}
+            .sidebar{position:fixed!important;transform:translateX(-100%);z-index:1040!important;}
+            .sidebar.open,.sidebar.active,.sidebar.show{transform:translateX(0)!important;}
         }
-        
-        .panel-title {
-            font-weight: 900;
-            font-size: 18px;
-            color: #1f2937;
-            margin: 0;
+        @media(max-width:1199px){
+            .compact-table thead{display:none;}
+            .compact-table,.compact-table tbody,.compact-table tr,.compact-table td{display:block;width:100%;}
+            .compact-table tbody tr{border-bottom:1px solid var(--border);padding:10px;}
+            .compact-table tbody td{border:0;display:flex;justify-content:space-between;gap:12px;}
+            .compact-table tbody td::before{content:attr(data-label);font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;flex:0 0 110px;}
+            .compact-table tbody td:first-child{display:block;}
+            .compact-table tbody td:first-child::before{display:none;}
+            .actions-col{width:auto!important;}
         }
-        
-        .panel-menu {
-            width: 36px;
-            height: 36px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            background: #fff;
-            display: grid;
-            place-items: center;
-            color: #6b7280;
+        @media(max-width:768px){
+            .content-scroll{padding:12px 10px!important;}
+            .container-fluid.projects-wrapper{padding-left:0!important;padding-right:0!important;}
+            .page-heading{align-items:flex-start;flex-direction:column;}
+            .panel,.filter-card{padding:12px;}
+            .primary-btn,.secondary-btn,.success-btn,.danger-btn{width:100%;}
+            .modal-footer{flex-direction:column-reverse;align-items:stretch;}
         }
-
-        /* Stats Cards */
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 14px 16px;
-            height: 90px;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-        
-        .stat-ic {
-            width: 46px;
-            height: 46px;
-            border-radius: 14px;
-            display: grid;
-            place-items: center;
-            color: #fff;
-            font-size: 20px;
-            flex: 0 0 auto;
-        }
-        
-        .stat-ic.blue { background: var(--blue); }
-        .stat-ic.green { background: #10b981; }
-        .stat-ic.yellow { background: #f59e0b; }
-        .stat-ic.purple { background: #8b5cf6; }
-        .stat-ic.red { background: #ef4444; }
-        
-        .stat-label {
-            color: #4b5563;
-            font-weight: 750;
-            font-size: 13px;
-        }
-        
-        .stat-value {
-            font-size: 30px;
-            font-weight: 900;
-            line-height: 1;
-            margin-top: 2px;
-        }
-
-        /* Filter Card */
-        .filter-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 18px;
-            margin-bottom: 20px;
-        }
-
-        /* Buttons */
-        .btn-add {
-            background: var(--blue);
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            border-radius: 12px;
-            font-weight: 800;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 8px 18px rgba(45, 156, 219, 0.18);
-            text-decoration: none;
-            white-space: nowrap;
-        }
-        .btn-add:hover { background: #2a8bc9; color: #fff; }
-
-        .btn-filter {
-            background: #10b981;
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            border-radius: 12px;
-            font-weight: 800;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 8px 18px rgba(16, 185, 129, 0.18);
-            white-space: nowrap;
-        }
-        .btn-filter:hover { background: #0da271; color: #fff; }
-
-        .btn-reset {
-            background: #6b7280;
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            border-radius: 12px;
-            font-weight: 800;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            white-space: nowrap;
-            text-decoration: none;
-        }
-        .btn-reset:hover { background: #4b5563; color: #fff; }
-
-        /* Table Styles */
-        .table-responsive { overflow-x: hidden !important; }
-        table.dataTable { width: 100% !important; }
-        
-        .table thead th {
-            font-size: 11px;
-            color: #6b7280;
-            font-weight: 800;
-            border-bottom: 1px solid var(--border) !important;
-            padding: 10px 10px !important;
-            white-space: normal !important;
-        }
-        
-        .table td {
-            vertical-align: middle;
-            border-color: var(--border);
-            font-weight: 650;
-            color: #374151;
-            padding: 12px 10px !important;
-            white-space: normal !important;
-            word-break: break-word;
-        }
-
-        /* Status Badges */
-        .status-badge {
-            padding: 3px 8px;
-            border-radius: 20px;
-            font-size: 10px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: .3px;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            white-space: nowrap;
-        }
-        
-        .status-new { background: rgba(45, 156, 219, .12); color: var(--blue); border: 1px solid rgba(45, 156, 219, .22); }
-        .status-screening { background: rgba(107, 114, 128, .12); color: #6b7280; border: 1px solid rgba(107, 114, 128, .22); }
-        .status-shortlisted { background: rgba(139, 92, 246, .12); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, .22); }
-        .status-interview { background: rgba(245, 158, 11, .12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, .22); }
-        .status-interviewed { background: rgba(16, 185, 129, .12); color: #10b981; border: 1px solid rgba(16, 185, 129, .22); }
-        .status-selected { background: rgba(16, 185, 129, .12); color: #10b981; border: 1px solid rgba(16, 185, 129, .22); }
-        .status-rejected { background: rgba(239, 68, 68, .12); color: #ef4444; border: 1px solid rgba(239, 68, 68, .22); }
-        .status-hold { background: rgba(245, 158, 11, .12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, .22); }
-        .status-offered { background: rgba(16, 185, 129, .12); color: #10b981; border: 1px solid rgba(16, 185, 129, .22); }
-        .status-joined { background: rgba(16, 185, 129, .12); color: #10b981; border: 1px solid rgba(16, 185, 129, .22); }
-        .status-declined { background: rgba(239, 68, 68, .12); color: #ef4444; border: 1px solid rgba(239, 68, 68, .22); }
-
-        /* Action Buttons */
-        .btn-action {
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 5px 8px;
-            color: var(--muted);
-            font-size: 12px;
-            margin: 0 2px;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .btn-action:hover { background: var(--bg); color: var(--blue); }
-        .btn-action.success:hover { background: #d1fae5; color: #065f46; border-color: #065f46; }
-        .btn-action.warning:hover { background: #fef3c7; color: #92400e; border-color: #92400e; }
-        .btn-action.danger:hover { background: #fee2e2; color: #991b1b; border-color: #991b1b; }
-
-        /* Request Number */
-        .request-no {
-            font-weight: 900;
-            font-size: 13px;
-            color: var(--blue);
-        }
-
-        /* Position Info */
-        .position-title {
-            font-weight: 800;
-            font-size: 13px;
-            color: #1f2937;
-            margin-bottom: 2px;
-        }
-        
-        .designation-text {
-            font-size: 11px;
-            color: #6b7280;
-            font-weight: 600;
-        }
-
-        /* Requester Info */
-        .requester-name {
-            font-weight: 700;
-            font-size: 12px;
-            color: #1f2937;
-        }
-        
-        .request-date {
-            font-size: 10px;
-            color: #6b7280;
-            font-weight: 600;
-        }
-
-        /* Candidate Stats */
-        .candidate-stats {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .stat-circle {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 13px;
-        }
-        
-        .stat-circle.total { background: #f3f4f6; color: #374151; }
-        .stat-circle.selected { background: #d1fae5; color: #065f46; }
-        .stat-circle.joined { background: #dbeafe; color: #1e40af; }
-
-        /* Progress Bar */
-        .progress {
-            height: 6px;
-            background-color: #e5e7eb;
-            border-radius: 3px;
-        }
-        .progress-bar-filled { background-color: #10b981; }
-        .progress-bar-progress { background-color: #f59e0b; }
-
-        /* Modal Styles */
-        .modal-content {
-            border-radius: var(--radius);
-            border: none;
-            box-shadow: var(--shadow);
-        }
-        .modal-header {
-            border-bottom: 1px solid var(--border);
-            padding: 16px 20px;
-        }
-        .modal-title {
-            font-weight: 900;
-            font-size: 18px;
-            color: #1f2937;
-        }
-        .modal-body { padding: 20px; }
-        .modal-footer {
-            border-top: 1px solid var(--border);
-            padding: 16px 20px;
-        }
-
-        /* Form Labels */
-        .form-label {
-            font-weight: 800;
-            font-size: 12px;
-            color: #4b5563;
-            margin-bottom: 4px;
-        }
-        .required:after {
-            content: " *";
-            color: #ef4444;
-        }
-
-        /* Alert Styles */
-        .alert {
-            border-radius: var(--radius);
-            border: none;
-            box-shadow: var(--shadow);
-            margin-bottom: 20px;
-        }
-
-        /* Actions Column Width */
-        th.actions-col, td.actions-col { width: 120px !important; white-space: nowrap !important; }
     </style>
 </head>
 <body>
@@ -605,7 +603,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
         <?php include 'includes/topbar.php'; ?>
 
         <div class="content-scroll">
-            <div class="container-fluid maxw">
+            <div class="container-fluid projects-wrapper px-0">
 
                 <!-- Flash Messages -->
                 <?php if (!empty($message)): ?>
@@ -617,13 +615,27 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                 <?php endif; ?>
 
                 <!-- Page Header -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="page-heading">
                     <div>
-                        <h1 class="h3 fw-bold text-dark mb-1">Hiring Requests</h1>
-                        <p class="text-muted mb-0">Manage job openings and recruitment requests</p>
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                            <h1>Hiring Requests</h1>
+                            <span class="badge-pill progressing">
+                                <i class="bi bi-person-badge"></i>
+                                <?php echo $isHr ? 'HR' : ($isAdmin ? 'Admin' : 'Manager'); ?>
+                            </span>
+                        </div>
+                        <p>
+                            <?php if ($isHr || $isAdmin): ?>
+                                Review, approve, reject, and track recruitment requests.
+                            <?php else: ?>
+                                Track your hiring requests and recruitment progress.
+                            <?php endif; ?>
+                        </p>
                     </div>
-                    <a href="new-hiring-request.php" class="btn-add">
-                        <i class="bi bi-plus-circle"></i> New Request
+
+                    <a href="new-hiring-request.php" class="primary-btn">
+                        <i class="bi bi-plus-circle"></i>
+                        New Request
                     </a>
                 </div>
 
@@ -687,10 +699,10 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
                 <!-- Filter Card -->
                 <div class="filter-card">
-                    <form method="GET" class="row g-3 align-items-end">
-                        <div class="col-md-2">
+                    <form method="GET" class="row g-2 align-items-end">
+                        <div class="col-12 col-md-2">
                             <label class="form-label">Status</label>
-                            <select name="status" class="form-select form-select-sm">
+                            <select name="status" class="form-select">
                                 <option value="all">All Status</option>
                                 <option value="pending" <?php echo $status_filter === 'pending' ? 'selected' : ''; ?>>Pending</option>
                                 <option value="approved" <?php echo $status_filter === 'approved' ? 'selected' : ''; ?>>Approved</option>
@@ -699,9 +711,9 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 <option value="closed" <?php echo $status_filter === 'closed' ? 'selected' : ''; ?>>Closed</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-12 col-md-2">
                             <label class="form-label">Department</label>
-                            <select name="department" class="form-select form-select-sm">
+                            <select name="department" class="form-select">
                                 <option value="">All Departments</option>
                                 <?php foreach ($departments as $dept): ?>
                                     <option value="<?php echo $dept; ?>" <?php echo $department_filter === $dept ? 'selected' : ''; ?>>
@@ -710,9 +722,9 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-12 col-md-2">
                             <label class="form-label">Priority</label>
-                            <select name="priority" class="form-select form-select-sm">
+                            <select name="priority" class="form-select">
                                 <option value="">All Priorities</option>
                                 <?php foreach ($priorities as $p): ?>
                                     <option value="<?php echo $p; ?>" <?php echo $priority_filter === $p ? 'selected' : ''; ?>>
@@ -721,16 +733,16 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-12 col-md-4">
                             <label class="form-label">Search</label>
-                            <input type="text" name="search" class="form-control form-control-sm" 
+                            <input type="text" name="search" class="form-control" 
                                    placeholder="Request No., Position, Requester..." value="<?php echo e($search); ?>">
                         </div>
-                        <div class="col-md-2 d-flex gap-2">
-                            <button type="submit" class="btn-filter w-100">
+                        <div class="col-12 col-md-2 d-flex gap-2">
+                            <button type="submit" class="primary-btn w-100">
                                 <i class="bi bi-funnel"></i> Filter
                             </button>
-                            <a href="hiring-requests.php" class="btn-reset">
+                            <a href="hiring-requests.php" class="secondary-btn">
                                 <i class="bi bi-arrow-counterclockwise"></i>
                             </a>
                         </div>
@@ -740,12 +752,15 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                 <!-- Requests Table -->
                 <div class="panel">
                     <div class="panel-header">
-                        <h3 class="panel-title">Hiring Requests</h3>
+                        <div>
+                            <h3 class="panel-title"><i class="bi bi-briefcase"></i> Hiring Requests</h3>
+                            <div class="panel-subtitle">Showing <?php echo count($requests); ?> request(s)</div>
+                        </div>
                         <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
                     </div>
 
-                    <div class="table-responsive">
-                        <table id="requestsTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
+                    <div class="compact-table-wrap">
+                        <table id="requestsTable" class="table compact-table align-middle mb-0">
                             <thead>
                                 <tr>
                                     <th>Request No.</th>
@@ -760,29 +775,29 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php if (mysqli_num_rows($requests) === 0): ?>
-                                   
+                                <?php if (empty($requests)): ?>
+                                    
                                 <?php else: ?>
-                                    <?php while ($row = mysqli_fetch_assoc($requests)): ?>
+                                    <?php foreach ($requests as $row): ?>
                                         <tr>
-                                            <td>
+                                            <td data-label="Request No.">
                                                 <span class="request-no"><?php echo e($row['request_no']); ?></span>
                                             </td>
-                                            <td>
+                                            <td data-label="Position">
                                                 <div class="position-title"><?php echo e($row['position_title']); ?></div>
                                                 <div class="designation-text"><?php echo e($row['designation']); ?></div>
                                             </td>
-                                            <td><?php echo e($row['department']); ?></td>
-                                            <td class="text-center fw-900"><?php echo (int)$row['vacancies']; ?></td>
-                                            <td><?php echo getPriorityBadge($row['priority']); ?></td>
-                                            <td><?php echo getStatusBadge($row['status']); ?></td>
-                                            <td>
+                                            <td data-label="Department"><?php echo e($row['department']); ?></td>
+                                            <td data-label="Vacancies" class="text-center fw-900"><?php echo (int)$row['vacancies']; ?></td>
+                                            <td data-label="Priority"><?php echo getPriorityBadge($row['priority']); ?></td>
+                                            <td data-label="Status"><?php echo getStatusBadge($row['status']); ?></td>
+                                            <td data-label="Requested By">
                                                 <div class="requester-name"><?php echo e($row['requested_by_name']); ?></div>
                                                 <div class="request-date">
                                                     <i class="bi bi-calendar"></i> <?php echo safeDate($row['requested_date']); ?>
                                                 </div>
                                             </td>
-                                            <td style="min-width: 150px;">
+                                            <td data-label="Progress" style="min-width: 150px;">
                                                 <?php 
                                                 $filled = (int)$row['joined_count'];
                                                 $selected = (int)$row['selected_count'];
@@ -792,10 +807,10 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                     <div class="flex-grow-1">
                                                         <div class="progress">
                                                             <?php if ($filled > 0): ?>
-                                                                <div class="progress-bar-filled" style="width: <?php echo ($filled/$vacancies)*100; ?>%"></div>
+                                                                <div class="progress-bar-filled" style="width: <?php echo $vacancies > 0 ? ($filled/$vacancies)*100 : 0; ?>%"></div>
                                                             <?php endif; ?>
                                                             <?php if ($selected - $filled > 0): ?>
-                                                                <div class="progress-bar-progress" style="width: <?php echo (($selected-$filled)/$vacancies)*100; ?>%"></div>
+                                                                <div class="progress-bar-progress" style="width: <?php echo $vacancies > 0 ? (($selected-$filled)/$vacancies)*100 : 0; ?>%"></div>
                                                             <?php endif; ?>
                                                         </div>
                                                     </div>
@@ -814,12 +829,12 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
-                                            <td class="text-end actions-col">
-                                                <a href="view-hiring-request.php?id=<?php echo $row['id']; ?>" class="btn-action" title="View Details">
+                                            <td data-label="Actions" class="text-end actions-col">
+                                                <a href="view-hiring-request.php?id=<?php echo $row['id']; ?>" class="btn-action view" title="View Details">
                                                     <i class="bi bi-eye"></i>
                                                 </a>
                                                 
-                                                <?php if ($row['status'] === 'Pending' && $isHr): ?>
+                                                <?php if ($row['status'] === 'Pending' && ($isHr || $isAdmin)): ?>
                                                     <button class="btn-action success" 
                                                             onclick="openApproveModal(<?php echo $row['id']; ?>, '<?php echo e($row['request_no']); ?>')" 
                                                             title="Approve">
@@ -832,7 +847,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                     </button>
                                                 <?php endif; ?>
                                                 
-                                                <a href="candidates.php?hiring_id=<?php echo $row['id']; ?>" class="btn-action" title="View Candidates">
+                                                <a href="candidates.php?hiring_id=<?php echo $row['id']; ?>" class="btn-action people" title="View Candidates">
                                                     <i class="bi bi-people"></i>
                                                 </a>
                                                 
@@ -843,7 +858,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                 <?php endif; ?>
                                             </td>
                                         </tr>
-                                    <?php endwhile; ?>
+                                    <?php endforeach; ?>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -880,8 +895,8 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                 </div>
                 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-add">Approve Request</button>
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="success-btn">Approve Request</button>
                 </div>
             </form>
         </div>
@@ -911,8 +926,8 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                 </div>
                 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-add" style="background: #ef4444;">Reject Request</button>
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="danger-btn">Reject Request</button>
                 </div>
             </form>
         </div>
@@ -921,58 +936,36 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
 <!-- JavaScript -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-$(document).ready(function() {
-    // Initialize DataTable
-    $('#requestsTable').DataTable({
-        responsive: true,
-        autoWidth: false,
-        scrollX: false,
-        pageLength: 25,
-        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-        order: [[0, 'desc']],
-        language: {
-            zeroRecords: "No matching hiring requests found",
-            info: "Showing _START_ to _END_ of _TOTAL_ requests",
-            infoEmpty: "No requests to show",
-            lengthMenu: "Show _MENU_",
-            search: "Search:"
-        },
-        columnDefs: [
-            { orderable: false, targets: [8] }
-        ]
-    });
-
-    // Auto-focus search
-    setTimeout(function() {
-        $('.dataTables_filter input').focus();
-    }, 400);
-});
-
 function openApproveModal(id, requestNo) {
-    $('#approve_id').val(id);
-    $('#approve_no').text(requestNo);
+    const approveId = document.getElementById('approve_id');
+    const approveNo = document.getElementById('approve_no');
+
+    if (approveId) approveId.value = id;
+    if (approveNo) approveNo.textContent = requestNo;
+
     new bootstrap.Modal(document.getElementById('approveModal')).show();
 }
 
 function openRejectModal(id, requestNo) {
-    $('#reject_id').val(id);
-    $('#reject_no').text(requestNo);
+    const rejectId = document.getElementById('reject_id');
+    const rejectNo = document.getElementById('reject_no');
+
+    if (rejectId) rejectId.value = id;
+    if (rejectNo) rejectNo.textContent = requestNo;
+
     new bootstrap.Modal(document.getElementById('rejectModal')).show();
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    const yearElement = document.getElementById('year');
+    if (yearElement) {
+        yearElement.textContent = new Date().getFullYear();
+    }
+});
 </script>
 
 </body>
 </html>
-<?php
-if (isset($conn) && $conn) {
-    mysqli_close($conn);
-}
-?>

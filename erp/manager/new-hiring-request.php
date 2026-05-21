@@ -3,7 +3,6 @@
 session_start();
 
 require_once 'includes/db-config.php';
-require_once 'includes/activity-logger.php';
 
 date_default_timezone_set('Asia/Kolkata');
 
@@ -11,6 +10,202 @@ $conn = get_db_connection();
 if (!$conn) {
     die("Database connection failed.");
 }
+
+function hrTableExists($conn, string $table): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function hrColumnExists($conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $columnEsc = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function logHiringActivityCurrentDb($conn, int $employeeId, string $activityType, string $description, int $referenceId, array $newData = []): bool {
+    if (!$conn || !hrTableExists($conn, 'activity_logs')) {
+        return false;
+    }
+
+    $newJson = $newData ? json_encode($newData, JSON_UNESCAPED_UNICODE) : null;
+    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? 'System';
+    $username = $_SESSION['username'] ?? '';
+    $designation = $_SESSION['designation'] ?? '';
+    $department = $_SESSION['department'] ?? '';
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+    $map = [
+        'employee_id'   => ['i', $employeeId],
+        'employee_name' => ['s', $employeeName],
+        'username'      => ['s', $username],
+        'designation'   => ['s', $designation],
+        'department'    => ['s', $department],
+        'activity_type' => ['s', $activityType],
+        'module'        => ['s', 'hiring_request'],
+        'description'   => ['s', $description],
+        'reference_id'  => ['i', $referenceId],
+        'new_data'      => ['s', $newJson],
+        'ip_address'    => ['s', $ipAddress],
+    ];
+
+    $columns = [];
+    $types = '';
+    $values = [];
+
+    foreach ($map as $column => $pair) {
+        if (hrColumnExists($conn, 'activity_logs', $column)) {
+            $columns[] = "`$column`";
+            $types .= $pair[0];
+            $values[] = $pair[1];
+        }
+    }
+
+    if (!$columns) return false;
+
+    $sql = "INSERT INTO activity_logs (" . implode(',', $columns) . ") VALUES (" . implode(',', array_fill(0, count($columns), '?')) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$values);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return $ok;
+}
+
+
+function createNotificationCurrentDb(
+    $conn,
+    int $employeeId,
+    string $title,
+    string $message,
+    string $module,
+    int $referenceId,
+    string $link,
+    string $type = 'hiring'
+): bool {
+    if ($employeeId <= 0 || !$conn || !hrTableExists($conn, 'notifications')) {
+        return false;
+    }
+
+    $columns = [];
+    $placeholders = [];
+    $types = '';
+    $values = [];
+
+    $map = [
+        'employee_id'  => ['i', $employeeId],
+        'title'        => ['s', $title],
+        'message'      => ['s', $message],
+        'type'         => ['s', $type],
+        'module'       => ['s', $module],
+        'reference_id' => ['i', $referenceId],
+        'link'         => ['s', $link],
+        'priority'     => ['s', 'normal'],
+        'is_read'      => ['i', 0],
+        'created_at'   => ['raw', 'NOW()'],
+    ];
+
+    foreach ($map as $column => $pair) {
+        if (hrColumnExists($conn, 'notifications', $column)) {
+            $columns[] = "`$column`";
+
+            if ($pair[0] === 'raw') {
+                $placeholders[] = $pair[1];
+            } else {
+                $placeholders[] = '?';
+                $types .= $pair[0];
+                $values[] = $pair[1];
+            }
+        }
+    }
+
+    if (!$columns) {
+        return false;
+    }
+
+    $sql = "INSERT INTO notifications (" . implode(',', $columns) . ") VALUES (" . implode(',', $placeholders) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+
+    if (!$stmt) {
+        return false;
+    }
+
+    if ($values) {
+        mysqli_stmt_bind_param($stmt, $types, ...$values);
+    }
+
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return $ok;
+}
+
+function getHrEmployees($conn): array {
+    $employees = [];
+
+    if (!$conn || !hrTableExists($conn, 'employees')) {
+        return $employees;
+    }
+
+    $sql = "
+        SELECT id, full_name
+        FROM employees
+        WHERE employee_status = 'active'
+          AND (
+                LOWER(COALESCE(designation, '')) LIKE '%hr%'
+             OR LOWER(COALESCE(department, '')) LIKE '%hr%'
+             OR LOWER(COALESCE(department, '')) LIKE '%human resource%'
+          )
+        ORDER BY full_name
+    ";
+
+    $res = mysqli_query($conn, $sql);
+
+    if ($res) {
+        while ($row = mysqli_fetch_assoc($res)) {
+            $employees[] = $row;
+        }
+        mysqli_free_result($res);
+    }
+
+    return $employees;
+}
+
+function notifyHrForHiringRequest($conn, int $createdByEmployeeId, int $requestId, string $requestNo, string $positionTitle, string $createdByName): void {
+    $hrs = getHrEmployees($conn);
+    $notified = [];
+
+    foreach ($hrs as $hr) {
+        $hrId = (int)($hr['id'] ?? 0);
+
+        if ($hrId <= 0 || $hrId === $createdByEmployeeId || isset($notified[$hrId])) {
+            continue;
+        }
+
+        createNotificationCurrentDb(
+            $conn,
+            $hrId,
+            'New hiring request',
+            $createdByName . ' created hiring request ' . $requestNo . ' for ' . $positionTitle . '.',
+            'hiring_request',
+            $requestId,
+            'hiring-requests.php',
+            'hiring'
+        );
+
+        $notified[$hrId] = true;
+    }
+}
+
 
 /* ---------------- AUTH (HR / MANAGER) ---------------- */
 
@@ -44,10 +239,12 @@ $isManager = in_array($designation, [
     'team lead',
     'project manager',
     'director',
-    'administrator'
+    'administrator',
+    'admin'
 ]);
+$isAdmin = in_array($designation, ['administrator', 'admin', 'director']);
 
-if (!$isHr && !$isManager) {
+if (!$isHr && !$isManager && !$isAdmin) {
     $_SESSION['flash_error'] = "You don't have permission to create hiring requests.";
     header("Location: ../dashboard.php");
     exit;
@@ -92,7 +289,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             /* Generate Request Number */
 
-            $year = date('Y');
+            $year = (int)date('Y');
             $month = date('m');
 
             $stmt = mysqli_prepare($conn, "SELECT COUNT(*) as count FROM hiring_requests WHERE YEAR(created_at) = ?");
@@ -100,8 +297,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             mysqli_stmt_execute($stmt);
             $res = mysqli_stmt_get_result($stmt);
             $row = mysqli_fetch_assoc($res);
+            mysqli_stmt_close($stmt);
 
-            $count = $row['count'] + 1;
+            $count = ((int)($row['count'] ?? 0)) + 1;
 
             $request_no = "HRQ-{$year}{$month}-" . str_pad($count, 4, '0', STR_PAD_LEFT);
 
@@ -159,7 +357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Pending')
             ");
 
-            $types = "ssssiisiiddssssssisss";
+            $types = "ssssisiiddsssssssisss";
 
             mysqli_stmt_bind_param(
                 $insert,
@@ -191,16 +389,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 $request_id = mysqli_insert_id($conn);
 
-                logActivity(
+                logHiringActivityCurrentDb(
                     $conn,
+                    (int)$current_employee_id,
                     'CREATE',
-                    'hiring',
                     "Created hiring request: {$request_no} for {$position_title}",
-                    $request_id,
-                    $request_no,
-                    null,
-                    json_encode($_POST)
+                    (int)$request_id,
+                    [
+                        'request_no' => $request_no,
+                        'department' => $department,
+                        'designation' => $designation,
+                        'position_title' => $position_title,
+                        'vacancies' => $vacancies,
+                        'employment_type' => $employment_type,
+                        'priority' => $priority,
+                        'requested_by_name' => $requested_by_name,
+                        'status' => 'Pending'
+                    ]
                 );
+
+                // When Manager/Admin creates a hiring request, notify HR employees.
+                if (!$isHr) {
+                    notifyHrForHiringRequest(
+                        $conn,
+                        (int)$current_employee_id,
+                        (int)$request_id,
+                        $request_no,
+                        $position_title,
+                        $requested_by_name
+                    );
+                }
 
                 $_SESSION['flash_success'] = "Hiring request created successfully! Request #: {$request_no}";
                 header("Location: hiring-requests.php");
@@ -208,8 +426,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             } else {
 
-                $message = "Error creating request: " . mysqli_error($conn);
+                $message = "Error creating request: " . mysqli_stmt_error($insert);
                 $messageType = "danger";
+            }
+
+            if (isset($insert) && $insert) {
+                mysqli_stmt_close($insert);
             }
         }
     }
@@ -242,7 +464,7 @@ $priorities = [
 
 $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 
-$userRole = $isHr ? 'HR' : 'Manager';
+$userRole = $isHr ? 'HR' : ($isAdmin ? 'Admin' : 'Manager');
 ?>
 <!doctype html>
 <html lang="en">
@@ -256,27 +478,284 @@ $userRole = $isHr ? 'HR' : 'Manager';
     <link href="assets/css/layout-styles.css" rel="stylesheet" />
     <link href="assets/css/topbar.css" rel="stylesheet" />
     <link href="assets/css/footer.css" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 
     <style>
-        .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px; }
-        .panel{ background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 8px 24px rgba(17,24,39,.06); padding:24px; }
-        .panel-header{ margin-bottom:20px; }
-        .panel-title{ font-weight:900; font-size:20px; color:#1f2937; margin:0; }
+        :root{
+            --page-bg:#f5f7fb;
+            --card-bg:#ffffff;
+            --border:#e5e7eb;
+            --text:#111827;
+            --muted:#6b7280;
+            --soft:#f8fafc;
+            --shadow:0 10px 26px rgba(15,23,42,.055);
+            --radius:15px;
+            --blue:#2f80ed;
+            --green:#27ae60;
+            --orange:#f2994a;
+            --red:#eb5757;
+            --purple:#7c3aed;
+        }
 
-        .form-section{ background:#f9fafb; border-radius:12px; padding:20px; margin-bottom:24px; border:1px solid #e5e7eb; }
-        .form-section h6{ font-weight:800; color:#4b5563; margin-bottom:16px; padding-bottom:8px; border-bottom:1px solid #e5e7eb; }
+        body{ background:var(--page-bg); }
 
-        .form-label{ font-weight:700; font-size:13px; color:#4b5563; margin-bottom:4px; }
-        .required:after{ content:" *"; color:#dc3545; }
+        .content-scroll{
+            flex:1 1 auto;
+            overflow:auto;
+            padding:16px;
+        }
 
-        .btn-submit{ padding:12px 30px; font-weight:800; }
+        .projects-wrapper{ width:100%; }
 
-        .role-badge{ font-size:11px; padding:4px 8px; border-radius:20px; font-weight:700; background:#dbeafe; color:#1e40af; }
+        .page-heading{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:14px;
+        }
 
-        @media (max-width: 768px) {
-            .content-scroll{ padding:12px; }
+        .page-heading h1{
+            font-size:19px;
+            font-weight:950;
+            color:var(--text);
+            margin:0;
+            display:flex;
+            align-items:center;
+            gap:8px;
+        }
+
+        .page-heading p{
+            margin:3px 0 0;
+            color:var(--muted);
+            font-size:12px;
+            font-weight:650;
+        }
+
+        .primary-btn,.secondary-btn,.submit-btn{
+            min-height:36px;
+            padding:0 14px;
+            border-radius:11px;
+            font-size:12px;
+            font-weight:900;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:7px;
+            text-decoration:none;
+            white-space:nowrap;
+            line-height:1;
+            border:0;
+        }
+
+        .primary-btn,.submit-btn{
+            background:#111827;
+            color:#fff;
+        }
+
+        .primary-btn:hover,.submit-btn:hover{
+            background:#020617;
+            color:#fff;
+        }
+
+        .secondary-btn{
+            border:1px solid var(--border);
+            background:#fff;
+            color:#334155;
+        }
+
+        .secondary-btn:hover{
+            border-color:#cbd5e1;
+            background:#f8fafc;
+            color:#111827;
+        }
+
+        .panel{
+            background:var(--card-bg);
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:13px;
+            margin-bottom:14px;
+        }
+
+        .panel-header{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:12px;
+        }
+
+        .panel-title{
+            font-weight:950;
+            font-size:14px;
+            color:var(--text);
+            margin:0;
+            display:flex;
+            align-items:center;
+            gap:8px;
+        }
+
+        .panel-title i{
+            color:var(--blue);
+            font-size:16px;
+        }
+
+        .panel-subtitle{
+            color:var(--muted);
+            font-size:11px;
+            font-weight:700;
+            margin-top:2px;
+        }
+
+        .form-section{
+            border:1px solid #eef2f7;
+            background:#fff;
+            border-radius:14px;
+            padding:13px;
+            margin-bottom:13px;
+        }
+
+        .form-section h6{
+            font-weight:950;
+            font-size:13px;
+            color:#111827;
+            margin:0 0 12px;
+            padding-bottom:8px;
+            border-bottom:1px solid #eef2f7;
+            display:flex;
+            align-items:center;
+            gap:8px;
+        }
+
+        .form-section h6 i{
+            color:var(--blue);
+            font-size:15px;
+        }
+
+        .form-label{
+            font-size:11px;
+            font-weight:900;
+            color:#475569;
+            text-transform:uppercase;
+            margin-bottom:6px;
+        }
+
+        .required:after{
+            content:" *";
+            color:var(--red);
+            font-weight:950;
+        }
+
+        .form-control,.form-select{
+            min-height:38px;
+            border:1px solid var(--border);
+            border-radius:11px;
+            font-size:12px;
+            font-weight:800;
+            color:#111827;
+            padding:8px 11px;
+            background:#fff;
+        }
+
+        .form-control:focus,.form-select:focus{
+            border-color:#bfdbfe;
+            box-shadow:0 0 0 3px rgba(59,130,246,.10);
+        }
+
+        textarea.form-control{ min-height:92px; }
+
+        .role-badge,.badge-pill{
+            border-radius:999px;
+            padding:5px 8px;
+            font-weight:900;
+            font-size:10px;
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            border:1px solid #bfdbfe;
+            color:#2563eb;
+            background:#dbeafe;
+            white-space:nowrap;
+        }
+
+        .info-note{
+            background:#eff6ff;
+            border:1px solid #bfdbfe;
+            border-radius:13px;
+            padding:11px 13px;
+            margin-bottom:14px;
+            display:flex;
+            align-items:center;
+            gap:10px;
+        }
+
+        .info-note i{
+            color:#2563eb;
+            font-size:18px;
+        }
+
+        .info-note p{
+            margin:0;
+            color:#1e293b;
+            font-weight:750;
+            font-size:11.5px;
+        }
+
+        .submit-strip{
+            background:#fff;
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:13px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-top:14px;
+        }
+
+        .submit-note{
+            color:#64748b;
+            font-size:11px;
+            font-weight:750;
+            margin:0;
+        }
+
+        .alert{
+            border-radius:14px;
+            border:1px solid transparent;
+            box-shadow:var(--shadow);
+            font-size:12px;
+            font-weight:850;
+            margin-bottom:14px;
+        }
+
+        .alert-danger{
+            background:#fee2e2;
+            border-color:#fecaca;
+            color:#991b1b;
+        }
+
+        .alert-success{
+            background:#dcfce7;
+            border-color:#bbf7d0;
+            color:#166534;
+        }
+
+        @media(max-width:991.98px){
+            .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
+            .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
+            .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
+        }
+
+        @media(max-width:768px){
+            .content-scroll{ padding:12px 10px!important; }
+            .container-fluid.projects-wrapper{ padding-left:0!important; padding-right:0!important; }
+            .page-heading,.submit-strip{ flex-direction:column; align-items:flex-start; }
+            .panel,.form-section{ padding:12px; }
+            .primary-btn,.secondary-btn,.submit-btn{ width:100%; }
+            .form-actions{ flex-direction:column-reverse; align-items:stretch!important; }
         }
     </style>
 </head>
@@ -288,22 +767,24 @@ $userRole = $isHr ? 'HR' : 'Manager';
         <?php include 'includes/topbar.php'; ?>
 
         <div class="content-scroll">
-            <div class="container-fluid maxw">
+            <div class="container-fluid projects-wrapper px-0">
 
                 <!-- Page Header -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="page-heading">
                     <div>
-                        <h1 class="h3 fw-bold mb-1">
-                            <i class="bi bi-plus-circle me-2"></i>
-                            New Hiring Request
-                        </h1>
-                        <div class="d-flex align-items-center gap-2">
-                            <p class="text-muted mb-0">Create a new position requisition</p>
-                            <span class="role-badge"><i class="bi bi-shield-check me-1"></i> <?php echo $userRole; ?></span>
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                            <h1><i class="bi bi-plus-circle"></i> New Hiring Request</h1>
+                            <span class="role-badge">
+                                <i class="bi bi-shield-check"></i>
+                                <?php echo e($userRole); ?>
+                            </span>
                         </div>
+                        <p>Create a new position requisition for HR approval and recruitment tracking.</p>
                     </div>
-                    <a href="hiring-requests.php" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left"></i> Back to Requests
+
+                    <a href="hiring-requests.php" class="secondary-btn">
+                        <i class="bi bi-arrow-left"></i>
+                        Back to Requests
                     </a>
                 </div>
 
@@ -318,6 +799,21 @@ $userRole = $isHr ? 'HR' : 'Manager';
 
                 <!-- Form -->
                 <div class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h3 class="panel-title">
+                                <i class="bi bi-briefcase"></i>
+                                Request Details
+                            </h3>
+                            <div class="panel-subtitle">Fill the position details, experience range, and hiring reason.</div>
+                        </div>
+                    </div>
+
+                    <div class="info-note">
+                        <i class="bi bi-info-circle"></i>
+                        <p><?php echo $isHr ? 'After submission, the hiring request will be saved as Pending and visible in the hiring requests page.' : 'After submission, HR employees will be notified and the request will stay Pending for HR review.'; ?></p>
+                    </div>
+
                     <form method="POST" action="" id="hiringRequestForm">
                         <input type="hidden" name="action" value="create_request">
 
@@ -330,28 +826,28 @@ $userRole = $isHr ? 'HR' : 'Manager';
                                     <select name="department" class="form-select" required>
                                         <option value="">Select Department</option>
                                         <?php foreach ($departments as $dept): ?>
-                                            <option value="<?php echo $dept; ?>"><?php echo $dept; ?></option>
+                                            <option value="<?php echo e($dept); ?>" <?php echo (($_POST['department'] ?? '') === $dept) ? 'selected' : ''; ?>><?php echo e($dept); ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label required">Designation</label>
-                                    <input type="text" name="designation" class="form-control" placeholder="e.g., Senior Engineer" required>
+                                    <input type="text" name="designation" class="form-control" value="<?php echo e($_POST['designation'] ?? ''); ?>" placeholder="e.g., Senior Engineer" required>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label required">Position Title</label>
-                                    <input type="text" name="position_title" class="form-control" placeholder="e.g., Project Engineer" required>
+                                    <input type="text" name="position_title" class="form-control" value="<?php echo e($_POST['position_title'] ?? ''); ?>" placeholder="e.g., Project Engineer" required>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label required">No. of Vacancies</label>
-                                    <input type="number" name="vacancies" class="form-control" min="1" value="1" required>
+                                    <input type="number" name="vacancies" class="form-control" min="1" value="<?php echo e($_POST['vacancies'] ?? '1'); ?>" required>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label required">Employment Type</label>
                                     <select name="employment_type" class="form-select" required>
                                         <option value="">Select Type</option>
                                         <?php foreach ($employment_types as $type): ?>
-                                            <option value="<?php echo $type; ?>"><?php echo $type; ?></option>
+                                            <option value="<?php echo e($type); ?>" <?php echo (($_POST['employment_type'] ?? '') === $type) ? 'selected' : ''; ?>><?php echo e($type); ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
@@ -359,7 +855,7 @@ $userRole = $isHr ? 'HR' : 'Manager';
                                     <label class="form-label required">Priority</label>
                                     <select name="priority" class="form-select" required>
                                         <?php foreach ($priorities as $p): ?>
-                                            <option value="<?php echo $p; ?>" <?php echo $p === 'Medium' ? 'selected' : ''; ?>>
+                                            <option value="<?php echo e($p); ?>" <?php echo (($_POST['priority'] ?? 'Medium') === $p) ? 'selected' : ''; ?>>
                                                 <?php echo $p; ?>
                                             </option>
                                         <?php endforeach; ?>
@@ -367,7 +863,7 @@ $userRole = $isHr ? 'HR' : 'Manager';
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Expected Joining Date</label>
-                                    <input type="date" name="expected_joining_date" class="form-control" min="<?php echo date('Y-m-d', strtotime('+7 days')); ?>">
+                                    <input type="date" name="expected_joining_date" class="form-control" min="<?php echo date('Y-m-d', strtotime('+7 days')); ?>" value="<?php echo e($_POST['expected_joining_date'] ?? ''); ?>">
                                 </div>
                             </div>
                         </div>
@@ -378,23 +874,23 @@ $userRole = $isHr ? 'HR' : 'Manager';
                             <div class="row g-3">
                                 <div class="col-md-3">
                                     <label class="form-label required">Min Experience (years)</label>
-                                    <input type="number" name="experience_min" class="form-control" min="0" step="0.5" value="0" required>
+                                    <input type="number" name="experience_min" class="form-control" min="0" step="0.5" value="<?php echo e($_POST['experience_min'] ?? '0'); ?>" required>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label required">Max Experience (years)</label>
-                                    <input type="number" name="experience_max" class="form-control" min="0" step="0.5" value="2" required>
+                                    <input type="number" name="experience_max" class="form-control" min="0" step="0.5" value="<?php echo e($_POST['experience_max'] ?? '2'); ?>" required>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Min Salary (₹ LPA)</label>
-                                    <input type="number" name="salary_min" class="form-control" min="0" step="0.1" placeholder="e.g., 3.5">
+                                    <input type="number" name="salary_min" class="form-control" min="0" step="0.1" value="<?php echo e($_POST['salary_min'] ?? ''); ?>" placeholder="e.g., 3.5">
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Max Salary (₹ LPA)</label>
-                                    <input type="number" name="salary_max" class="form-control" min="0" step="0.1" placeholder="e.g., 6.0">
+                                    <input type="number" name="salary_max" class="form-control" min="0" step="0.1" value="<?php echo e($_POST['salary_max'] ?? ''); ?>" placeholder="e.g., 6.0">
                                 </div>
                                 <div class="col-md-12">
                                     <label class="form-label required">Location</label>
-                                    <input type="text" name="location" class="form-control" placeholder="e.g., Bangalore, Mumbai, Remote" required>
+                                    <input type="text" name="location" class="form-control" value="<?php echo e($_POST['location'] ?? ''); ?>" placeholder="e.g., Bangalore, Mumbai, Remote" required>
                                 </div>
                             </div>
                         </div>
@@ -405,15 +901,15 @@ $userRole = $isHr ? 'HR' : 'Manager';
                             <div class="row g-3">
                                 <div class="col-md-12">
                                     <label class="form-label required">Job Description</label>
-                                    <textarea name="job_description" class="form-control" rows="4" placeholder="Describe the role, responsibilities, etc." required></textarea>
+                                    <textarea name="job_description" class="form-control" rows="4" placeholder="Describe the role, responsibilities, etc." required><?php echo e($_POST['job_description'] ?? ''); ?></textarea>
                                 </div>
                                 <div class="col-md-12">
                                     <label class="form-label">Qualification Required</label>
-                                    <textarea name="qualification" class="form-control" rows="3" placeholder="e.g., B.E/B.Tech in Civil Engineering"></textarea>
+                                    <textarea name="qualification" class="form-control" rows="3" placeholder="e.g., B.E/B.Tech in Civil Engineering"><?php echo e($_POST['qualification'] ?? ''); ?></textarea>
                                 </div>
                                 <div class="col-md-12">
                                     <label class="form-label">Skills Required</label>
-                                    <textarea name="skills_required" class="form-control" rows="3" placeholder="List key skills required (comma separated)"></textarea>
+                                    <textarea name="skills_required" class="form-control" rows="3" placeholder="List key skills required (comma separated)"><?php echo e($_POST['skills_required'] ?? ''); ?></textarea>
                                 </div>
                             </div>
                         </div>
@@ -426,29 +922,38 @@ $userRole = $isHr ? 'HR' : 'Manager';
                                     <label class="form-label required">Reason for Hiring</label>
                                     <select name="reason_for_hiring" class="form-select" required>
                                         <option value="">Select Reason</option>
-                                        <option value="New Position">New Position</option>
-                                        <option value="Replacement">Replacement</option>
-                                        <option value="Project Expansion">Project Expansion</option>
-                                        <option value="Backfill">Backfill</option>
-                                        <option value="Seasonal">Seasonal</option>
-                                        <option value="Other">Other</option>
+                                        <option value="New Position" <?php echo (($_POST['reason_for_hiring'] ?? '') === 'New Position') ? 'selected' : ''; ?>>New Position</option>
+                                        <option value="Replacement" <?php echo (($_POST['reason_for_hiring'] ?? '') === 'Replacement') ? 'selected' : ''; ?>>Replacement</option>
+                                        <option value="Project Expansion" <?php echo (($_POST['reason_for_hiring'] ?? '') === 'Project Expansion') ? 'selected' : ''; ?>>Project Expansion</option>
+                                        <option value="Backfill" <?php echo (($_POST['reason_for_hiring'] ?? '') === 'Backfill') ? 'selected' : ''; ?>>Backfill</option>
+                                        <option value="Seasonal" <?php echo (($_POST['reason_for_hiring'] ?? '') === 'Seasonal') ? 'selected' : ''; ?>>Seasonal</option>
+                                        <option value="Other" <?php echo (($_POST['reason_for_hiring'] ?? '') === 'Other') ? 'selected' : ''; ?>>Other</option>
                                     </select>
                                 </div>
                                 <div class="col-md-12" id="replacementField" style="display:none;">
                                     <label class="form-label">Replacement For (Employee Name/Code)</label>
-                                    <input type="text" name="replacement_for" class="form-control" placeholder="Enter employee name or code">
+                                    <input type="text" name="replacement_for" class="form-control" value="<?php echo e($_POST['replacement_for'] ?? ''); ?>" placeholder="Enter employee name or code">
                                 </div>
                             </div>
                         </div>
 
                         <!-- Submit Buttons -->
-                        <div class="d-flex justify-content-end gap-2 mt-4">
-                            <button type="reset" class="btn btn-outline-secondary btn-submit">
-                                <i class="bi bi-arrow-counterclockwise"></i> Reset
-                            </button>
-                            <button type="submit" class="btn btn-primary btn-submit">
-                                <i class="bi bi-send"></i> Submit Request
-                            </button>
+                        <div class="submit-strip">
+                            <p class="submit-note">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <?php echo $isHr ? 'Required fields are marked with *. Request will be saved as Pending.' : 'Required fields are marked with *. HR will receive a notification after submission.'; ?>
+                            </p>
+
+                            <div class="d-flex gap-2 form-actions">
+                                <button type="reset" class="secondary-btn">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                    Reset
+                                </button>
+                                <button type="submit" class="submit-btn" id="submitHiringBtn">
+                                    <i class="bi bi-send"></i>
+                                    Submit Request
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -461,53 +966,68 @@ $userRole = $isHr ? 'HR' : 'Manager';
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-$(document).ready(function() {
-    // Show/hide replacement field based on reason selection
-    $('select[name="reason_for_hiring"]').change(function() {
-        if ($(this).val() === 'Replacement') {
-            $('#replacementField').show();
-            $('input[name="replacement_for"]').prop('required', true);
+document.addEventListener('DOMContentLoaded', function () {
+    const reasonSelect = document.querySelector('select[name="reason_for_hiring"]');
+    const replacementField = document.getElementById('replacementField');
+    const replacementInput = document.querySelector('input[name="replacement_for"]');
+    const form = document.getElementById('hiringRequestForm');
+    const submitBtn = document.getElementById('submitHiringBtn');
+
+    function toggleReplacementField() {
+        if (!reasonSelect || !replacementField || !replacementInput) return;
+
+        if (reasonSelect.value === 'Replacement') {
+            replacementField.style.display = '';
+            replacementInput.required = true;
         } else {
-            $('#replacementField').hide();
-            $('input[name="replacement_for"]').prop('required', false);
+            replacementField.style.display = 'none';
+            replacementInput.required = false;
+            replacementInput.value = '';
         }
-    });
+    }
 
-    // Validate experience range
-    $('form').submit(function(e) {
-        var minExp = parseFloat($('input[name="experience_min"]').val());
-        var maxExp = parseFloat($('input[name="experience_max"]').val());
-        
-        if (maxExp < minExp) {
-            e.preventDefault();
-            alert('Maximum experience cannot be less than minimum experience');
-            return false;
-        }
-        
-        var minSalary = parseFloat($('input[name="salary_min"]').val()) || 0;
-        var maxSalary = parseFloat($('input[name="salary_max"]').val()) || 0;
-        
-        if (maxSalary > 0 && minSalary > 0 && maxSalary < minSalary) {
-            e.preventDefault();
-            alert('Maximum salary cannot be less than minimum salary');
-            return false;
-        }
-    });
+    if (reasonSelect) {
+        reasonSelect.addEventListener('change', toggleReplacementField);
+        toggleReplacementField();
+    }
 
-    // Initialize Select2
-    $('.select2').select2({
-        theme: 'bootstrap-5',
-        width: '100%'
-    });
-    
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            const minExp = parseFloat(document.querySelector('input[name="experience_min"]')?.value || '0');
+            const maxExp = parseFloat(document.querySelector('input[name="experience_max"]')?.value || '0');
+
+            if (maxExp < minExp) {
+                e.preventDefault();
+                alert('Maximum experience cannot be less than minimum experience');
+                return;
+            }
+
+            const minSalary = parseFloat(document.querySelector('input[name="salary_min"]')?.value || '0');
+            const maxSalary = parseFloat(document.querySelector('input[name="salary_max"]')?.value || '0');
+
+            if (maxSalary > 0 && minSalary > 0 && maxSalary < minSalary) {
+                e.preventDefault();
+                alert('Maximum salary cannot be less than minimum salary');
+                return;
+            }
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Submitting...';
+            }
+        });
+    }
+
+    const yearElement = document.getElementById('year');
+    if (yearElement) {
+        yearElement.textContent = new Date().getFullYear();
+    }
 });
-
 </script>
+
 
 </body>
 </html>

@@ -140,148 +140,459 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
 
-  <!-- DataTables (Bootstrap 5 + Responsive) -->
-  <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-  <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
-
   <!-- TEK-C Custom Styles -->
   <link href="assets/css/layout-styles.css" rel="stylesheet" />
   <link href="assets/css/topbar.css" rel="stylesheet" />
   <link href="assets/css/footer.css" rel="stylesheet" />
 
   <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-
-    .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px 16px 12px; height:100%; }
-    .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-    .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
-    .panel-menu{ width:36px; height:36px; border-radius:12px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:#6b7280; }
-
-    .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-      padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; }
-    .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
-    .stat-ic.blue{ background: var(--blue); }
-    .stat-ic.green{ background: #10b981; }
-    .stat-ic.yellow{ background: #f59e0b; }
-    .stat-ic.red{ background: #ef4444; }
-    .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-    .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
-
-    .table-responsive { overflow-x: hidden !important; }
-    table.dataTable { width:100% !important; }
-    .table thead th{
-      font-size: 11px; color:#6b7280; font-weight:800;
-      border-bottom:1px solid var(--border)!important;
-      padding: 10px 10px !important;
-      white-space: normal !important;
-    }
-    .table td{
-      vertical-align: top; border-color: var(--border);
-      font-weight:650; color:#374151;
-      padding: 10px 10px !important;
-      white-space: normal !important;
-      word-break: break-word;
+    :root {
+      --page-bg: #f5f7fb;
+      --card-bg: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --soft: #f8fafc;
+      --shadow: 0 10px 26px rgba(15, 23, 42, .055);
+      --radius: 15px;
     }
 
-    .btn-add {
-      background: var(--blue);
-      color: white;
-      border: none;
-      padding: 10px 18px;
-      border-radius: 12px;
-      font-weight: 800;
-      font-size: 13px;
+    body {
+      background: var(--page-bg);
+    }
+
+    .content-scroll {
+      flex: 1 1 auto;
+      overflow: auto;
+      padding: 16px;
+    }
+
+    .employees-wrapper {
+      width: 100%;
+    }
+
+    .page-heading {
       display: flex;
       align-items: center;
-      gap: 8px;
-      box-shadow: 0 8px 18px rgba(45, 156, 219, 0.18);
-      text-decoration:none;
-      white-space: nowrap;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
     }
-    .btn-add:hover { background:#2a8bc9; color:#fff; }
 
-    .btn-export {
-      background: #10b981;
-      color: white;
-      border: none;
-      padding: 10px 18px;
-      border-radius: 12px;
-      font-weight: 800;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      box-shadow: 0 8px 18px rgba(16, 185, 129, 0.18);
-      white-space: nowrap;
-    }
-    .btn-export:hover { background:#0da271; color:#fff; }
-
-    .employee-photo {
-      width: 38px; height: 38px; border-radius: 8px; overflow: hidden;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      display:flex; align-items:center; justify-content:center;
-      color:#fff; font-weight:900; font-size:16px; flex:0 0 auto;
-    }
-    .employee-photo img { width:100%; height:100%; object-fit:cover; }
-
-    .employee-name{ font-weight:900; font-size:13px; color:#1f2937; margin-bottom:2px; line-height:1.2; }
-    .employee-code{ font-size:11px; color:#6b7280; font-weight:650; line-height:1.2; }
-
-    .role-info{ display:flex; flex-direction:column; gap:3px; }
-    .designation-text{ font-size:12px; font-weight:800; color:#2d3748; display:flex; align-items:center; gap:6px; line-height:1.2; }
-    .designation-text i{ color: var(--blue); font-size: 13px; }
-    .department-badge{
-      background: rgba(45,156,219,.1);
-      color: var(--blue);
-      padding: 3px 8px;
-      border-radius: 8px;
-      font-size: 10px;
+    .page-heading h1 {
+      font-size: 19px;
       font-weight: 900;
-      border: 1px solid rgba(45,156,219,.2);
-      display:inline-flex; align-items:center; gap:4px; width:fit-content;
+      color: var(--text);
+      margin: 0;
     }
 
-    .contact-info{ font-size:11px; color:#6b7280; display:flex; align-items:center; gap:6px; margin-top:2px; line-height:1.2; }
-    .contact-info i{ font-size: 11px; }
-
-    .status-badge{
-      padding: 3px 8px; border-radius: 20px;
-      font-size: 10px; font-weight: 900;
-      text-transform: uppercase; letter-spacing: .3px;
-      display:inline-flex; align-items:center; gap:6px;
-      white-space: nowrap;
-    }
-    .status-active{ background: rgba(16,185,129,.12); color:#10b981; border:1px solid rgba(16,185,129,.22); }
-    .status-inactive{ background: rgba(245,158,11,.12); color:#f59e0b; border:1px solid rgba(245,158,11,.22); }
-    .status-resigned{ background: rgba(239,68,68,.12); color:#ef4444; border:1px solid rgba(239,68,68,.22); }
-
-    .btn-action{
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 5px 8px;
+    .page-heading p {
+      margin: 3px 0 0;
       color: var(--muted);
       font-size: 12px;
-      margin-left: 4px;
-      text-decoration:none;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
+      font-weight: 600;
     }
-    .btn-action:hover{ background: var(--bg); color: var(--blue); }
 
-    .btn-delete{
-      background: transparent;
-      border: 1px solid rgba(235,87,87,.25);
-      border-radius: 8px;
-      padding: 5px 8px;
-      color: var(--red);
+    .primary-btn {
+      border: 0;
+      background: #111827;
+      color: #fff;
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 11px;
       font-size: 12px;
+      font-weight: 900;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      text-decoration: none;
+      white-space: nowrap;
     }
-    .btn-delete:hover{ background: rgba(235,87,87,.10); color:#d32f2f; }
 
-    .alert{ border-radius: var(--radius); border:none; box-shadow: var(--shadow); margin-bottom: 20px; }
-    th.actions-col, td.actions-col { width: 170px !important; white-space: nowrap !important; }
+    .primary-btn:hover {
+      background: #020617;
+      color: #fff;
+    }
+
+    .add-btn {
+      background: #2f80ed;
+    }
+
+    .add-btn:hover {
+      background: #2563eb;
+    }
+
+    .export-btn {
+      background: #10b981;
+    }
+
+    .export-btn:hover {
+      background: #059669;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px 13px;
+      min-height: 78px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+
+    .stat-ic {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 17px;
+    }
+
+    .blue {
+      background: #2f80ed;
+    }
+
+    .orange {
+      background: #f2994a;
+    }
+
+    .green {
+      background: #27ae60;
+    }
+
+    .red {
+      background: #eb5757;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 10.5px;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 950;
+    }
+
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 13px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .panel-title {
+      font-weight: 900;
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .panel-subtitle {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1 1 260px;
+      max-width: 430px;
+    }
+
+    .search-box i {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 13px;
+    }
+
+    .search-box input {
+      width: 100%;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: #fff;
+      padding: 0 12px 0 34px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      outline: none;
+    }
+
+    .search-box input:focus {
+      border-color: #bfdbfe;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+    }
+
+    .filter-select {
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: #fff;
+      padding: 0 42px 0 12px;
+      font-size: 12px;
+      font-weight: 800;
+      min-width: 145px;
+    }
+
+    .compact-table-wrap {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .compact-table {
+      width: 100%;
+      margin: 0;
+      table-layout: auto;
+    }
+
+    .compact-table thead th {
+      background: var(--soft);
+      color: #64748b;
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 900;
+      border-bottom: 1px solid var(--border) !important;
+      padding: 8px 9px;
+    }
+
+    .compact-table tbody td {
+      padding: 8px 9px;
+      vertical-align: middle;
+      border-color: #eef2f7;
+      color: #334155;
+      font-weight: 700;
+      font-size: 11.5px;
+    }
+
+    .compact-table tbody tr:hover {
+      background: #fbfdff;
+    }
+
+    .table-title-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .employee-photo {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      overflow: hidden;
+      background: #eff6ff;
+      color: #2563eb;
+      display: grid;
+      place-items: center;
+      font-weight: 950;
+      font-size: 13px;
+      flex: 0 0 auto;
+    }
+
+    .employee-photo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .table-primary-text {
+      color: #111827;
+      font-size: 11.5px;
+      font-weight: 900;
+    }
+
+    .table-secondary-text {
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 700;
+      margin-top: 1px;
+    }
+
+    .team-text {
+      font-size: 10px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    .badge-pill {
+      border-radius: 999px;
+      padding: 5px 8px;
+      font-weight: 900;
+      font-size: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-transform: capitalize;
+      white-space: nowrap;
+    }
+
+    .mini-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-active {
+      color: #15803d;
+      background: #dcfce7;
+    }
+
+    .status-inactive {
+      color: #c2410c;
+      background: #ffedd5;
+    }
+
+    .status-resigned {
+      color: #dc2626;
+      background: #fee2e2;
+    }
+
+    .action-group {
+      display: flex;
+      justify-content: flex-end;
+      gap: 5px;
+    }
+
+    .action-btn {
+      width: 27px;
+      height: 27px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: #fff;
+      display: grid;
+      place-items: center;
+      text-decoration: none;
+      padding: 0;
+    }
+
+    .view-btn {
+      color: #475569;
+      background: #f8fafc;
+    }
+
+    .edit-btn {
+      color: #2563eb;
+      background: #eff6ff;
+    }
+
+    .file-btn {
+      color: #dc2626;
+      background: #fef2f2;
+    }
+
+    .delete-btn {
+      color: #dc2626;
+      background: #fef2f2;
+    }
+
+    .pagination-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 12px;
+    }
+
+    .pagination-info {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .alert {
+      border-radius: var(--radius);
+      border: none;
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+    }
+
+    @media(max-width:1199px) {
+      .compact-table thead {
+        display: none;
+      }
+
+      .compact-table,
+      .compact-table tbody,
+      .compact-table tr,
+      .compact-table td {
+        display: block;
+        width: 100%;
+      }
+
+      .compact-table tbody tr {
+        border-bottom: 1px solid var(--border);
+        padding: 10px;
+      }
+
+      .compact-table tbody td {
+        border: 0;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .compact-table tbody td::before {
+        content: attr(data-label);
+        font-size: 10px;
+        font-weight: 900;
+        color: #64748b;
+        text-transform: uppercase;
+        flex: 0 0 95px;
+      }
+
+      .compact-table tbody td:first-child {
+        display: block;
+      }
+
+      .compact-table tbody td:first-child::before {
+        display: none;
+      }
+
+      .action-group {
+        justify-content: flex-start;
+      }
+    }
+
+    @media(max-width:575px) {
+      .page-heading {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .page-heading .d-flex {
+        width: 100%;
+        flex-wrap: wrap;
+      }
+    }
   </style>
 </head>
 
@@ -293,20 +604,24 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
     <?php include 'includes/topbar.php'; ?>
 
     <div id="contentScroll" class="content-scroll">
-      <div class="container-fluid maxw">
+      <div class="container-fluid employees-wrapper px-0">
 
-        <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <!-- PAGE HEADING -->
+        <div class="page-heading">
           <div>
-            <h1 class="h3 fw-bold text-dark mb-1">Manage Employees</h1>
-            <p class="text-muted mb-0">View and manage all employee records</p>
+            <h1>Manage Employees</h1>
+            <p>View and manage all employee records</p>
           </div>
+
           <div class="d-flex gap-2">
-            <a href="add-employee.php" class="btn-add">
-              <i class="bi bi-person-plus"></i> Add Employee
+            <a href="add-employee.php" class="primary-btn add-btn">
+              <i class="bi bi-person-plus"></i>
+              Add Employee
             </a>
-            <button class="btn-export" data-bs-toggle="modal" data-bs-target="#exportModal">
-              <i class="bi bi-download"></i> Export
+
+            <button class="primary-btn export-btn" data-bs-toggle="modal" data-bs-target="#exportModal">
+              <i class="bi bi-download"></i>
+              Export
             </button>
           </div>
         </div>
@@ -328,9 +643,9 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
           </div>
         <?php endif; ?>
 
-        <!-- Stats -->
+        <!-- STATS -->
         <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6 col-xl-3">
+          <div class="col-12 col-sm-6 col-xl-3">
             <div class="stat-card">
               <div class="stat-ic blue"><i class="bi bi-people-fill"></i></div>
               <div>
@@ -339,7 +654,7 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
               </div>
             </div>
           </div>
-          <div class="col-12 col-md-6 col-xl-3">
+          <div class="col-12 col-sm-6 col-xl-3">
             <div class="stat-card">
               <div class="stat-ic green"><i class="bi bi-person-check"></i></div>
               <div>
@@ -348,16 +663,16 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
               </div>
             </div>
           </div>
-          <div class="col-12 col-md-6 col-xl-3">
+          <div class="col-12 col-sm-6 col-xl-3">
             <div class="stat-card">
-              <div class="stat-ic yellow"><i class="bi bi-person-x"></i></div>
+              <div class="stat-ic orange"><i class="bi bi-person-x"></i></div>
               <div>
                 <div class="stat-label">Inactive</div>
                 <div class="stat-value"><?php echo $inactive_employees; ?></div>
               </div>
             </div>
           </div>
-          <div class="col-12 col-md-6 col-xl-3">
+          <div class="col-12 col-sm-6 col-xl-3">
             <div class="stat-card">
               <div class="stat-ic red"><i class="bi bi-person-dash"></i></div>
               <div>
@@ -368,15 +683,35 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
           </div>
         </div>
 
-        <!-- Table -->
-        <div class="panel mb-4">
+        <!-- PANEL -->
+        <div class="panel">
           <div class="panel-header">
-            <h3 class="panel-title">Employee Directory</h3>
-            <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
+            <div>
+              <h3 class="panel-title">Employee Directory</h3>
+              <div class="panel-subtitle">Search, filter and manage HR employee records</div>
+            </div>
           </div>
 
-          <div class="table-responsive">
-            <table id="employeesTable" class="table align-middle mb-0 dt-responsive" style="width:100%">
+          <!-- FILTER BAR -->
+          <div class="filter-bar">
+            <div class="search-box">
+              <i class="bi bi-search"></i>
+              <input type="text" id="employeeSearch" placeholder="Search name, code, department, contact or location...">
+            </div>
+
+            <div>
+              <select class="filter-select" id="statusFilter">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="resigned">Resigned</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- TABLE -->
+          <div class="compact-table-wrap">
+            <table id="employeesTable" class="table compact-table align-middle">
               <thead>
                 <tr>
                   <th>Employee</th>
@@ -384,7 +719,7 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
                   <th>Contact</th>
                   <th>Status</th>
                   <th>Joining</th>
-                  <th class="text-end actions-col">Actions</th>
+                  <th class="text-end">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -403,9 +738,9 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
                     $photoSrc    = fileUrl($employee['photo'] ?? '');
                     $passbookSrc = fileUrl($employee['passbook_photo'] ?? '');
                   ?>
-                  <tr>
-                    <td>
-                      <div class="d-flex align-items-center gap-2">
+                  <tr data-status="<?php echo e($st); ?>">
+                    <td data-label="Employee">
+                      <div class="table-title-cell">
                         <div class="employee-photo">
                           <?php if (!empty($photoSrc)): ?>
                             <img src="<?php echo e($photoSrc); ?>" alt="<?php echo e($employee['full_name'] ?? ''); ?>">
@@ -414,75 +749,109 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
                           <?php endif; ?>
                         </div>
                         <div>
-                          <div class="employee-name"><?php echo e($employee['full_name'] ?? ''); ?></div>
-                          <div class="employee-code"><i class="bi bi-hash"></i> <?php echo e($employee['employee_code'] ?? ''); ?></div>
+                          <div class="table-primary-text"><?php echo e($employee['full_name'] ?? ''); ?></div>
+                          <div class="table-secondary-text">
+                            #<?php echo e($employee['employee_code'] ?? ''); ?>
+                          </div>
                         </div>
                       </div>
                     </td>
 
-                    <td>
-                      <div class="role-info">
+                    <td data-label="Role & Dept">
+                      <div class="team-text">
                         <?php if (!empty($employee['designation'])): ?>
-                          <div class="designation-text"><i class="bi bi-briefcase"></i> <?php echo e($employee['designation']); ?></div>
+                          <div>
+                            <b>Role:</b>
+                            <?php echo e($employee['designation']); ?>
+                          </div>
                         <?php endif; ?>
 
                         <?php if (!empty($employee['department'])): ?>
-                          <div class="department-badge"><i class="bi bi-building"></i> <?php echo e($employee['department']); ?></div>
+                          <div>
+                            <b>Dept:</b>
+                            <?php echo e($employee['department']); ?>
+                          </div>
                         <?php endif; ?>
 
                         <?php if (!empty($employee['reporting_manager'])): ?>
-                          <div class="contact-info"><i class="bi bi-person-badge"></i> Reports to: <?php echo e($employee['reporting_manager']); ?></div>
+                          <div>
+                            <b>Reports:</b>
+                            <?php echo e($employee['reporting_manager']); ?>
+                          </div>
                         <?php endif; ?>
                       </div>
                     </td>
 
-                    <td>
+                    <td data-label="Contact">
                       <?php if (!empty($employee['mobile_number'])): ?>
-                        <div class="contact-info"><i class="bi bi-telephone"></i> <?php echo e($employee['mobile_number']); ?></div>
+                        <div class="table-primary-text">
+                          <?php echo e($employee['mobile_number']); ?>
+                        </div>
                       <?php endif; ?>
                       <?php if (!empty($employee['email'])): ?>
-                        <div class="contact-info"><i class="bi bi-envelope"></i> <?php echo e($employee['email']); ?></div>
+                        <div class="table-secondary-text">
+                          <?php echo e($employee['email']); ?>
+                        </div>
                       <?php endif; ?>
                       <?php if (!empty($employee['work_location'])): ?>
-                        <div class="contact-info"><i class="bi bi-geo-alt"></i> <?php echo e($employee['work_location']); ?></div>
+                        <div class="table-secondary-text">
+                          <?php echo e($employee['work_location']); ?>
+                        </div>
                       <?php endif; ?>
                     </td>
 
-                    <td>
-                      <span class="status-badge <?php echo e($status_class); ?>">
-                        <i class="bi bi-circle-fill" style="font-size:8px;"></i> <?php echo e($status_text); ?>
+                    <td data-label="Status">
+                      <span class="badge-pill <?php echo e($status_class); ?>">
+                        <span class="mini-dot"></span>
+                        <?php echo e($status_text); ?>
                       </span>
                     </td>
 
-                    <td data-order="<?php echo (int)$joining_order; ?>">
-                      <?php echo e(safeDate($employee['date_of_joining'] ?? '', 'Not Set')); ?>
+                    <td data-label="Joining" data-order="<?php echo (int)$joining_order; ?>">
+                      <div class="table-primary-text">
+                        <?php echo e(safeDate($employee['date_of_joining'] ?? '', 'Not Set')); ?>
+                      </div>
                     </td>
 
-                    <td class="text-end actions-col">
-                      <a href="view-employee.php?id=<?php echo (int)$employee['id']; ?>" class="btn-action" title="View">
-                        <i class="bi bi-eye"></i>
-                      </a>
-                      <a href="edit-employee.php?id=<?php echo (int)$employee['id']; ?>" class="btn-action" title="Edit">
-                        <i class="bi bi-pencil"></i>
-                      </a>
-
-                      <?php if (!empty($passbookSrc)): ?>
-                        <a href="<?php echo e($passbookSrc); ?>" target="_blank" rel="noopener" class="btn-action" title="Passbook/File">
-                          <i class="bi bi-file-earmark-arrow-down"></i>
+                    <td data-label="Actions">
+                      <div class="action-group">
+                        <a href="view-employee.php?id=<?php echo (int)$employee['id']; ?>" class="action-btn view-btn" title="View">
+                          <i class="bi bi-eye"></i>
                         </a>
-                      <?php endif; ?>
 
-                      <form method="POST" style="display:inline;" onsubmit="return confirm('Mark this employee as inactive?');">
-                        <input type="hidden" name="delete_id" value="<?php echo (int)$employee['id']; ?>">
-                        <button type="submit" class="btn-delete" title="Mark Inactive">
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </form>
+                        <a href="edit-employee.php?id=<?php echo (int)$employee['id']; ?>" class="action-btn edit-btn" title="Edit">
+                          <i class="bi bi-pencil-square"></i>
+                        </a>
+
+                        <?php if (!empty($passbookSrc)): ?>
+                          <a href="<?php echo e($passbookSrc); ?>" target="_blank" rel="noopener" class="action-btn file-btn" title="Passbook/File">
+                            <i class="bi bi-file-earmark-arrow-down"></i>
+                          </a>
+                        <?php endif; ?>
+
+                        <form method="POST" onsubmit="return confirm('Mark this employee as inactive?');">
+                          <input type="hidden" name="delete_id" value="<?php echo (int)$employee['id']; ?>">
+                          <button type="submit" class="action-btn delete-btn" title="Mark Inactive">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </form>
+                      </div>
                     </td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>
             </table>
+          </div>
+
+          <!-- PAGINATION INFO -->
+          <div class="pagination-wrap">
+            <div class="pagination-info">
+              Showing
+              <span id="visibleCount"><?php echo count($employees); ?></span>
+              of
+              <?php echo count($employees); ?>
+              employee records
+            </div>
           </div>
         </div>
 
@@ -506,7 +875,7 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
           <div class="row g-3">
             <div class="col-12">
               <label class="form-label">Export Format *</label>
-              <select class="form-control" name="export_format" required>
+              <select class="form-select" name="export_format" required>
                 <option value="csv">CSV (Excel)</option>
                 <option value="pdf">PDF Document</option>
                 <option value="excel">Excel File</option>
@@ -522,7 +891,7 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn-export"><i class="bi bi-download me-2"></i> Export</button>
+          <button type="submit" class="btn btn-success">Export</button>
         </div>
       </form>
     </div>
@@ -531,40 +900,72 @@ $resigned_employees  = (int)($stats['resigned'] ?? 0);
 
 <!-- JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-  (function () {
-    $(function () {
-      $('#employeesTable').DataTable({
-        responsive: true,
-        autoWidth: false,
-        scrollX: false,
-        pageLength: 10,
-        lengthMenu: [[10,25,50,100,-1],[10,25,50,100,'All']],
-        order: [[4, 'desc']],
-        columnDefs: [{ targets: [5], orderable: false, searchable: false }],
-        language: {
-          zeroRecords: "No matching employees found",
-          info: "Showing _START_ to _END_ of _TOTAL_ employees",
-          infoEmpty: "No employees to show",
-          lengthMenu: "Show _MENU_",
-          search: "Search:"
+  document.addEventListener('DOMContentLoaded', function () {
+    const searchInput =
+      document.getElementById('employeeSearch');
+
+    const statusFilter =
+      document.getElementById('statusFilter');
+
+    const visibleCount =
+      document.getElementById('visibleCount');
+
+    const tableRows =
+      document.querySelectorAll('#employeesTable tbody tr');
+
+    function filterEmployees() {
+      const searchValue =
+        searchInput.value.toLowerCase().trim();
+
+      const statusValue =
+        statusFilter.value.toLowerCase().trim();
+
+      let shown = 0;
+
+      tableRows.forEach(function (row) {
+        const rowText =
+          row.innerText.toLowerCase();
+
+        const rowStatus =
+          row.getAttribute('data-status') || '';
+
+        const matchesSearch =
+          rowText.includes(searchValue);
+
+        const matchesStatus =
+          !statusValue ||
+          rowStatus === statusValue;
+
+        const shouldShow =
+          matchesSearch && matchesStatus;
+
+        row.style.display =
+          shouldShow ? '' : 'none';
+
+        if (shouldShow) {
+          shown++;
         }
       });
 
-      setTimeout(function() {
-        $('.dataTables_filter input').focus();
-      }, 400);
-    });
-  })();
+      if (visibleCount) {
+        visibleCount.textContent = shown;
+      }
+    }
+
+    searchInput.addEventListener(
+      'input',
+      filterEmployees
+    );
+
+    statusFilter.addEventListener(
+      'change',
+      filterEmployees
+    );
+  });
 </script>
 
 </body>
 </html>
-

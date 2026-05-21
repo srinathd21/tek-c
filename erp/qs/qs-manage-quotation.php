@@ -845,6 +845,37 @@ $res = mysqli_stmt_get_result($stmt);
 $quotations = mysqli_fetch_all($res, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
 
+// Prefetch quotation items BEFORE rendering the page.
+// Some included template files can close/reuse $conn, so do not run mysqli queries inside HTML loops.
+$quotation_items_by_id = [];
+if (!empty($quotations)) {
+    $quotation_ids = array_map('intval', array_column($quotations, 'id'));
+    $quotation_ids = array_values(array_filter($quotation_ids));
+
+    if (!empty($quotation_ids)) {
+        $placeholders = implode(',', array_fill(0, count($quotation_ids), '?'));
+        $types = str_repeat('i', count($quotation_ids));
+        $items_sql = "SELECT * FROM quotation_items WHERE quotation_id IN ($placeholders) ORDER BY quotation_id, id";
+        $items_stmt = mysqli_prepare($conn, $items_sql);
+
+        if ($items_stmt) {
+            mysqli_stmt_bind_param($items_stmt, $types, ...$quotation_ids);
+            mysqli_stmt_execute($items_stmt);
+            $items_res = mysqli_stmt_get_result($items_stmt);
+
+            while ($item_row = mysqli_fetch_assoc($items_res)) {
+                $qid = (int)$item_row['quotation_id'];
+                if (!isset($quotation_items_by_id[$qid])) {
+                    $quotation_items_by_id[$qid] = [];
+                }
+                $quotation_items_by_id[$qid][] = $item_row;
+            }
+
+            mysqli_stmt_close($items_stmt);
+        }
+    }
+}
+
 // Fetch active dealers for dropdown
 $dealers = [];
 $dealer_query = "SELECT id, dealer_name FROM quotation_dealers WHERE status = 'Active' ORDER BY dealer_name";
@@ -1468,15 +1499,8 @@ function getStatusBadge($status) {
                                 <?php else: ?>
                                     <?php foreach ($quotations as $q): 
                                         $isFinal = ($request['final_quotation_id'] == $q['id']);
-                                        // fetch items
-                                        $items = [];
-                                        $item_sql = "SELECT * FROM quotation_items WHERE quotation_id = ? ORDER BY id";
-                                        $stmt_i = mysqli_prepare($conn, $item_sql);
-                                        mysqli_stmt_bind_param($stmt_i, "i", $q['id']);
-                                        mysqli_stmt_execute($stmt_i);
-                                        $res_i = mysqli_stmt_get_result($stmt_i);
-                                        $items = mysqli_fetch_all($res_i, MYSQLI_ASSOC);
-                                        mysqli_stmt_close($stmt_i);
+                                        // Items are prefetched before includes/rendering to avoid using a closed mysqli connection.
+                                        $items = $quotation_items_by_id[(int)$q['id']] ?? [];
                                     ?>
                                         <tr class="quotation-row <?php echo $isFinal ? 'selected' : ''; ?>">
                                             <td data-label="Dealer"><span class="table-primary-text"><?php echo e($q['dealer_name'] ?? '—'); ?></span></td>
@@ -1732,4 +1756,4 @@ function getStatusBadge($status) {
 </script>
 </body>
 </html>
-<?php if (isset($conn)) { mysqli_close($conn); } ?>
+<?php // Connection is managed by includes/db-config.php / request lifecycle. ?>

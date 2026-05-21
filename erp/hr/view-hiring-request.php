@@ -2,12 +2,151 @@
 // hr/view-hiring-request.php - View Hiring Request Details
 session_start();
 require_once 'includes/db-config.php';
-require_once 'includes/activity-logger.php';
 
 date_default_timezone_set('Asia/Kolkata');
 
 $conn = get_db_connection();
 if (!$conn) { die("Database connection failed."); }
+
+function hrTableExists($conn, string $table): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function hrColumnExists($conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $columnEsc = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function logHiringActivityCurrentDb($conn, int $employeeId, string $activityType, string $description, int $referenceId, array $newData = []): bool {
+    if (!$conn || !hrTableExists($conn, 'activity_logs')) return false;
+
+    $newJson = $newData ? json_encode($newData, JSON_UNESCAPED_UNICODE) : null;
+    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? 'System';
+    $username = $_SESSION['username'] ?? '';
+    $designation = $_SESSION['designation'] ?? '';
+    $department = $_SESSION['department'] ?? '';
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+    $map = [
+        'employee_id'   => ['i', $employeeId],
+        'employee_name' => ['s', $employeeName],
+        'username'      => ['s', $username],
+        'designation'   => ['s', $designation],
+        'department'    => ['s', $department],
+        'activity_type' => ['s', $activityType],
+        'module'        => ['s', 'hiring_request'],
+        'description'   => ['s', $description],
+        'reference_id'  => ['i', $referenceId],
+        'new_data'      => ['s', $newJson],
+        'ip_address'    => ['s', $ipAddress],
+    ];
+
+    $columns = [];
+    $types = '';
+    $values = [];
+
+    foreach ($map as $column => $pair) {
+        if (hrColumnExists($conn, 'activity_logs', $column)) {
+            $columns[] = "`$column`";
+            $types .= $pair[0];
+            $values[] = $pair[1];
+        }
+    }
+
+    if (!$columns) return false;
+
+    $sql = "INSERT INTO activity_logs (" . implode(',', $columns) . ") VALUES (" . implode(',', array_fill(0, count($columns), '?')) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$values);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return $ok;
+}
+
+function createNotificationCurrentDb($conn, int $employeeId, string $title, string $message, string $module, int $referenceId, string $link, string $type = 'hiring'): bool {
+    if ($employeeId <= 0 || !$conn || !hrTableExists($conn, 'notifications')) return false;
+
+    $map = [
+        'employee_id'  => ['i', $employeeId],
+        'title'        => ['s', $title],
+        'message'      => ['s', $message],
+        'type'         => ['s', $type],
+        'module'       => ['s', $module],
+        'reference_id' => ['i', $referenceId],
+        'link'         => ['s', $link],
+        'priority'     => ['s', 'normal'],
+        'is_read'      => ['i', 0],
+        'created_at'   => ['raw', 'NOW()'],
+    ];
+
+    $columns = [];
+    $placeholders = [];
+    $types = '';
+    $values = [];
+
+    foreach ($map as $column => $pair) {
+        if (hrColumnExists($conn, 'notifications', $column)) {
+            $columns[] = "`$column`";
+            if ($pair[0] === 'raw') {
+                $placeholders[] = $pair[1];
+            } else {
+                $placeholders[] = '?';
+                $types .= $pair[0];
+                $values[] = $pair[1];
+            }
+        }
+    }
+
+    if (!$columns) return false;
+
+    $sql = "INSERT INTO notifications (" . implode(',', $columns) . ") VALUES (" . implode(',', $placeholders) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    if ($values) mysqli_stmt_bind_param($stmt, $types, ...$values);
+
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return $ok;
+}
+
+function notifyHiringRequestCreator($conn, array $request, int $actorId, string $status, string $remarks = ''): void {
+    $creatorId = (int)($request['requested_by'] ?? 0);
+    if ($creatorId <= 0 || $creatorId === $actorId) return;
+
+    $requestNo = (string)($request['request_no'] ?? '');
+    $positionTitle = (string)($request['position_title'] ?? '');
+
+    $title = $status === 'Approved' ? 'Hiring request approved' : 'Hiring request declined';
+    $message = 'Your hiring request ' . $requestNo . ' for ' . $positionTitle . ' has been ' . strtolower($status) . ' by HR.';
+    if ($remarks !== '') $message .= ' Remarks: ' . $remarks;
+
+    createNotificationCurrentDb(
+        $conn,
+        $creatorId,
+        $title,
+        $message,
+        'hiring_request',
+        (int)$request['id'],
+        'view-hiring-request.php?id=' . (int)$request['id'],
+        'hiring'
+    );
+}
+
 
 // ---------------- AUTH (HR/Manager) ----------------
 if (empty($_SESSION['employee_id'])) {
@@ -34,7 +173,7 @@ $designation = strtolower(trim($current_employee['designation'] ?? ''));
 $department = strtolower(trim($current_employee['department'] ?? ''));
 
 $isHr = ($designation === 'hr' || $department === 'hr');
-$isManager = in_array($designation, ['manager', 'team lead', 'project manager', 'director', 'administrator']);
+$isManager = in_array($designation, ['manager', 'team lead', 'project manager', 'director', 'administrator', 'admin']);
 $isAdmin = ($designation === 'administrator' || $designation === 'admin' || $designation === 'director');
 
 if (!$isHr && !$isManager && !$isAdmin) {
@@ -42,6 +181,10 @@ if (!$isHr && !$isManager && !$isAdmin) {
     header("Location: ../dashboard.php");
     exit;
 }
+
+// ---------------- PAGE MESSAGE ----------------
+$message = '';
+$messageType = '';
 
 // ---------------- GET HIRING REQUEST ID ----------------
 $request_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -81,6 +224,111 @@ if (!$isHr && !$isAdmin && $request['requested_by'] != $current_employee_id) {
     $_SESSION['flash_error'] = "You don't have permission to view this request.";
     header("Location: hiring-requests.php");
     exit;
+}
+
+// ---------------- HANDLE APPROVE/DECLINE ON THIS PAGE ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && ($isHr || $isAdmin)) {
+    $action = strtolower(trim((string)($_POST['action'] ?? '')));
+    $remarks = trim((string)($_POST['remarks'] ?? ''));
+
+    if (($request['status'] ?? '') !== 'Pending') {
+        $message = "Only pending hiring requests can be processed.";
+        $messageType = "danger";
+    } elseif ($action === 'approve') {
+        $update_stmt = mysqli_prepare($conn, "
+            UPDATE hiring_requests
+            SET status = 'Approved',
+                approved_by = ?,
+                approved_by_name = ?,
+                approved_at = NOW(),
+                approver_remarks = ?
+            WHERE id = ?
+              AND status = 'Pending'
+        ");
+
+        if ($update_stmt) {
+            mysqli_stmt_bind_param($update_stmt, "issi", $current_employee_id, $current_employee['full_name'], $remarks, $request_id);
+
+            if (mysqli_stmt_execute($update_stmt)) {
+                logHiringActivityCurrentDb(
+                    $conn,
+                    (int)$current_employee_id,
+                    'UPDATE',
+                    "Approved hiring request ID: {$request_id}",
+                    $request_id,
+                    ['remarks' => $remarks, 'status' => 'Approved']
+                );
+
+                notifyHiringRequestCreator($conn, $request, (int)$current_employee_id, 'Approved', $remarks);
+
+                $message = "Hiring request approved successfully!";
+                $messageType = "success";
+
+                $request['status'] = 'Approved';
+                $request['approved_by'] = $current_employee_id;
+                $request['approved_by_name'] = $current_employee['full_name'];
+                $request['approver_name'] = $current_employee['full_name'];
+                $request['approved_at'] = date('Y-m-d H:i:s');
+                $request['approver_remarks'] = $remarks;
+            } else {
+                $message = "Error approving request: " . mysqli_stmt_error($update_stmt);
+                $messageType = "danger";
+            }
+
+            mysqli_stmt_close($update_stmt);
+        } else {
+            $message = "Error preparing approval: " . mysqli_error($conn);
+            $messageType = "danger";
+        }
+    } elseif ($action === 'decline' || $action === 'reject') {
+        if ($remarks === '') {
+            $message = "Please enter decline reason.";
+            $messageType = "danger";
+        } else {
+            $update_stmt = mysqli_prepare($conn, "
+                UPDATE hiring_requests
+                SET status = 'Rejected',
+                    rejected_by = ?,
+                    rejected_at = NOW(),
+                    rejection_reason = ?
+                WHERE id = ?
+                  AND status = 'Pending'
+            ");
+
+            if ($update_stmt) {
+                mysqli_stmt_bind_param($update_stmt, "isi", $current_employee_id, $remarks, $request_id);
+
+                if (mysqli_stmt_execute($update_stmt)) {
+                    logHiringActivityCurrentDb(
+                        $conn,
+                        (int)$current_employee_id,
+                        'UPDATE',
+                        "Declined hiring request ID: {$request_id}",
+                        $request_id,
+                        ['reason' => $remarks, 'status' => 'Rejected']
+                    );
+
+                    notifyHiringRequestCreator($conn, $request, (int)$current_employee_id, 'Rejected', $remarks);
+
+                    $message = "Hiring request declined successfully!";
+                    $messageType = "success";
+
+                    $request['status'] = 'Rejected';
+                    $request['rejected_by'] = $current_employee_id;
+                    $request['rejecter_name'] = $current_employee['full_name'];
+                    $request['rejected_at'] = date('Y-m-d H:i:s');
+                    $request['rejection_reason'] = $remarks;
+                } else {
+                    $message = "Error declining request: " . mysqli_stmt_error($update_stmt);
+                    $messageType = "danger";
+                }
+
+                mysqli_stmt_close($update_stmt);
+            } else {
+                $message = "Error preparing decline: " . mysqli_error($conn);
+            }
+        }
+    }
 }
 
 // ---------------- FETCH CANDIDATES FOR THIS REQUEST ----------------
@@ -126,6 +374,7 @@ while ($row = mysqli_fetch_assoc($candidates_result)) {
         case 'Joined': $candidate_counts['joined']++; break;
     }
 }
+mysqli_stmt_close($candidates_stmt);
 
 // ---------------- FETCH INTERVIEWS FOR THIS REQUEST ----------------
 $interviews_query = "
@@ -142,6 +391,13 @@ $interviews_stmt = mysqli_prepare($conn, $interviews_query);
 mysqli_stmt_bind_param($interviews_stmt, "i", $request_id);
 mysqli_stmt_execute($interviews_stmt);
 $interviews_result = mysqli_stmt_get_result($interviews_stmt);
+$interviews = [];
+if ($interviews_result) {
+    while ($row = mysqli_fetch_assoc($interviews_result)) {
+        $interviews[] = $row;
+    }
+}
+mysqli_stmt_close($interviews_stmt);
 
 // ---------------- HELPER FUNCTIONS ----------------
 function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
@@ -152,53 +408,48 @@ function formatCurrency($amount) {
 }
 
 function getStatusBadge($status) {
-    switch($status) {
-        case 'Pending':
-            return '<span class="badge bg-warning text-dark px-3 py-2"><i class="bi bi-clock"></i> Pending</span>';
-        case 'Approved':
-            return '<span class="badge bg-success px-3 py-2"><i class="bi bi-check-circle"></i> Approved</span>';
-        case 'In Progress':
-            return '<span class="badge bg-info px-3 py-2"><i class="bi bi-gear"></i> In Progress</span>';
-        case 'Rejected':
-            return '<span class="badge bg-danger px-3 py-2"><i class="bi bi-x-circle"></i> Rejected</span>';
-        case 'Closed':
-            return '<span class="badge bg-secondary px-3 py-2"><i class="bi bi-check2-circle"></i> Closed</span>';
-        default:
-            return '<span class="badge bg-light text-dark">' . e($status) . '</span>';
-    }
+    $status = trim((string)$status);
+    $map = [
+        'Pending'     => ['pending', 'bi-clock'],
+        'Approved'    => ['ontrack', 'bi-check-circle'],
+        'In Progress' => ['progressing', 'bi-gear'],
+        'Rejected'    => ['atrisk', 'bi-x-circle'],
+        'Closed'      => ['ontrack', 'bi-check2-circle'],
+        'Cancelled'   => ['neutral', 'bi-x']
+    ];
+    $item = $map[$status] ?? ['neutral', 'bi-info-circle'];
+    return "<span class='badge-pill {$item[0]}'><i class='bi {$item[1]}'></i> " . e($status ?: '—') . "</span>";
 }
 
 function getPriorityBadge($priority) {
-    switch($priority) {
-        case 'Urgent':
-            return '<span class="badge bg-danger">Urgent</span>';
-        case 'High':
-            return '<span class="badge bg-warning text-dark">High</span>';
-        case 'Medium':
-            return '<span class="badge bg-info">Medium</span>';
-        case 'Low':
-            return '<span class="badge bg-secondary">Low</span>';
-        default:
-            return '<span class="badge bg-light text-dark">' . e($priority) . '</span>';
-    }
+    $priority = trim((string)$priority);
+    $map = [
+        'Urgent' => ['atrisk', 'bi-exclamation-triangle-fill'],
+        'High'   => ['warning', 'bi-arrow-up-circle-fill'],
+        'Medium' => ['progressing', 'bi-dash-circle-fill'],
+        'Low'    => ['neutral', 'bi-arrow-down-circle-fill']
+    ];
+    $item = $map[$priority] ?? ['neutral', 'bi-info-circle'];
+    return "<span class='badge-pill {$item[0]}'><i class='bi {$item[1]}'></i> " . e($priority ?: '—') . "</span>";
 }
 
 function getCandidateStatusBadge($status) {
-    $colors = [
-        'New' => 'info',
-        'Screening' => 'secondary',
-        'Shortlisted' => 'primary',
-        'Interview Scheduled' => 'warning',
-        'Interviewed' => 'dark',
-        'Selected' => 'success',
-        'Rejected' => 'danger',
-        'On Hold' => 'secondary',
-        'Offered' => 'success',
-        'Joined' => 'success',
-        'Declined' => 'danger'
+    $status = trim((string)$status);
+    $map = [
+        'New' => ['progressing', 'bi-person-plus'],
+        'Screening' => ['neutral', 'bi-search'],
+        'Shortlisted' => ['progressing', 'bi-list-check'],
+        'Interview Scheduled' => ['warning', 'bi-calendar-event'],
+        'Interviewed' => ['pending', 'bi-camera-video'],
+        'Selected' => ['ontrack', 'bi-check-circle'],
+        'Rejected' => ['atrisk', 'bi-x-circle'],
+        'On Hold' => ['neutral', 'bi-pause-circle'],
+        'Offered' => ['ontrack', 'bi-envelope-check'],
+        'Joined' => ['ontrack', 'bi-person-check'],
+        'Declined' => ['atrisk', 'bi-x-circle']
     ];
-    $color = $colors[$status] ?? 'secondary';
-    return "<span class='badge bg-{$color}'>{$status}</span>";
+    $item = $map[$status] ?? ['neutral', 'bi-info-circle'];
+    return "<span class='badge-pill {$item[0]}'><i class='bi {$item[1]}'></i> " . e($status ?: '—') . "</span>";
 }
 
 $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
@@ -217,49 +468,20 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
     <link href="assets/css/footer.css" rel="stylesheet" />
 
     <style>
-        .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px; }
-        .panel{ background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 8px 24px rgba(17,24,39,.06); padding:24px; margin-bottom:24px; }
-        .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
-        .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; display:flex; align-items:center; gap:8px; }
-
-        .info-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:20px; }
-        .info-item{ margin-bottom:12px; }
-        .info-label{ font-size:12px; color:#6b7280; font-weight:700; text-transform:uppercase; margin-bottom:4px; }
-        .info-value{ font-weight:800; color:#1f2937; font-size:16px; }
-
-        .stat-card{ background:#f9fafb; border-radius:12px; padding:16px; text-align:center; border:1px solid #e5e7eb; }
-        .stat-value{ font-size:28px; font-weight:900; line-height:1; color:#1f2937; }
-        .stat-label{ font-size:12px; font-weight:700; color:#6b7280; margin-top:4px; }
-
-        .timeline{ position:relative; padding-left:30px; }
-        .timeline-item{ position:relative; padding-bottom:20px; border-left:2px solid #e5e7eb; padding-left:20px; margin-left:10px; }
-        .timeline-item:last-child{ border-left-color:transparent; }
-        .timeline-dot{ position:absolute; left:-34px; top:0; width:16px; height:16px; border-radius:50%; background:#fff; border:3px solid; }
-        .timeline-dot.pending{ border-color:#f59e0b; }
-        .timeline-dot.approved{ border-color:#10b981; }
-        .timeline-dot.rejected{ border-color:#ef4444; }
-        .timeline-date{ font-size:12px; color:#6b7280; margin-bottom:4px; }
-        .timeline-title{ font-weight:800; margin-bottom:4px; }
-        .timeline-text{ font-size:13px; color:#4b5563; }
-
-        .candidate-avatar{ width:40px; height:40px; border-radius:50%; background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-weight:800; color:#4b5563; }
-        .candidate-avatar img{ width:40px; height:40px; border-radius:50%; object-fit:cover; }
-
-        .badge-count{ background:#e5e7eb; color:#374151; padding:2px 8px; border-radius:20px; font-size:12px; font-weight:700; }
-
-        .quick-stats{ display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:20px; }
-        .quick-stat{ background:#f9fafb; border-radius:8px; padding:10px; text-align:center; }
-        .quick-stat .number{ font-size:20px; font-weight:900; }
-        .quick-stat .label{ font-size:11px; font-weight:700; color:#6b7280; }
-
-        .action-btn{ width:32px; height:32px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; 
-            display:inline-flex; align-items:center; justify-content:center; color:#6b7280; text-decoration:none; margin:0 2px; }
-        .action-btn:hover{ background:#f3f4f6; }
-
-        @media (max-width: 768px) {
-            .content-scroll{ padding:12px; }
-            .quick-stats{ grid-template-columns:repeat(2, 1fr); }
-        }
+        :root{--page-bg:#f5f7fb;--card-bg:#fff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;--soft:#f8fafc;--shadow:0 10px 26px rgba(15,23,42,.055);--radius:15px;--blue:#2f80ed;--green:#27ae60;--orange:#f2994a;--red:#eb5757;--purple:#7c3aed}
+        body{background:var(--page-bg)}.content-scroll{flex:1 1 auto;overflow:auto;padding:16px}.projects-wrapper{width:100%}
+        .page-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.page-heading h1{font-size:19px;font-weight:950;color:var(--text);margin:0;display:flex;align-items:center;gap:8px}.page-heading p{margin:3px 0 0;color:var(--muted);font-size:12px;font-weight:650}
+        .primary-btn,.secondary-btn,.success-btn,.danger-btn,.btn-action{min-height:36px;padding:0 14px;border-radius:11px;font-size:12px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;white-space:nowrap;line-height:1;border:0}.primary-btn{background:#111827;color:#fff}.primary-btn:hover{background:#020617;color:#fff}.success-btn{background:#16a34a;color:#fff}.success-btn:hover{background:#15803d;color:#fff}.danger-btn{background:#dc2626;color:#fff}.danger-btn:hover{background:#b91c1c;color:#fff}.secondary-btn,.btn-action{border:1px solid var(--border);background:#fff;color:#334155}.secondary-btn:hover,.btn-action:hover{border-color:#cbd5e1;background:#f8fafc;color:#111827}
+        .panel{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:13px;margin-bottom:14px}.panel-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.panel-title{font-weight:950;font-size:14px;color:var(--text);margin:0;display:flex;align-items:center;gap:8px}.panel-title i{color:var(--blue);font-size:16px}
+        .quick-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}.quick-stat{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 13px;min-height:78px;display:flex;align-items:center;gap:11px;text-align:left}.quick-stat .icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:17px;flex:0 0 auto;background:#111827}.quick-stat .icon.blue{background:var(--blue)}.quick-stat .icon.green{background:var(--green)}.quick-stat .icon.orange{background:var(--orange)}.quick-stat .icon.purple{background:var(--purple)}.quick-stat .number{font-size:24px;font-weight:950;line-height:1;color:#111827}.quick-stat .label{color:#64748b;font-weight:850;font-size:10.5px;text-transform:uppercase;margin-top:2px}
+        .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.info-item{padding:10px 11px;background:#f8fafc;border-radius:12px;border:1px solid #eef2f7;margin-bottom:0}.info-label{font-size:10px;color:#64748b;font-weight:950;text-transform:uppercase;margin-bottom:3px}.info-value{font-weight:900;color:#111827;font-size:12px;word-break:break-word}.description-box{background:#f8fafc;border:1px solid #eef2f7;border-radius:13px;padding:12px;color:#334155;font-size:12px;font-weight:750;line-height:1.5}
+        .badge-pill{border-radius:999px;padding:5px 8px;font-weight:900;font-size:10px;display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;text-decoration:none;white-space:nowrap}.ontrack{color:#15803d;background:#dcfce7;border-color:#bbf7d0}.progressing{color:#2563eb;background:#dbeafe;border-color:#bfdbfe}.pending{color:#6d28d9;background:#ede9fe;border-color:#ddd6fe}.atrisk{color:#b91c1c;background:#fee2e2;border-color:#fecaca}.neutral{color:#475569;background:#f1f5f9;border-color:#e2e8f0}.warning{color:#b45309;background:#ffedd5;border-color:#fed7aa}
+        .compact-table-wrap{width:100%;border:1px solid var(--border);border-radius:13px;overflow:hidden;background:#fff}.compact-table{width:100%;margin:0;table-layout:auto}.compact-table thead th{background:var(--soft);color:#64748b;font-size:10px;text-transform:uppercase;font-weight:900;border-bottom:1px solid var(--border)!important;padding:8px 9px;white-space:nowrap}.compact-table tbody td{padding:8px 9px;vertical-align:middle;border-color:#eef2f7;color:#334155;font-weight:700;font-size:11.5px}.compact-table tbody tr:hover{background:#fbfdff}
+        .candidate-avatar{width:34px;height:34px;border-radius:12px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-weight:900;color:#4b5563;overflow:hidden;flex:0 0 auto}.candidate-avatar img{width:100%;height:100%;object-fit:cover}.timeline{position:relative;padding-left:10px}.timeline-item{position:relative;padding:0 0 16px 22px;border-left:2px solid #e5e7eb;margin-left:8px}.timeline-item:last-child{border-left-color:transparent}.timeline-dot{position:absolute;left:-9px;top:1px;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #94a3b8}.timeline-dot.pending{border-color:#f59e0b}.timeline-dot.approved{border-color:#10b981}.timeline-dot.rejected{border-color:#ef4444}.timeline-date{font-size:10.5px;color:#64748b;font-weight:750;margin-bottom:3px}.timeline-title{font-weight:950;font-size:12px;color:#111827;margin-bottom:2px}.timeline-text{font-size:11px;color:#475569;font-weight:750}
+        .summary-row{margin-bottom:10px}.summary-row .label{font-size:11px;font-weight:850;color:#475569}.summary-row .value{font-size:11px;font-weight:950;color:#111827}.progress{height:7px;background-color:#e5e7eb;border-radius:999px;overflow:hidden}.progress-bar{height:7px}.alert{border-radius:14px;border:1px solid transparent;box-shadow:var(--shadow);margin-bottom:14px;font-size:12px;font-weight:850}.alert-success{background:#dcfce7;border-color:#bbf7d0;color:#166534}.alert-danger{background:#fee2e2;border-color:#fecaca;color:#991b1b}.modal-content{border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 55px rgba(15,23,42,.18)}.modal-header{border-bottom:1px solid #eef2f7;padding:14px 16px}.modal-title{font-size:15px;font-weight:950;color:#111827}.modal-body{padding:16px}.modal-footer{border-top:1px solid #eef2f7;padding:14px 16px}.required:after{content:" *";color:#ef4444}.form-label{font-size:11px;font-weight:900;color:#475569;text-transform:uppercase;margin-bottom:6px}.form-control{min-height:38px;border:1px solid var(--border);border-radius:11px;font-size:12px;font-weight:800;color:#111827;padding:8px 11px;background:#fff}.action-btn{min-height:31px;min-width:31px;padding:0 9px;border-radius:10px;border:1px solid var(--border);color:#334155;background:#fff;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}.action-btn:hover{background:#eff6ff;border-color:#bfdbfe;color:#2563eb}
+        @media(max-width:991.98px){.main{margin-left:0!important;width:100%!important;max-width:100%!important}.sidebar{position:fixed!important;transform:translateX(-100%);z-index:1040!important}.sidebar.open,.sidebar.active,.sidebar.show{transform:translateX(0)!important}}
+        @media(max-width:1199px){.compact-table thead{display:none}.compact-table,.compact-table tbody,.compact-table tr,.compact-table td{display:block;width:100%}.compact-table tbody tr{border-bottom:1px solid var(--border);padding:10px}.compact-table tbody td{border:0;display:flex;justify-content:space-between;gap:12px}.compact-table tbody td::before{content:attr(data-label);font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;flex:0 0 105px}.compact-table tbody td:first-child{display:block}.compact-table tbody td:first-child::before{display:none}}
+        @media(max-width:768px){.content-scroll{padding:12px 10px!important}.container-fluid.projects-wrapper{padding-left:0!important;padding-right:0!important}.page-heading{align-items:flex-start;flex-direction:column}.quick-stats{grid-template-columns:repeat(2,1fr)}.panel{padding:12px}.primary-btn,.secondary-btn,.success-btn,.danger-btn{width:100%}.modal-footer{flex-direction:column-reverse;align-items:stretch}}
     </style>
 </head>
 <body>
@@ -270,36 +492,48 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
         <?php include 'includes/topbar.php'; ?>
 
         <div class="content-scroll">
-            <div class="container-fluid maxw">
+            <div class="container-fluid projects-wrapper px-0">
+
+                <?php if (!empty($message)): ?>
+                    <div class="alert alert-<?php echo e($messageType); ?> alert-dismissible fade show" role="alert">
+                        <i class="bi bi-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>-fill me-2"></i>
+                        <?php echo e($message); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
 
                 <!-- Page Header -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="page-heading">
                     <div>
-                        <h1 class="h3 fw-bold mb-1">
-                            <i class="bi bi-file-text me-2"></i>
-                            Hiring Request Details
-                        </h1>
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="text-muted">Request #: <?php echo e($request['request_no']); ?></span>
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                            <h1><i class="bi bi-file-text"></i> Hiring Request Details</h1>
                             <?php echo getStatusBadge($request['status']); ?>
                             <?php echo getPriorityBadge($request['priority']); ?>
                         </div>
+                        <p>Request #<?php echo e($request['request_no']); ?> • <?php echo e($request['position_title']); ?></p>
                     </div>
-                    <div>
-                        <a href="hiring-requests.php" class="btn btn-outline-secondary me-2">
-                            <i class="bi bi-arrow-left"></i> Back
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a href="hiring-requests.php" class="secondary-btn">
+                            <i class="bi bi-arrow-left"></i>
+                            Back
                         </a>
-                        <?php if ($isHr && $request['status'] === 'Pending'): ?>
-                            <button class="btn btn-success" onclick="openApproveModal()">
-                                <i class="bi bi-check-lg"></i> Approve
+
+                        <?php if (($isHr || $isAdmin) && $request['status'] === 'Pending'): ?>
+                            <button class="success-btn" onclick="openApproveModal()">
+                                <i class="bi bi-check-lg"></i>
+                                Approve
                             </button>
-                            <button class="btn btn-danger" onclick="openRejectModal()">
-                                <i class="bi bi-x-lg"></i> Reject
+                            <button class="danger-btn" onclick="openDeclineModal()">
+                                <i class="bi bi-x-lg"></i>
+                                Decline
                             </button>
                         <?php endif; ?>
+
                         <?php if ($request['status'] === 'Approved' || $request['status'] === 'In Progress'): ?>
-                            <a href="candidates.php?hiring_id=<?php echo $request_id; ?>" class="btn btn-primary">
-                                <i class="bi bi-people"></i> View Candidates (<?php echo $candidate_counts['total']; ?>)
+                            <a href="candidates.php?hiring_id=<?php echo $request_id; ?>" class="primary-btn">
+                                <i class="bi bi-people"></i>
+                                Candidates (<?php echo $candidate_counts['total']; ?>)
                             </a>
                         <?php endif; ?>
                     </div>
@@ -308,20 +542,32 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                 <!-- Quick Stats -->
                 <div class="quick-stats">
                     <div class="quick-stat">
-                        <div class="number"><?php echo (int)$request['vacancies']; ?></div>
-                        <div class="label">Vacancies</div>
+                        <div class="icon blue"><i class="bi bi-briefcase"></i></div>
+                        <div>
+                            <div class="number"><?php echo (int)$request['vacancies']; ?></div>
+                            <div class="label">Vacancies</div>
+                        </div>
                     </div>
                     <div class="quick-stat">
-                        <div class="number"><?php echo $candidate_counts['total']; ?></div>
-                        <div class="label">Total Candidates</div>
+                        <div class="icon purple"><i class="bi bi-people"></i></div>
+                        <div>
+                            <div class="number"><?php echo $candidate_counts['total']; ?></div>
+                            <div class="label">Total Candidates</div>
+                        </div>
                     </div>
                     <div class="quick-stat">
-                        <div class="number"><?php echo $candidate_counts['interview']; ?></div>
-                        <div class="label">In Interview</div>
+                        <div class="icon orange"><i class="bi bi-camera-video"></i></div>
+                        <div>
+                            <div class="number"><?php echo $candidate_counts['interview']; ?></div>
+                            <div class="label">In Interview</div>
+                        </div>
                     </div>
                     <div class="quick-stat">
-                        <div class="number"><?php echo $candidate_counts['selected'] + $candidate_counts['offered'] + $candidate_counts['joined']; ?></div>
-                        <div class="label">Selected</div>
+                        <div class="icon green"><i class="bi bi-check2-circle"></i></div>
+                        <div>
+                            <div class="number"><?php echo $candidate_counts['selected'] + $candidate_counts['offered'] + $candidate_counts['joined']; ?></div>
+                            <div class="label">Selected</div>
+                        </div>
                     </div>
                 </div>
 
@@ -410,7 +656,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 </h5>
                             </div>
                             
-                            <div class="p-3 bg-light rounded">
+                            <div class="description-box">
                                 <?php echo nl2br(e($request['job_description'])); ?>
                             </div>
                         </div>
@@ -423,13 +669,13 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                     <i class="bi bi-people"></i>
                                     Candidate Pipeline
                                 </h5>
-                                <a href="candidates.php?hiring_id=<?php echo $request_id; ?>" class="btn btn-sm btn-outline-primary">
+                                <a href="candidates.php?hiring_id=<?php echo $request_id; ?>" class="secondary-btn">
                                     View All <i class="bi bi-arrow-right"></i>
                                 </a>
                             </div>
                             
-                            <div class="table-responsive">
-                                <table class="table table-sm">
+                            <div class="compact-table-wrap">
+                                <table class="table compact-table">
                                     <thead>
                                         <tr>
                                             <th>Candidate</th>
@@ -445,7 +691,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                         foreach ($display_candidates as $candidate): 
                                         ?>
                                         <tr>
-                                            <td>
+                                            <td data-label="Candidate">
                                                 <div class="d-flex align-items-center gap-2">
                                                     <div class="candidate-avatar" style="width:32px;height:32px;">
                                                         <?php if (!empty($candidate['photo_path'])): ?>
@@ -462,10 +708,10 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td><?php echo getCandidateStatusBadge($candidate['status']); ?></td>
-                                            <td><?php echo $candidate['total_experience'] ? number_format($candidate['total_experience'], 1) . ' yrs' : 'Fresher'; ?></td>
-                                            <td><?php echo $candidate['expected_ctc'] ? '₹' . number_format($candidate['expected_ctc'], 2) . ' L' : '—'; ?></td>
-                                            <td>
+                                            <td data-label="Status"><?php echo getCandidateStatusBadge($candidate['status']); ?></td>
+                                            <td data-label="Experience"><?php echo $candidate['total_experience'] ? number_format($candidate['total_experience'], 1) . ' yrs' : 'Fresher'; ?></td>
+                                            <td data-label="Expected CTC"><?php echo $candidate['expected_ctc'] ? '₹' . number_format($candidate['expected_ctc'], 2) . ' L' : '—'; ?></td>
+                                            <td data-label="Action">
                                                 <a href="view-candidate.php?id=<?php echo $candidate['id']; ?>" class="action-btn" title="View">
                                                     <i class="bi bi-eye"></i>
                                                 </a>
@@ -487,7 +733,7 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                         <?php endif; ?>
 
                         <!-- Recent Interviews -->
-                        <?php if (mysqli_num_rows($interviews_result) > 0): ?>
+                        <?php if (!empty($interviews)): ?>
                         <div class="panel">
                             <div class="panel-header">
                                 <h5 class="panel-title">
@@ -496,8 +742,8 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 </h5>
                             </div>
                             
-                            <div class="table-responsive">
-                                <table class="table table-sm">
+                            <div class="compact-table-wrap">
+                                <table class="table compact-table">
                                     <thead>
                                         <tr>
                                             <th>Candidate</th>
@@ -508,22 +754,22 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php while ($interview = mysqli_fetch_assoc($interviews_result)): ?>
+                                        <?php foreach ($interviews as $interview): ?>
                                         <tr>
-                                            <td><?php echo e($interview['candidate_name']); ?></td>
-                                            <td><?php echo e($interview['interview_round']); ?></td>
-                                            <td>
+                                            <td data-label="Candidate"><?php echo e($interview['candidate_name']); ?></td>
+                                            <td data-label="Round"><?php echo e($interview['interview_round']); ?></td>
+                                            <td data-label="Date & Time">
                                                 <?php echo date('d M Y', strtotime($interview['interview_date'])); ?><br>
                                                 <small><?php echo date('h:i A', strtotime($interview['interview_time'])); ?></small>
                                             </td>
-                                            <td><?php echo e($interview['interviewer_name']); ?></td>
-                                            <td>
-                                                <span class="badge bg-<?php echo $interview['status'] === 'Scheduled' ? 'warning' : ($interview['status'] === 'Completed' ? 'success' : 'secondary'); ?>">
+                                            <td data-label="Interviewer"><?php echo e($interview['interviewer_name']); ?></td>
+                                            <td data-label="Status">
+                                                <span class="badge-pill <?php echo $interview['status'] === 'Scheduled' ? 'warning' : ($interview['status'] === 'Completed' ? 'ontrack' : 'neutral'); ?>">
                                                     <?php echo e($interview['status']); ?>
                                                 </span>
                                             </td>
                                         </tr>
-                                        <?php endwhile; ?>
+                                        <?php endforeach; ?>
                                     </tbody>
                                 </table>
                             </div>
@@ -676,60 +922,60 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                                 </h5>
                             </div>
                             
-                            <div class="mb-3">
+                            <div class="summary-row">
                                 <div class="d-flex justify-content-between mb-2">
-                                    <span>New / Screening</span>
-                                    <span class="fw-bold"><?php echo $candidate_counts['new'] + $candidate_counts['screening']; ?></span>
+                                    <span class="label">New / Screening</span>
+                                    <span class="value"><?php echo $candidate_counts['new'] + $candidate_counts['screening']; ?></span>
                                 </div>
                                 <div class="progress" style="height:8px;">
                                     <div class="progress-bar bg-info" style="width: <?php echo $candidate_counts['total'] > 0 ? (($candidate_counts['new'] + $candidate_counts['screening']) / $candidate_counts['total'] * 100) : 0; ?>%"></div>
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
+                            <div class="summary-row">
                                 <div class="d-flex justify-content-between mb-2">
-                                    <span>Shortlisted</span>
-                                    <span class="fw-bold"><?php echo $candidate_counts['shortlisted']; ?></span>
+                                    <span class="label">Shortlisted</span>
+                                    <span class="value"><?php echo $candidate_counts['shortlisted']; ?></span>
                                 </div>
                                 <div class="progress" style="height:8px;">
                                     <div class="progress-bar bg-primary" style="width: <?php echo $candidate_counts['total'] > 0 ? ($candidate_counts['shortlisted'] / $candidate_counts['total'] * 100) : 0; ?>%"></div>
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
+                            <div class="summary-row">
                                 <div class="d-flex justify-content-between mb-2">
-                                    <span>Interview</span>
-                                    <span class="fw-bold"><?php echo $candidate_counts['interview']; ?></span>
+                                    <span class="label">Interview</span>
+                                    <span class="value"><?php echo $candidate_counts['interview']; ?></span>
                                 </div>
                                 <div class="progress" style="height:8px;">
                                     <div class="progress-bar bg-warning" style="width: <?php echo $candidate_counts['total'] > 0 ? ($candidate_counts['interview'] / $candidate_counts['total'] * 100) : 0; ?>%"></div>
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
+                            <div class="summary-row">
                                 <div class="d-flex justify-content-between mb-2">
-                                    <span>Selected / Offered</span>
-                                    <span class="fw-bold"><?php echo $candidate_counts['selected'] + $candidate_counts['offered']; ?></span>
+                                    <span class="label">Selected / Offered</span>
+                                    <span class="value"><?php echo $candidate_counts['selected'] + $candidate_counts['offered']; ?></span>
                                 </div>
                                 <div class="progress" style="height:8px;">
                                     <div class="progress-bar bg-success" style="width: <?php echo $candidate_counts['total'] > 0 ? (($candidate_counts['selected'] + $candidate_counts['offered']) / $candidate_counts['total'] * 100) : 0; ?>%"></div>
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
+                            <div class="summary-row">
                                 <div class="d-flex justify-content-between mb-2">
-                                    <span>Joined</span>
-                                    <span class="fw-bold"><?php echo $candidate_counts['joined']; ?></span>
+                                    <span class="label">Joined</span>
+                                    <span class="value"><?php echo $candidate_counts['joined']; ?></span>
                                 </div>
                                 <div class="progress" style="height:8px;">
                                     <div class="progress-bar bg-success" style="width: <?php echo $candidate_counts['total'] > 0 ? ($candidate_counts['joined'] / $candidate_counts['total'] * 100) : 0; ?>%"></div>
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
+                            <div class="summary-row">
                                 <div class="d-flex justify-content-between mb-2">
-                                    <span>Rejected</span>
-                                    <span class="fw-bold"><?php echo $candidate_counts['rejected']; ?></span>
+                                    <span class="label">Rejected</span>
+                                    <span class="value"><?php echo $candidate_counts['rejected']; ?></span>
                                 </div>
                                 <div class="progress" style="height:8px;">
                                     <div class="progress-bar bg-danger" style="width: <?php echo $candidate_counts['total'] > 0 ? ($candidate_counts['rejected'] / $candidate_counts['total'] * 100) : 0; ?>%"></div>
@@ -747,11 +993,11 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 </div>
 
 <!-- Approve Modal (HR only) -->
-<?php if ($isHr && $request['status'] === 'Pending'): ?>
+<?php if (($isHr || $isAdmin) && $request['status'] === 'Pending'): ?>
 <div class="modal fade" id="approveModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="hiring-requests.php">
+            <form method="POST" action="view-hiring-request.php?id=<?php echo $request_id; ?>">
                 <input type="hidden" name="action" value="approve">
                 <input type="hidden" name="request_id" value="<?php echo $request_id; ?>">
                 
@@ -764,14 +1010,14 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                     <p>Are you sure you want to approve request <strong><?php echo e($request['request_no']); ?></strong>?</p>
                     
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Remarks (Optional)</label>
+                        <label class="form-label">Remarks (Optional)</label>
                         <textarea name="remarks" class="form-control" rows="2"></textarea>
                     </div>
                 </div>
                 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Approve Request</button>
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="success-btn">Approve Request</button>
                 </div>
             </form>
         </div>
@@ -781,12 +1027,12 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
 <div class="modal fade" id="rejectModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="hiring-requests.php">
-                <input type="hidden" name="action" value="reject">
+            <form method="POST" action="view-hiring-request.php?id=<?php echo $request_id; ?>">
+                <input type="hidden" name="action" value="decline">
                 <input type="hidden" name="request_id" value="<?php echo $request_id; ?>">
                 
                 <div class="modal-header">
-                    <h5 class="modal-title">Reject Hiring Request</h5>
+                    <h5 class="modal-title">Decline Hiring Request</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 
@@ -794,14 +1040,14 @@ $loggedName = $_SESSION['employee_name'] ?? $current_employee['full_name'];
                     <p>Are you sure you want to reject request <strong><?php echo e($request['request_no']); ?></strong>?</p>
                     
                     <div class="mb-3">
-                        <label class="form-label fw-bold required">Reason for Rejection</label>
+                        <label class="form-label required">Reason for Decline</label>
                         <textarea name="remarks" class="form-control" rows="3" required></textarea>
                     </div>
                 </div>
                 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger">Reject Request</button>
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="danger-btn">Decline Request</button>
                 </div>
             </form>
         </div>
@@ -813,7 +1059,7 @@ function openApproveModal() {
     new bootstrap.Modal(document.getElementById('approveModal')).show();
 }
 
-function openRejectModal() {
+function openDeclineModal() {
     new bootstrap.Modal(document.getElementById('rejectModal')).show();
 }
 </script>
@@ -824,8 +1070,3 @@ function openRejectModal() {
 
 </body>
 </html>
-<?php
-if (isset($conn) && $conn) {
-    mysqli_close($conn);
-}
-?>
