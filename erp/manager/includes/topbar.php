@@ -111,7 +111,7 @@ if ($employeeId > 0) {
   if ($conn) {
     $topbarUnreadCount = getUnreadNotificationCount($conn, $employeeId);
     $topbarNotifications = getEmployeeNotifications($conn, $employeeId, 5);
-    mysqli_close($conn);
+   
   }
 }
 

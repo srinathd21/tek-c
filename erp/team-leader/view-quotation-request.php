@@ -30,6 +30,128 @@ $error = '';
 // Helper functions
 function e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
+function tableExists($conn, string $table): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function columnExists($conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $columnEsc = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$columnEsc'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function roleKeyFromDesignation(string $designation, string $department = ''): string {
+    $d = strtolower(trim($designation));
+    $dept = strtolower(trim($department));
+
+    if (
+        str_contains($d, 'director') ||
+        str_contains($d, 'admin') ||
+        str_contains($d, 'administrator') ||
+        str_contains($d, 'vice president') ||
+        str_contains($d, 'general manager')
+    ) return 'admin';
+
+    if (str_contains($d, 'hr') || str_contains($dept, 'hr') || str_contains($dept, 'human resource')) {
+        return 'admin';
+    }
+
+    if (str_contains($d, 'manager')) return 'manager';
+
+    if (
+        str_contains($d, 'team lead') ||
+        str_contains($d, 'teamleader') ||
+        str_contains($d, 'tl') ||
+        str_contains($d, 'lead')
+    ) return 'tl';
+
+    if (str_contains($d, 'qs') || str_contains($dept, 'qs')) return 'qs';
+
+    if (
+        str_contains($d, 'project engineer') ||
+        str_contains($d, 'engineer')
+    ) return 'project_engineer';
+
+    return 'other';
+}
+
+function createNotificationCurrentDb(
+    $conn,
+    int $employeeId,
+    string $title,
+    string $message,
+    string $module,
+    int $referenceId,
+    string $link,
+    string $type = 'quotation'
+): bool {
+    if ($employeeId <= 0 || !$conn || !tableExists($conn, 'notifications')) {
+        return false;
+    }
+
+    $columns = [];
+    $placeholders = [];
+    $types = '';
+    $values = [];
+
+    $map = [
+        'employee_id'  => ['i', $employeeId],
+        'title'        => ['s', $title],
+        'message'      => ['s', $message],
+        'type'         => ['s', $type],
+        'module'       => ['s', $module],
+        'reference_id' => ['i', $referenceId],
+        'link'         => ['s', $link],
+        'priority'     => ['s', 'normal'],
+        'is_read'      => ['i', 0],
+        'created_at'   => ['raw', 'NOW()'],
+    ];
+
+    foreach ($map as $column => $pair) {
+        if (columnExists($conn, 'notifications', $column)) {
+            $columns[] = "`$column`";
+
+            if ($pair[0] === 'raw') {
+                $placeholders[] = $pair[1];
+            } else {
+                $placeholders[] = '?';
+                $types .= $pair[0];
+                $values[] = $pair[1];
+            }
+        }
+    }
+
+    if (!$columns) return false;
+
+    $sql = "INSERT INTO notifications (" . implode(',', $columns) . ") VALUES (" . implode(',', $placeholders) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    if ($values) {
+        mysqli_stmt_bind_param($stmt, $types, ...$values);
+    }
+
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    return $ok;
+}
+
+
+
+
+
+
+$currentRoleKey = roleKeyFromDesignation($user_designation, $user_department);
+
 function safeDate($v, $dash = '—') {
     $v = trim((string)$v);
     if ($v === '' || $v === '0000-00-00') return $dash;
@@ -43,30 +165,57 @@ function formatCurrency($amount) {
 }
 
 function getPriorityBadge($priority) {
-    $badges = [
-        'Low' => ['bg-secondary', 'bi-arrow-down'],
-        'Medium' => ['bg-info', 'bi-dash'],
-        'High' => ['bg-warning', 'bi-arrow-up'],
-        'Urgent' => ['bg-danger', 'bi-exclamation-triangle']
+    $priority = (string)$priority;
+    $classes = [
+        'Low' => 'neutral',
+        'Medium' => 'progressing',
+        'High' => 'warning',
+        'Urgent' => 'atrisk'
     ];
-    $badge = $badges[$priority] ?? ['bg-secondary', 'bi-question'];
-    return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $priority . '</span>';
+
+    $icons = [
+        'Low' => 'bi-arrow-down',
+        'Medium' => 'bi-dash',
+        'High' => 'bi-arrow-up',
+        'Urgent' => 'bi-exclamation-triangle'
+    ];
+
+    $class = $classes[$priority] ?? 'neutral';
+    $icon = $icons[$priority] ?? 'bi-question';
+
+    return '<span class="badge-pill ' . $class . '"><i class="bi ' . $icon . '"></i>' . e($priority ?: '—') . '</span>';
 }
 
 function getStatusBadge($status) {
-    $badges = [
-        'Draft' => ['bg-secondary', 'bi-pencil'],
-        'Pending Assignment' => ['bg-warning', 'bi-clock'],
-        'Assigned' => ['bg-info', 'bi-person-check'],
-        'Quotations Received' => ['bg-primary', 'bi-file-text'],
-        'With QS' => ['bg-secondary', 'bi-arrow-right'],
-        'QS Finalized' => ['bg-success', 'bi-check-circle'],
-        'Approved' => ['bg-success', 'bi-check-circle-fill'],
-        'Rejected' => ['bg-danger', 'bi-x-circle'],
-        'Cancelled' => ['bg-dark', 'bi-x']
+    $status = (string)$status;
+    $classes = [
+        'Draft' => 'neutral',
+        'Pending Assignment' => 'pending',
+        'Assigned' => 'progressing',
+        'Quotations Received' => 'progressing',
+        'With QS' => 'pending',
+        'QS Finalized' => 'ontrack',
+        'Approved' => 'ontrack',
+        'Rejected' => 'atrisk',
+        'Cancelled' => 'neutral'
     ];
-    $badge = $badges[$status] ?? ['bg-secondary', 'bi-question'];
-    return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $status . '</span>';
+
+    $icons = [
+        'Draft' => 'bi-pencil',
+        'Pending Assignment' => 'bi-clock',
+        'Assigned' => 'bi-person-check',
+        'Quotations Received' => 'bi-file-text',
+        'With QS' => 'bi-arrow-right',
+        'QS Finalized' => 'bi-check-circle',
+        'Approved' => 'bi-check-circle-fill',
+        'Rejected' => 'bi-x-circle',
+        'Cancelled' => 'bi-x'
+    ];
+
+    $class = $classes[$status] ?? 'neutral';
+    $icon = $icons[$status] ?? 'bi-question';
+
+    return '<span class="badge-pill ' . $class . '"><i class="bi ' . $icon . '"></i>' . e($status ?: '—') . '</span>';
 }
 
 // Fetch quotation request details with full joins
@@ -78,6 +227,8 @@ $query = "
         s.project_location,
         s.project_type,
         s.scope_of_work,
+        s.manager_employee_id,
+        s.team_lead_employee_id,
         c.client_name,
         c.company_name,
         c.mobile_number AS client_mobile,
@@ -90,6 +241,7 @@ $query = "
         pe.full_name AS project_engineer_name,
         qs_emp.full_name AS qs_employee_name,
         qs_emp.employee_code AS qs_employee_code,
+        req_by.full_name AS requested_by_name,
         (SELECT GROUP_CONCAT(e.full_name SEPARATOR ', ')
          FROM site_project_engineers spe
          JOIN employees e ON e.id = spe.employee_id
@@ -114,6 +266,7 @@ $query = "
     LEFT JOIN employees tl ON s.team_lead_employee_id = tl.id
     LEFT JOIN employees pe ON qr.project_engineer_id = pe.id
     LEFT JOIN employees qs_emp ON qr.qs_employee_id = qs_emp.id
+    LEFT JOIN employees req_by ON qr.requested_by = req_by.id
     LEFT JOIN quotations final_q ON qr.final_quotation_id = final_q.id
     LEFT JOIN quotation_dealers final_d ON final_q.dealer_id = final_d.id
     WHERE qr.id = ?
@@ -132,7 +285,7 @@ if (!$request) {
 }
 
 // Permission checks
-$is_manager = ($request['requested_by'] == $user_id);
+$is_manager = ($request['requested_by'] == $user_id); // requester / creator
 $is_project_engineer = ($request['project_engineer_id'] == $user_id);
 $is_qs = ($request['qs_employee_id'] == $user_id && in_array($request['status'], ['With QS', 'QS Finalized']));
 $is_team_lead = false;
@@ -172,6 +325,147 @@ mysqli_stmt_execute($stmt);
 $res = mysqli_stmt_get_result($stmt);
 $quotations = mysqli_fetch_all($res, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
+
+// Common role permissions for this page.
+$is_request_creator = ((int)($request['requested_by'] ?? 0) === $user_id);
+$is_tl_for_project = $is_team_lead;
+$is_project_manager_for_project = ((int)($request['manager_employee_id'] ?? 0) === $user_id);
+$is_admin_view = $is_admin;
+
+// Access control for common page.
+// Project Engineer/creator can view own request.
+// TL can view/action project request.
+// Manager/Admin can view only.
+// QS can manage only when assigned.
+$can_view_request = $is_admin_view || $is_request_creator || $is_project_manager_for_project || $is_tl_for_project || $is_qs || $is_project_engineer;
+if (!$can_view_request) {
+    header('Location: my-quotation-requests.php');
+    exit();
+}
+
+// Fetch active QS employees for TL forward action.
+$qs_employees = [];
+$qs_query = "SELECT id, full_name FROM employees WHERE (department = 'QS' OR designation LIKE '%QS%') AND employee_status = 'active' ORDER BY full_name";
+$qs_result = mysqli_query($conn, $qs_query);
+if ($qs_result) {
+    while ($row = mysqli_fetch_assoc($qs_result)) {
+        $qs_employees[] = $row;
+    }
+}
+
+// TL action handling: approve/accept request, then forward to selected QS.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['tl_action'])) {
+    if (!$is_tl_for_project) {
+        $error = 'Only the assigned Team Lead can process this request.';
+    } else {
+        $tlAction = $_POST['tl_action'];
+
+        if ($tlAction === 'approve_request') {
+            if ($request['status'] !== 'Pending Assignment') {
+                $error = 'This request cannot be approved now. Current status: ' . $request['status'];
+            } else {
+                $tlName = $_SESSION['employee_name'] ?? ($request['team_lead_name'] ?? '');
+                $update = "UPDATE quotation_requests
+                           SET project_engineer_id = ?,
+                               project_engineer_name = ?,
+                               status = 'Assigned',
+                               assigned_at = COALESCE(assigned_at, NOW()),
+                               updated_at = NOW()
+                           WHERE id = ?";
+                $stmt = mysqli_prepare($conn, $update);
+                mysqli_stmt_bind_param($stmt, "isi", $user_id, $tlName, $request_id);
+
+                if ($stmt && mysqli_stmt_execute($stmt)) {
+                    $success = 'Quotation request approved successfully. You can now forward it to QS.';
+
+                    $creatorId = (int)($request['requested_by'] ?? 0);
+                    if ($creatorId > 0 && $creatorId !== $user_id) {
+                        createNotificationCurrentDb(
+                            $conn,
+                            $creatorId,
+                            'Quotation request approved',
+                            'Your quotation request ' . ($request['request_no'] ?? '') . ' has been approved by TL.',
+                            'quotation_requests',
+                            $request_id,
+                            'view-quotation-request.php?id=' . $request_id,
+                            'quotation'
+                        );
+                    }
+
+                    header('Location: view-quotation-request.php?id=' . $request_id . '&success=approved');
+                    exit();
+                } else {
+                    $error = 'Failed to approve request.';
+                }
+
+                if ($stmt) mysqli_stmt_close($stmt);
+            }
+        }
+
+        if ($tlAction === 'forward_to_qs') {
+            $qs_employee_id = (int)($_POST['qs_employee_id'] ?? 0);
+
+            if ($qs_employee_id <= 0) {
+                $error = 'Please select QS employee.';
+            } elseif (!in_array($request['status'], ['Assigned', 'Pending Assignment'], true)) {
+                $error = 'This request cannot be forwarded now. Current status: ' . $request['status'];
+            } else {
+                $check_qs_query = "SELECT id, full_name FROM employees WHERE id = ? AND (department = 'QS' OR designation LIKE '%QS%') AND employee_status = 'active' LIMIT 1";
+                $stmt = mysqli_prepare($conn, $check_qs_query);
+                mysqli_stmt_bind_param($stmt, "i", $qs_employee_id);
+                mysqli_stmt_execute($stmt);
+                $qs_res = mysqli_stmt_get_result($stmt);
+                $qs_row = $qs_res ? mysqli_fetch_assoc($qs_res) : null;
+                mysqli_stmt_close($stmt);
+
+                if (!$qs_row) {
+                    $error = 'Selected employee is not a valid active QS staff.';
+                } else {
+                    $tlName = $_SESSION['employee_name'] ?? ($request['team_lead_name'] ?? '');
+                    $update = "UPDATE quotation_requests
+                               SET project_engineer_id = COALESCE(project_engineer_id, ?),
+                                   project_engineer_name = COALESCE(NULLIF(project_engineer_name, ''), ?),
+                                   status = 'With QS',
+                                   qs_assigned_at = NOW(),
+                                   qs_assigned_by = ?,
+                                   qs_employee_id = ?,
+                                   updated_at = NOW()
+                               WHERE id = ?";
+                    $stmt = mysqli_prepare($conn, $update);
+                    mysqli_stmt_bind_param($stmt, "isiii", $user_id, $tlName, $user_id, $qs_employee_id, $request_id);
+
+                    if ($stmt && mysqli_stmt_execute($stmt)) {
+                        createNotificationCurrentDb(
+                            $conn,
+                            $qs_employee_id,
+                            'Quotation request assigned to you',
+                            'Quotation request ' . ($request['request_no'] ?? '') . ' has been forwarded to you by TL.',
+                            'quotation_requests',
+                            $request_id,
+                            'qs-quotation-requests.php',
+                            'quotation'
+                        );
+
+                        $success = 'Quotation request forwarded to QS successfully.';
+                        header('Location: view-quotation-request.php?id=' . $request_id . '&success=forwarded');
+                        exit();
+                    } else {
+                        $error = 'Failed to forward request to QS.';
+                    }
+
+                    if ($stmt) mysqli_stmt_close($stmt);
+                }
+            }
+        }
+    }
+}
+
+if (isset($_GET['success'])) {
+    if ($_GET['success'] === 'approved') $success = 'Quotation request approved successfully.';
+    if ($_GET['success'] === 'forwarded') $success = 'Quotation request forwarded to QS successfully.';
+}
+
+
 ?>
 <!doctype html>
 <html lang="en">
@@ -190,12 +484,7 @@ mysqli_stmt_close($stmt);
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
 
-    <!-- DataTables -->
-    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet" />
-    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet" />
 
-    <!-- Lightbox for image viewing -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.4/css/lightbox.min.css" />
 
     <!-- TEK-C Custom Styles -->
     <link href="assets/css/layout-styles.css" rel="stylesheet" />
@@ -203,356 +492,442 @@ mysqli_stmt_close($stmt);
     <link href="assets/css/footer.css" rel="stylesheet" />
 
     <style>
-        /* Use TEK-C variables for consistency */
-        :root {
-            --tekc-yellow: #F9C52A;
-            --tekc-dark: #111827;
-            --tekc-muted: #6b7280;
-            --border: #e5e7eb;
-            --surface: #ffffff;
-            --radius: 14px;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        :root{
+            --page-bg:#f5f7fb;
+            --card-bg:#ffffff;
+            --border:#e5e7eb;
+            --text:#111827;
+            --muted:#6b7280;
+            --soft:#f8fafc;
+            --shadow:0 10px 26px rgba(15,23,42,.055);
+            --radius:15px;
+            --blue:#2f80ed;
+            --green:#27ae60;
+            --orange:#f2994a;
+            --red:#eb5757;
+            --purple:#7c3aed;
         }
 
-        .content-scroll {
-            flex: 1 1 auto;
-            overflow: auto;
-            padding: 22px 22px 14px;
+        body{ background:var(--page-bg); }
+        .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px; }
+        .projects-wrapper{ width:100%; }
+
+        .page-heading{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:14px;
         }
 
-        .panel {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 16px;
-            margin-bottom: 20px;
+        .page-heading h1{
+            font-size:19px;
+            font-weight:950;
+            color:var(--text);
+            margin:0;
+            letter-spacing:-.01em;
         }
 
-        .panel-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 12px;
+        .page-heading p{
+            margin:3px 0 0;
+            color:var(--muted);
+            font-size:12px;
+            font-weight:650;
         }
 
-        .panel-title {
-            font-weight: 900;
-            font-size: 18px;
-            color: var(--tekc-dark);
-            margin: 0;
+        .primary-btn,.secondary-btn,.success-btn,.warning-btn,.danger-btn,.btn-action{
+            min-height:36px;
+            padding:0 14px;
+            border-radius:11px;
+            font-size:12px;
+            font-weight:900;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:7px;
+            text-decoration:none;
+            white-space:nowrap;
+            line-height:1;
         }
 
-        .panel-menu {
-            width: 36px;
-            height: 36px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            background: #fff;
-            display: grid;
-            place-items: center;
-            color: var(--tekc-muted);
+        .primary-btn{ border:0; background:#111827; color:#fff; }
+        .primary-btn:hover{ background:#020617; color:#fff; }
+
+        .success-btn{ border:0; background:#16a34a; color:#fff; }
+        .success-btn:hover{ background:#15803d; color:#fff; }
+
+        .warning-btn{ border:0; background:#7c3aed; color:#fff; }
+        .warning-btn:hover{ background:#6d28d9; color:#fff; }
+
+        .danger-btn{ border:0; background:#dc2626; color:#fff; }
+        .danger-btn:hover{ background:#b91c1c; color:#fff; }
+
+        .secondary-btn,.btn-action{
+            border:1px solid var(--border);
+            background:#fff;
+            color:#334155;
         }
 
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 14px 16px;
-            height: 90px;
-            display: flex;
-            align-items: center;
-            gap: 14px;
+        .secondary-btn:hover,.btn-action:hover{
+            border-color:#cbd5e1;
+            background:#f8fafc;
+            color:#111827;
         }
 
-        .stat-ic {
-            width: 46px;
-            height: 46px;
-            border-radius: 14px;
-            display: grid;
-            place-items: center;
-            color: #fff;
-            font-size: 20px;
-            flex: 0 0 auto;
+        .panel,.action-panel{
+            background:var(--card-bg);
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:13px;
+            margin-bottom:14px;
+            height:auto;
         }
 
-        .stat-ic.blue { background: var(--blue); }
-        .stat-ic.green { background: #10b981; }
-        .stat-ic.yellow { background: #f59e0b; }
-        .stat-ic.red { background: #ef4444; }
-        .stat-ic.purple { background: #8b5cf6; }
-        .stat-label { color: #4b5563; font-weight: 750; font-size: 13px; }
-        .stat-value { font-size: 18px; font-weight: 900; line-height: 1; margin-top: 2px; }
-
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 12px;
-            margin-top: 10px;
+        .panel-header{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:12px;
         }
 
-        .info-item {
-            padding: 10px 12px;
-            background: #f9fafb;
-            border-radius: 10px;
-            border: 1px solid var(--border);
+        .panel-title{
+            font-weight:950;
+            font-size:14px;
+            color:var(--text);
+            margin:0;
+            display:flex;
+            align-items:center;
+            gap:8px;
         }
 
-        .info-label {
-            font-size: 11px;
-            font-weight: 800;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-            margin-bottom: 2px;
+        .panel-title i{ color:var(--blue); font-size:16px; }
+        .panel-subtitle{ color:var(--muted); font-size:11px; font-weight:700; margin-top:2px; }
+
+        .panel-menu{
+            width:34px;
+            height:34px;
+            border-radius:11px;
+            border:1px solid var(--border);
+            background:#fff;
+            display:grid;
+            place-items:center;
+            color:#64748b;
+            flex:0 0 auto;
         }
 
-        .info-value {
-            font-size: 14px;
-            font-weight: 900;
-            color: #1f2937;
+        .stat-card{
+            background:#fff;
+            border:1px solid var(--border);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:12px 13px;
+            min-height:78px;
+            display:flex;
+            align-items:center;
+            gap:11px;
+            overflow:hidden;
         }
 
-        .description-box {
-            background: #f9fafb;
-            border-radius: 12px;
-            padding: 16px;
-            border: 1px solid var(--border);
-            line-height: 1.5;
-            font-size: 14px;
+        .stat-ic{
+            width:38px;
+            height:38px;
+            border-radius:12px;
+            display:grid;
+            place-items:center;
+            color:#fff;
+            font-size:17px;
+            flex:0 0 auto;
         }
 
-        .btn-action {
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 7px 10px;
-            color: var(--muted);
-            font-size: 12px;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-weight: 900;
+        .stat-ic.blue{ background:var(--blue); }
+        .stat-ic.green{ background:var(--green); }
+        .stat-ic.yellow{ background:var(--orange); }
+        .stat-ic.red{ background:var(--red); }
+        .stat-ic.purple{ background:var(--purple); }
+
+        .stat-label{ color:#64748b; font-weight:850; font-size:10.5px; text-transform:uppercase; }
+        .stat-value{ font-size:17px; font-weight:950; color:#111827; line-height:1.15; word-break:break-word; }
+
+        .info-grid{
+            display:grid;
+            grid-template-columns:repeat(auto-fill, minmax(235px, 1fr));
+            gap:10px;
+            margin-top:10px;
         }
 
-        .btn-action:hover {
-            background: var(--bg);
-            color: var(--blue);
+        .info-item{
+            padding:10px 11px;
+            background:#f8fafc;
+            border-radius:12px;
+            border:1px solid #eef2f7;
+            min-width:0;
         }
 
-        .file-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: 10px;
+        .info-label{
+            font-size:10px;
+            font-weight:950;
+            color:#64748b;
+            text-transform:uppercase;
+            margin-bottom:3px;
         }
 
-        .file-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
-            background: #f9fafb;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-            transition: all 0.2s;
+        .info-value{
+            font-size:12px;
+            font-weight:900;
+            color:#111827;
+            word-break:break-word;
         }
 
-        .file-item:hover {
-            background: #f3f4f6;
-            border-color: var(--blue);
+        .section-heading{
+            font-size:12px;
+            font-weight:950;
+            color:#111827;
+            margin:0 0 8px;
+            display:flex;
+            align-items:center;
+            gap:7px;
         }
 
-        .file-icon {
-            width: 32px;
-            height: 32px;
-            background: var(--blue);
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 16px;
+        .description-box{
+            background:#f8fafc;
+            border-radius:13px;
+            padding:12px;
+            border:1px solid #eef2f7;
+            line-height:1.5;
+            font-size:12px;
+            font-weight:750;
+            color:#334155;
         }
 
-        .file-icon.pdf { background: #dc2626; }
-        .file-icon.image { background: #8b5cf6; }
-        .file-icon.dwg { background: #f59e0b; }
-
-        .file-details {
-            flex: 1;
+        .badge-pill{
+            border-radius:999px;
+            padding:5px 8px;
+            font-weight:900;
+            font-size:10px;
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            border:1px solid transparent;
+            text-decoration:none;
+            white-space:nowrap;
         }
 
-        .file-name {
-            font-weight: 800;
-            color: #1f2937;
-            font-size: 13px;
-            margin-bottom: 2px;
+        .mini-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+        .ontrack{ color:#15803d; background:#dcfce7; border-color:#bbf7d0; }
+        .progressing{ color:#2563eb; background:#dbeafe; border-color:#bfdbfe; }
+        .pending{ color:#6d28d9; background:#ede9fe; border-color:#ddd6fe; }
+        .atrisk{ color:#b91c1c; background:#fee2e2; border-color:#fecaca; }
+        .neutral{ color:#475569; background:#f1f5f9; border-color:#e2e8f0; }
+        .warning{ color:#b45309; background:#ffedd5; border-color:#fed7aa; }
+
+        .file-list{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+
+        .file-item{
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:8px 10px;
+            background:#f8fafc;
+            border-radius:11px;
+            border:1px solid #eef2f7;
         }
 
-        .file-meta {
-            font-size: 10px;
-            color: #6b7280;
-            font-weight: 700;
+        .file-icon{
+            width:32px;
+            height:32px;
+            background:var(--blue);
+            border-radius:9px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:white;
+            font-size:15px;
+            flex:0 0 auto;
         }
 
-        .file-actions {
-            display: flex;
-            gap: 6px;
+        .file-icon.pdf{ background:#dc2626; }
+        .file-icon.image{ background:#8b5cf6; }
+        .file-icon.dwg{ background:#f59e0b; }
+
+        .file-details{ flex:1; min-width:0; }
+        .file-name{ font-weight:900; color:#111827; font-size:12px; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .file-meta{ font-size:10px; color:#64748b; font-weight:700; }
+        .file-actions{ display:flex; gap:6px; }
+
+        .btn-icon{
+            width:30px;
+            height:30px;
+            border-radius:9px;
+            border:1px solid var(--border);
+            background:white;
+            color:#64748b;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            text-decoration:none;
+            font-size:14px;
         }
 
-        .btn-icon {
-            width: 30px;
-            height: 30px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: white;
-            color: #6b7280;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-            transition: all 0.2s;
-            font-size: 14px;
+        .btn-icon:hover{ background:var(--blue); color:white; border-color:var(--blue); }
+
+        .timeline{ position:relative; padding-left:25px; margin-top:15px; }
+        .timeline-item{ position:relative; padding-bottom:18px; }
+        .timeline-item:last-child{ padding-bottom:0; }
+        .timeline-item::before{
+            content:'';
+            position:absolute;
+            left:-25px;
+            top:0;
+            width:2px;
+            height:100%;
+            background:#e5e7eb;
+        }
+        .timeline-item:last-child::before{ height:0; }
+        .timeline-dot{
+            position:absolute;
+            left:-31px;
+            top:0;
+            width:12px;
+            height:12px;
+            border-radius:50%;
+            background:#2f80ed;
+            border:2px solid #fff;
+            box-shadow:0 2px 4px rgba(0,0,0,.1);
+        }
+        .timeline-dot.completed{ background:#10b981; }
+        .timeline-dot.pending{ background:#f59e0b; }
+        .timeline-dot.cancelled{ background:#ef4444; }
+        .timeline-content{
+            background:#f8fafc;
+            border-radius:12px;
+            padding:10px 12px;
+            border:1px solid #eef2f7;
+        }
+        .timeline-title{ font-weight:900; color:#111827; font-size:12px; margin-bottom:2px; }
+        .timeline-date{ font-size:10.5px; color:#64748b; font-weight:700; }
+
+        .final-quote-card{
+            background:linear-gradient(135deg,#f0fdf4 0%,#e6f9e6 100%);
+            border:1px solid #86efac;
+            border-radius:14px;
+            padding:14px;
+            margin-bottom:14px;
+            box-shadow:var(--shadow);
         }
 
-        .btn-icon:hover {
-            background: var(--blue);
-            color: white;
-            border-color: var(--blue);
+        .final-quote-card .dealer-name{
+            font-size:14px;
+            font-weight:950;
+            color:#15803d;
+            margin-bottom:6px;
         }
 
-        .timeline {
-            position: relative;
-            padding-left: 25px;
-            margin-top: 15px;
+        .proj-title{ font-weight:950; font-size:12px; color:#111827; margin-bottom:2px; line-height:1.25; }
+        .proj-sub{ font-size:10.5px; color:#64748b; font-weight:700; line-height:1.35; }
+
+        .compact-table-wrap{
+            width:100%;
+            border:1px solid var(--border);
+            border-radius:13px;
+            overflow:hidden;
+            background:#fff;
         }
 
-        .timeline-item {
-            position: relative;
-            padding-bottom: 20px;
+        .compact-table{ width:100%; margin:0; table-layout:auto; }
+        .compact-table thead th{
+            background:var(--soft);
+            color:#64748b;
+            font-size:10px;
+            text-transform:uppercase;
+            font-weight:900;
+            border-bottom:1px solid var(--border)!important;
+            padding:8px 9px;
+        }
+        .compact-table tbody td{
+            padding:8px 9px;
+            vertical-align:middle;
+            border-color:#eef2f7;
+            color:#334155;
+            font-weight:700;
+            font-size:11.5px;
         }
 
-        .timeline-item:last-child {
-            padding-bottom: 0;
+        .form-label{
+            font-size:11px;
+            font-weight:900;
+            color:#475569;
+            text-transform:uppercase;
+            margin-bottom:6px;
         }
 
-        .timeline-item::before {
-            content: '';
-            position: absolute;
-            left: -25px;
-            top: 0;
-            width: 2px;
-            height: 100%;
-            background: var(--border);
+        .form-select{
+            min-height:38px;
+            border:1px solid var(--border);
+            border-radius:11px;
+            font-size:12px;
+            font-weight:800;
         }
 
-        .timeline-item:last-child::before {
-            height: 0;
+        .modal-content{
+            border:1px solid var(--border);
+            border-radius:16px;
+            box-shadow:0 24px 55px rgba(15,23,42,.18);
         }
 
-        .timeline-dot {
-            position: absolute;
-            left: -31px;
-            top: 0;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: var(--blue);
-            border: 2px solid #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .modal-header{ border-bottom:1px solid #eef2f7; }
+        .modal-title{ font-size:15px; font-weight:950; color:#111827; }
+
+        .alert{
+            border-radius:14px;
+            border:1px solid transparent;
+            box-shadow:var(--shadow);
+            font-size:12px;
+            font-weight:850;
+            margin-bottom:14px;
+        }
+        .alert-success{ background:#dcfce7; border-color:#bbf7d0; color:#166534; }
+        .alert-danger{ background:#fee2e2; border-color:#fecaca; color:#991b1b; }
+        .alert-info{ background:#eff6ff; border-color:#bfdbfe; color:#1e40af; }
+
+        @media(max-width:991.98px){
+            .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
+            .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
+            .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
         }
 
-        .timeline-dot.completed { background: #10b981; }
-        .timeline-dot.pending { background: #f59e0b; }
-        .timeline-dot.cancelled { background: #ef4444; }
-
-        .timeline-content {
-            background: #f9fafb;
-            border-radius: 10px;
-            padding: 12px 15px;
-            border: 1px solid var(--border);
-        }
-
-        .timeline-title {
-            font-weight: 900;
-            color: #1f2937;
-            font-size: 14px;
-            margin-bottom: 2px;
-        }
-
-        .timeline-date {
-            font-size: 11px;
-            color: #6b7280;
-            font-weight: 700;
-        }
-
-        .final-quote-card {
-            background: linear-gradient(135deg, #f0fdf4 0%, #e6f9e6 100%);
-            border: 1px solid #86efac;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 20px;
-        }
-
-        .final-quote-card .dealer-name {
-            font-size: 16px;
-            font-weight: 900;
-            color: #15803d;
-            margin-bottom: 8px;
-        }
-
-        .proj-title {
-            font-weight: 900;
-            font-size: 13px;
-            color: #1f2937;
-            margin-bottom: 2px;
-            line-height: 1.2;
-        }
-
-        .proj-sub {
-            font-size: 11px;
-            color: #6b7280;
-            font-weight: 700;
-            line-height: 1.25;
-        }
-
-        /* Responsive adjustments */
-        @media (max-width: 991.98px) {
-            .main {
-                margin-left: 0 !important;
-                width: 100% !important;
-                max-width: 100% !important;
+        @media(max-width:1199px){
+            .compact-table thead{ display:none; }
+            .compact-table,.compact-table tbody,.compact-table tr,.compact-table td{ display:block; width:100%; }
+            .compact-table tbody tr{ border-bottom:1px solid var(--border); padding:10px; }
+            .compact-table tbody td{
+                border:0;
+                display:flex;
+                justify-content:space-between;
+                gap:12px;
             }
-            .sidebar {
-                position: fixed !important;
-                transform: translateX(-100%);
-                z-index: 1040 !important;
+            .compact-table tbody td::before{
+                content:attr(data-label);
+                font-size:10px;
+                font-weight:900;
+                color:#64748b;
+                text-transform:uppercase;
+                flex:0 0 100px;
             }
-            .sidebar.open, .sidebar.active, .sidebar.show {
-                transform: translateX(0) !important;
-            }
+            .compact-table tbody td:first-child{ display:block; }
+            .compact-table tbody td:first-child::before{ display:none; }
         }
 
-        @media (max-width: 768px) {
-            .content-scroll {
-                padding: 12px 10px 12px !important;
-            }
-            .container-fluid.maxw {
-                padding-left: 6px !important;
-                padding-right: 6px !important;
-            }
-            .panel {
-                padding: 12px !important;
-                margin-bottom: 12px !important;
-                border-radius: 14px !important;
-            }
-            .stat-card {
-                height: auto;
-                padding: 12px;
-            }
+        @media(max-width:768px){
+            .content-scroll{ padding:12px 10px!important; }
+            .container-fluid.projects-wrapper{ padding-left:0!important; padding-right:0!important; }
+            .page-heading{ align-items:flex-start; flex-direction:column; }
+            .panel,.action-panel{ padding:12px; }
+            .primary-btn,.secondary-btn,.success-btn,.warning-btn,.danger-btn{ width:100%; }
+            .info-grid{ grid-template-columns:1fr; }
+            .stat-card{ min-height:72px; }
+            .file-item{ align-items:flex-start; }
         }
     </style>
 </head>
@@ -563,39 +938,131 @@ mysqli_stmt_close($stmt);
         <?php include 'includes/topbar.php'; ?>
 
         <div id="contentScroll" class="content-scroll">
-            <div class="container-fluid maxw">
+            <div class="container-fluid projects-wrapper px-0">
 
                 <!-- Header with Actions -->
-                <div class="d-flex align-items-center justify-content-between mb-4">
+                <div class="page-heading">
                     <div>
-                        <div class="d-flex align-items-center gap-3 mb-1">
-                            <h1 class="h3 fw-bold text-dark mb-0">Quotation Request Details</h1>
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                            <h1>Quotation Request Details</h1>
                             <?php echo getStatusBadge($request['status']); ?>
+                            <span class="badge-pill neutral">
+                                <i class="bi bi-person-badge"></i>
+                                <?php echo e(strtoupper(str_replace('_', ' ', $currentRoleKey))); ?>
+                            </span>
                         </div>
-                        <p class="text-muted mb-0" style="font-size:14px;">
+                        <p>
                             Request #<?php echo e($request['request_no']); ?> • Created on <?php echo safeDate($request['created_at']); ?>
                         </p>
                     </div>
-                    <div class="d-flex gap-2">
+
+                    <div class="d-flex gap-2 flex-wrap">
                         <?php
                         $backUrl = 'my-quotation-requests.php';
-                        if ($is_manager) $backUrl = 'my-quotation-requests.php';
-                        elseif ($is_project_engineer || $is_team_lead) $backUrl = 'assigned-quotations.php';
+                        if ($is_request_creator) $backUrl = 'my-quotation-requests.php';
+                        elseif ($is_tl_for_project || $is_project_manager_for_project || $is_admin_view) $backUrl = 'assigned-quotations.php';
                         elseif ($is_qs) $backUrl = 'qs-quotations.php';
-                        elseif ($is_admin) $backUrl = 'all-quotation-requests.php';
                         ?>
-                        <a href="<?php echo $backUrl; ?>" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back</a>
-                        <?php if ($request['status'] === 'Draft' && $is_manager): ?>
-                            <a href="quotation-requests.php?edit=<?php echo $request['id']; ?>" class="btn btn-primary"><i class="bi bi-pencil"></i> Edit Draft</a>
+                        <a href="<?php echo $backUrl; ?>" class="secondary-btn">
+                            <i class="bi bi-arrow-left"></i>
+                            Back
+                        </a>
+
+                        <?php if ($request['status'] === 'Draft' && $is_request_creator): ?>
+                            <a href="quotation-requests.php?edit=<?php echo $request['id']; ?>" class="primary-btn">
+                                <i class="bi bi-pencil"></i>
+                                Edit Draft
+                            </a>
                         <?php endif; ?>
-                        <?php if ($request['status'] === 'Assigned' && ($is_project_engineer || $is_team_lead)): ?>
-                            <a href="manage-quotation.php?id=<?php echo $request['id']; ?>" class="btn btn-primary"><i class="bi bi-play-circle"></i> Start Working</a>
+
+                        <?php if ($is_tl_for_project && $request['status'] === 'Pending Assignment'): ?>
+                            <form method="POST" class="m-0">
+                                <input type="hidden" name="tl_action" value="approve_request">
+                                <button type="submit" class="success-btn" onclick="return confirm('Approve this quotation request?')">
+                                    <i class="bi bi-check2-circle"></i>
+                                    Approve
+                                </button>
+                            </form>
                         <?php endif; ?>
+
+                        <?php if ($is_tl_for_project && in_array($request['status'], ['Assigned','Pending Assignment'], true)): ?>
+                            <button type="button" class="warning-btn" data-bs-toggle="modal" data-bs-target="#forwardQsModal">
+                                <i class="bi bi-send"></i>
+                                Forward to QS
+                            </button>
+                        <?php endif; ?>
+
                         <?php if ($request['status'] === 'With QS' && $is_qs): ?>
-                            <a href="qs-manage-quotation.php?id=<?php echo $request['id']; ?>" class="btn btn-primary"><i class="bi bi-file-text"></i> Manage Quotations</a>
+                            <a href="qs-manage-quotation.php?id=<?php echo $request['id']; ?>" class="primary-btn">
+                                <i class="bi bi-file-text"></i>
+                                Manage Quotations
+                            </a>
                         <?php endif; ?>
                     </div>
                 </div>
+
+                <?php if ($success): ?>
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="bi bi-check-circle-fill me-2"></i><?php echo e($success); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($error): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i><?php echo e($error); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (($is_project_manager_for_project || $is_admin_view) && !$is_tl_for_project): ?>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-1"></i>
+                        This is a view-only page for Manager/Admin. TL actions are hidden.
+                    </div>
+                <?php endif; ?>
+
+
+                <!-- TL Action Strip -->
+                <?php if ($is_tl_for_project): ?>
+                    <div class="action-panel">
+                        <div class="panel-header mb-2">
+                            <div>
+                                <h3 class="panel-title"><i class="bi bi-shield-check"></i> TL Action Controls</h3>
+                                <div class="panel-subtitle">
+                                    Approve pending requests or forward accepted requests to QS.
+                                </div>
+                            </div>
+                            <?php echo getStatusBadge($request['status']); ?>
+                        </div>
+
+                        <div class="d-flex gap-2 flex-wrap">
+                            <?php if ($request['status'] === 'Pending Assignment'): ?>
+                                <form method="POST" class="m-0">
+                                    <input type="hidden" name="tl_action" value="approve_request">
+                                    <button type="submit" class="success-btn" onclick="return confirm('Approve this quotation request?')">
+                                        <i class="bi bi-check2-circle"></i>
+                                        Approve Request
+                                    </button>
+                                </form>
+                            <?php endif; ?>
+
+                            <?php if (in_array($request['status'], ['Assigned','Pending Assignment'], true)): ?>
+                                <button type="button" class="warning-btn" data-bs-toggle="modal" data-bs-target="#forwardQsModal">
+                                    <i class="bi bi-send"></i>
+                                    Forward to QS
+                                </button>
+                            <?php endif; ?>
+
+                            <?php if (!in_array($request['status'], ['Pending Assignment','Assigned'], true)): ?>
+                                <span class="badge-pill neutral">
+                                    <i class="bi bi-lock"></i>
+                                    No TL action available for this status
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <!-- Stats Cards -->
                 <div class="row g-3 mb-4">
@@ -673,10 +1140,10 @@ mysqli_stmt_close($stmt);
                     <!-- Download/View button for the final quotation document -->
                     <?php if (!empty($request['final_quotation_document'])): ?>
                     <div class="mt-3">
-                        <a href="<?php echo e($request['final_quotation_document']); ?>" class="btn btn-sm btn-success" download>
+                        <a href="<?php echo e($request['final_quotation_document']); ?>" class="success-btn" download>
                             <i class="bi bi-file-earmark-pdf"></i> Download Final Quotation Document
                         </a>
-                        <a href="<?php echo e($request['final_quotation_document']); ?>" target="_blank" class="btn btn-sm btn-outline-secondary">
+                        <a href="<?php echo e($request['final_quotation_document']); ?>" target="_blank" class="secondary-btn">
                             <i class="bi bi-eye"></i> View
                         </a>
                     </div>
@@ -684,7 +1151,7 @@ mysqli_stmt_close($stmt);
 
                     <div class="row mt-2">
                         <?php if ($request['final_negotiated_amount'] && $request['final_quotation_amount'] && $request['final_negotiated_amount'] < $request['final_quotation_amount']): ?>
-                            <div class="col-12"><span class="badge bg-success"><i class="bi bi-piggy-bank"></i> Saved <?php echo formatCurrency($request['final_quotation_amount'] - $request['final_negotiated_amount']); ?></span></div>
+                            <div class="col-12"><span class="badge-pill ontrack"><i class="bi bi-piggy-bank"></i> Saved <?php echo formatCurrency($request['final_quotation_amount'] - $request['final_negotiated_amount']); ?></span></div>
                         <?php endif; ?>
                         <?php if ($request['final_delivery_terms']): ?>
                             <div class="col-md-4 mt-2"><small class="text-muted">Delivery:</small><br><strong><?php echo e($request['final_delivery_terms']); ?></strong></div>
@@ -704,13 +1171,13 @@ mysqli_stmt_close($stmt);
 
                 <!-- Main Request Details Panel -->
                 <div class="panel">
-                    <div class="panel-header"><h3 class="panel-title">Request Details</h3><button class="panel-menu"><i class="bi bi-three-dots"></i></button></div>
-                    <div class="mb-4"><h4 class="fw-900 mb-2">Description</h4><div class="description-box"><?php echo nl2br(e($request['description'])); ?></div></div>
+                    <div class="panel-header"><div><h3 class="panel-title"><i class="bi bi-file-earmark-text"></i> Request Details</h3><div class="panel-subtitle">Main request, project and team information</div></div><button class="panel-menu"><i class="bi bi-three-dots"></i></button></div>
+                    <div class="mb-4"><h4 class="section-heading"><i class="bi bi-card-text"></i>Description</h4><div class="description-box"><?php echo nl2br(e($request['description'])); ?></div></div>
                     <?php if (!empty($request['specifications'])): ?>
-                        <div class="mb-4"><h4 class="fw-900 mb-2">Specifications</h4><div class="description-box"><?php echo nl2br(e($request['specifications'])); ?></div></div>
+                        <div class="mb-4"><h4 class="section-heading"><i class="bi bi-list-check"></i>Specifications</h4><div class="description-box"><?php echo nl2br(e($request['specifications'])); ?></div></div>
                     <?php endif; ?>
 
-                    <h4 class="fw-900 mb-2">Project Information</h4>
+                    <h4 class="section-heading"><i class="bi bi-building"></i>Project Information</h4>
                     <div class="info-grid mb-4">
                         <div class="info-item"><div class="info-label">Client Name</div><div class="info-value"><?php echo e($request['client_name'] ?? '—'); ?></div></div>
                         <div class="info-item"><div class="info-label">Company</div><div class="info-value"><?php echo e($request['company_name'] ?? '—'); ?></div></div>
@@ -721,7 +1188,7 @@ mysqli_stmt_close($stmt);
                         <?php endif; ?>
                     </div>
 
-                    <h4 class="fw-900 mb-2">Team</h4>
+                    <h4 class="section-heading"><i class="bi bi-people"></i>Team</h4>
                     <div class="info-grid mb-4">
                         <div class="info-item"><div class="info-label">Manager</div><div class="info-value"><?php echo e($request['manager_name'] ?? '—'); ?><?php if (!empty($request['manager_code'])): ?><div class="proj-sub">Code: <?php echo e($request['manager_code']); ?></div><?php endif; ?></div></div>
                         <div class="info-item"><div class="info-label">Team Lead</div><div class="info-value"><?php echo e($request['team_lead_name'] ?? '—'); ?><?php if (!empty($request['team_lead_code'])): ?><div class="proj-sub">Code: <?php echo e($request['team_lead_code']); ?></div><?php endif; ?></div></div>
@@ -731,7 +1198,7 @@ mysqli_stmt_close($stmt);
                     </div>
 
                     <?php if (!empty($request['client_mobile']) || !empty($request['client_email']) || !empty($request['client_state'])): ?>
-                    <h4 class="fw-900 mb-2">Client Contact</h4>
+                    <h4 class="section-heading"><i class="bi bi-person-lines-fill"></i>Client Contact</h4>
                     <div class="info-grid">
                         <?php if (!empty($request['client_mobile'])): ?>
                             <div class="info-item"><div class="info-label">Phone</div><div class="info-value"><?php echo e($request['client_mobile']); ?></div></div>
@@ -749,10 +1216,10 @@ mysqli_stmt_close($stmt);
                 <!-- Drawings & Attachments -->
                 <?php if (!empty($request['drawing_number']) || !empty($request['drawing_file']) || !empty($attachments)): ?>
                 <div class="panel">
-                    <div class="panel-header"><h3 class="panel-title">Drawings & Attachments</h3><button class="panel-menu"><i class="bi bi-three-dots"></i></button></div>
+                    <div class="panel-header"><div><h3 class="panel-title"><i class="bi bi-paperclip"></i> Drawings & Attachments</h3><div class="panel-subtitle">Uploaded drawings and supporting documents</div></div><button class="panel-menu"><i class="bi bi-three-dots"></i></button></div>
                     <?php if (!empty($request['drawing_number']) || !empty($request['drawing_file'])): ?>
                     <div class="mb-3">
-                        <h4 class="fw-900 mb-2">Drawing</h4>
+                        <h4 class="section-heading"><i class="bi bi-file-earmark"></i>Drawing</h4>
                         <?php if (!empty($request['drawing_number'])): ?>
                             <div class="info-item mb-2"><div class="info-label">Drawing Number</div><div class="info-value"><?php echo e($request['drawing_number']); ?></div></div>
                         <?php endif; ?>
@@ -772,7 +1239,7 @@ mysqli_stmt_close($stmt);
                     </div>
                     <?php endif; ?>
                     <?php if (!empty($attachments)): ?>
-                    <div><h4 class="fw-900 mb-2">Additional Documents</h4><div class="file-list">
+                    <div><h4 class="section-heading"><i class="bi bi-files"></i>Additional Documents</h4><div class="file-list">
                         <?php if (isset($attachments['drawing'])): ?>
                         <div class="file-item">
                             <div class="file-icon pdf"><i class="bi bi-file-earmark"></i></div>
@@ -795,21 +1262,21 @@ mysqli_stmt_close($stmt);
                 <!-- Quotations Comparison Table -->
                 <?php if (count($quotations) > 0): ?>
                 <div class="panel">
-                    <div class="panel-header"><h3 class="panel-title">All Quotations Received</h3><button class="panel-menu"><i class="bi bi-three-dots"></i></button></div>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle">
-                            <thead class="table-light">
+                    <div class="panel-header"><div><h3 class="panel-title"><i class="bi bi-table"></i> All Quotations Received</h3><div class="panel-subtitle">Dealer quotations comparison</div></div><button class="panel-menu"><i class="bi bi-three-dots"></i></button></div>
+                    <div class="compact-table-wrap">
+                        <table class="table compact-table align-middle mb-0">
+                            <thead>
                                 <tr><th>Dealer</th><th>Amount</th><th>Delivery</th><th>Payment</th><th>Warranty</th><th>Status</th> </tr>
                             </thead>
                             <tbody>
                             <?php foreach ($quotations as $q): ?>
                                 <tr class="<?php echo ($request['final_quotation_id'] == $q['id']) ? 'table-success' : ''; ?>">
-                                    <td><?php echo e($q['dealer_name'] ?? '—'); ?></td>
-                                    <td class="fw-700"><?php echo formatCurrency($q['total_amount']); ?></td>
-                                    <td><?php echo e($q['delivery_terms'] ?? '—'); ?></td>
-                                    <td><?php echo e($q['payment_terms'] ?? '—'); ?></td>
-                                    <td><?php echo e($q['warranty'] ?? '—'); ?></td>
-                                    <td><?php echo ($request['final_quotation_id'] == $q['id']) ? '<span class="badge bg-success">Finalized</span>' : '<span class="badge bg-secondary">' . $q['status'] . '</span>'; ?></td>
+                                    <td data-label="Dealer"><?php echo e($q['dealer_name'] ?? '—'); ?></td>
+                                    <td data-label="Amount" class="fw-700"><?php echo formatCurrency($q['total_amount']); ?></td>
+                                    <td data-label="Delivery"><?php echo e($q['delivery_terms'] ?? '—'); ?></td>
+                                    <td data-label="Payment"><?php echo e($q['payment_terms'] ?? '—'); ?></td>
+                                    <td data-label="Warranty"><?php echo e($q['warranty'] ?? '—'); ?></td>
+                                    <td data-label="Status"><?php echo ($request['final_quotation_id'] == $q['id']) ? '<span class="badge-pill ontrack">Finalized</span>' : '<span class="badge-pill neutral">' . e($q['status']) . '</span>'; ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -820,7 +1287,7 @@ mysqli_stmt_close($stmt);
 
                 <!-- Timeline/Workflow Status -->
                 <div class="panel">
-                    <div class="panel-header"><h3 class="panel-title">Workflow Timeline</h3><button class="panel-menu"><i class="bi bi-three-dots"></i></button></div>
+                    <div class="panel-header"><div><h3 class="panel-title"><i class="bi bi-clock-history"></i> Workflow Timeline</h3><div class="panel-subtitle">Request progress and current status</div></div><button class="panel-menu"><i class="bi bi-three-dots"></i></button></div>
                     <div class="timeline">
                         <div class="timeline-item"><div class="timeline-dot completed"></div><div class="timeline-content"><div class="timeline-title">Request Created</div><div class="timeline-date"><?php echo safeDate($request['created_at']); ?> by <?php echo e($request['requested_by_name']); ?></div></div></div>
                         <?php if ($request['assigned_at']): ?>
@@ -855,15 +1322,64 @@ mysqli_stmt_close($stmt);
     </main>
 </div>
 
+
+<?php if ($is_tl_for_project): ?>
+<div class="modal fade" id="forwardQsModal" tabindex="-1" aria-labelledby="forwardQsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="forwardQsModalLabel">Forward to QS</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <input type="hidden" name="tl_action" value="forward_to_qs">
+
+                    <div class="mb-3">
+                        <label for="qs_employee_id" class="form-label">Select QS Employee</label>
+                        <select name="qs_employee_id" id="qs_employee_id" class="form-select" required>
+                            <option value="">-- Select QS --</option>
+                            <?php foreach ($qs_employees as $qs): ?>
+                                <option value="<?php echo (int)$qs['id']; ?>"><?php echo e($qs['full_name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+
+                        <?php if (empty($qs_employees)): ?>
+                            <div class="text-warning small mt-2">No active QS employees found.</div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Selected QS will receive a notification and this request status will become With QS.
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="warning-btn" <?php echo empty($qs_employees) ? 'disabled' : ''; ?>>
+                        <i class="bi bi-send"></i>
+                        Forward
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
 <script src="assets/js/sidebar-toggle.js"></script>
 
 <script>
-    lightbox.option({ 'resizeDuration': 200, 'wrapAround': true });
+    document.addEventListener('DOMContentLoaded', function () {
+        const yearElement = document.getElementById("year");
+        if (yearElement) {
+            yearElement.textContent = new Date().getFullYear();
+        }
+    });
 </script>
 </body>
 </html>

@@ -32,7 +32,7 @@
     <div class="collapse ps-2 side-submenu-collapse" id="quotationMenu">
 
 
-      <a class="side-link sub-link" href="qs-quotations.php">
+      <a class="side-link sub-link" href="qs-quotation-requests.php">
         <i class="bi bi-clock-history"></i>
         <span class="label">Quotation Requests</span>
 

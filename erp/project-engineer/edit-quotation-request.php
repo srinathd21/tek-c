@@ -5,7 +5,7 @@ require_once 'includes/db-config.php';
 
 // Check if user is logged in
 if (!isset($_SESSION['employee_id'])) {
-    header('Location: login.php');
+    header('Location: ../login.php');
     exit();
 }
 
@@ -17,6 +17,8 @@ if (!$conn) {
 $user_id = (int)$_SESSION['employee_id'];
 $user_name = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? '';
 $user_designation = strtolower(trim((string)($_SESSION['designation'] ?? '')));
+$user_department = strtolower(trim((string)($_SESSION['department'] ?? '')));
+$currentRoleKey = roleKeyFromDesignation($user_designation, $user_department);
 $request_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $error = '';
 $success = '';
@@ -32,16 +34,7 @@ if ($request_id <= 0) {
 // ============================================================
 // AUTHORIZATION: Only allow Project Engineers and Team Leads to edit
 // ============================================================
-$allowed_roles = [
-    'project engineer grade 1',
-    'project engineer grade 2',
-    'sr. engineer',
-    'senior engineer',
-    'team lead',
-    'teamleader'
-];
-
-if (!in_array($user_designation, $allowed_roles, true)) {
+if (!in_array($currentRoleKey, ['project_engineer', 'tl'], true)) {
     header('Location: index.php');
     exit();
 }
@@ -79,54 +72,189 @@ if (!in_array($request['status'], $editable_statuses)) {
 }
 
 // ============================================================
-// GET SITES ASSIGNED TO THIS PE/TL (via site_project_engineers)
+// GET SITES ASSIGNED TO THIS PE/TL
+// PE: site_project_engineers.employee_id
+// TL: sites.team_lead_employee_id OR fallback site_project_engineers
 // ============================================================
-$sites_query = "SELECT 
-                    s.id, 
-                    s.project_name, 
-                    s.project_code
-                FROM sites s 
-                INNER JOIN site_project_engineers spe ON spe.site_id = s.id
-                WHERE spe.employee_id = ? 
-                AND s.deleted_at IS NULL
-                ORDER BY s.project_name ASC";
+$hasTeamLeadCol = columnExists($conn, 'sites', 'team_lead_employee_id');
 
-$stmt = mysqli_prepare($conn, $sites_query);
-mysqli_stmt_bind_param($stmt, "i", $user_id);
+if ($currentRoleKey === 'tl' && $hasTeamLeadCol) {
+    $sites_query = "SELECT DISTINCT
+                        s.id,
+                        s.project_name,
+                        s.project_code
+                    FROM sites s
+                    LEFT JOIN site_project_engineers spe ON spe.site_id = s.id
+                    WHERE (s.team_lead_employee_id = ? OR spe.employee_id = ?)
+                    AND s.deleted_at IS NULL
+                    ORDER BY s.project_name ASC";
+
+    $stmt = mysqli_prepare($conn, $sites_query);
+    mysqli_stmt_bind_param($stmt, "ii", $user_id, $user_id);
+} else {
+    $sites_query = "SELECT DISTINCT
+                        s.id,
+                        s.project_name,
+                        s.project_code
+                    FROM sites s
+                    INNER JOIN site_project_engineers spe ON spe.site_id = s.id
+                    WHERE spe.employee_id = ?
+                    AND s.deleted_at IS NULL
+                    ORDER BY s.project_name ASC";
+
+    $stmt = mysqli_prepare($conn, $sites_query);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+}
+
 mysqli_stmt_execute($stmt);
 $sites_result = mysqli_stmt_get_result($stmt);
 $sites = mysqli_fetch_all($sites_result, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
 
+// Ensure current request site stays selectable if it was valid when request was created.
+$currentSiteInList = false;
+foreach ($sites as $siteRow) {
+    if ((int)$siteRow['id'] === (int)$request['site_id']) {
+        $currentSiteInList = true;
+        break;
+    }
+}
+if (!$currentSiteInList && !empty($request['site_id'])) {
+    $sites[] = [
+        'id' => (int)$request['site_id'],
+        'project_name' => $request['project_name'] ?? 'Current Project',
+        'project_code' => $request['project_code'] ?? ''
+    ];
+}
+
 // Helper functions
 function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
-function getPriorityBadge($priority) {
-    $badges = [
-        'Low' => ['bg-secondary', 'bi-arrow-down'],
-        'Medium' => ['bg-info', 'bi-dash'],
-        'High' => ['bg-warning', 'bi-arrow-up'],
-        'Urgent' => ['bg-danger', 'bi-exclamation-triangle']
+function tableExists($conn, string $table): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function columnExists($conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $col = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$col'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function roleKeyFromDesignation(string $designation, string $department = ''): string {
+    $d = strtolower(trim($designation));
+    $dept = strtolower(trim($department));
+
+    if (
+        str_contains($d, 'team lead') ||
+        str_contains($d, 'teamleader') ||
+        str_contains($d, 'tl') ||
+        str_contains($d, 'lead')
+    ) return 'tl';
+
+    if (
+        str_contains($d, 'project engineer') ||
+        str_contains($d, 'engineer') ||
+        str_contains($d, 'sr. engineer') ||
+        str_contains($d, 'sr engineer') ||
+        str_contains($d, 'senior engineer')
+    ) return 'project_engineer';
+
+    return 'other';
+}
+
+function logQuotationEditActivity($conn, int $employeeId, string $description, int $requestId, array $oldData = [], array $newData = []): bool {
+    if (!$conn || !tableExists($conn, 'activity_logs')) return false;
+
+    $oldJson = $oldData ? json_encode($oldData, JSON_UNESCAPED_UNICODE) : null;
+    $newJson = $newData ? json_encode($newData, JSON_UNESCAPED_UNICODE) : null;
+
+    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? 'System';
+    $username = $_SESSION['username'] ?? '';
+    $designation = $_SESSION['designation'] ?? '';
+    $department = $_SESSION['department'] ?? '';
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+    $map = [
+        'employee_id'   => ['i', $employeeId],
+        'employee_name' => ['s', $employeeName],
+        'username'      => ['s', $username],
+        'designation'   => ['s', $designation],
+        'department'    => ['s', $department],
+        'activity_type' => ['s', 'UPDATE'],
+        'module'        => ['s', 'quotation_requests'],
+        'description'   => ['s', $description],
+        'reference_id'  => ['i', $requestId],
+        'old_data'      => ['s', $oldJson],
+        'new_data'      => ['s', $newJson],
+        'ip_address'    => ['s', $ipAddress],
     ];
-    $badge = $badges[$priority] ?? ['bg-secondary', 'bi-question'];
-    return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $priority . '</span>';
+
+    $cols = [];
+    $types = '';
+    $values = [];
+
+    foreach ($map as $column => $pair) {
+        if (columnExists($conn, 'activity_logs', $column)) {
+            $cols[] = "`$column`";
+            $types .= $pair[0];
+            $values[] = $pair[1];
+        }
+    }
+
+    if (!$cols) return false;
+
+    $sql = "INSERT INTO activity_logs (" . implode(',', $cols) . ") VALUES (" . implode(',', array_fill(0, count($cols), '?')) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$values);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    return $ok;
+}
+
+function getPriorityBadge($priority) {
+    $p = trim((string)$priority);
+    $map = [
+        'Low'    => ['neutral', 'bi-arrow-down'],
+        'Medium' => ['progressing', 'bi-dash'],
+        'High'   => ['warning', 'bi-arrow-up'],
+        'Urgent' => ['atrisk', 'bi-exclamation-triangle']
+    ];
+    $m = $map[$p] ?? ['neutral', 'bi-question'];
+    return '<span class="badge-pill ' . $m[0] . '"><i class="bi ' . $m[1] . '"></i>' . e($p !== '' ? $p : '—') . '</span>';
 }
 
 function getStatusBadge($status) {
-    $badges = [
-        'Draft' => ['bg-secondary', 'bi-pencil'],
-        'Pending Assignment' => ['bg-warning', 'bi-clock'],
-        'Assigned' => ['bg-info', 'bi-person-check'],
-        'Quotations Received' => ['bg-primary', 'bi-file-text'],
-        'With QS' => ['bg-secondary', 'bi-arrow-right'],
-        'QS Finalized' => ['bg-success', 'bi-check-circle'],
-        'Approved' => ['bg-success', 'bi-check-circle-fill'],
-        'Rejected' => ['bg-danger', 'bi-x-circle'],
-        'Cancelled' => ['bg-dark', 'bi-x']
+    $s = trim((string)$status);
+    $map = [
+        'Draft'              => ['neutral', 'bi-pencil'],
+        'Pending Assignment' => ['pending', 'bi-clock'],
+        'Assigned'           => ['progressing', 'bi-person-check'],
+        'Quotations Received'=> ['progressing', 'bi-file-text'],
+        'With QS'            => ['pending', 'bi-arrow-right'],
+        'QS Finalized'       => ['ontrack', 'bi-check-circle'],
+        'Approved'           => ['ontrack', 'bi-check-circle-fill'],
+        'Rejected'           => ['atrisk', 'bi-x-circle'],
+        'Cancelled'          => ['neutral', 'bi-x']
     ];
-    $badge = $badges[$status] ?? ['bg-secondary', 'bi-question'];
-    return '<span class="badge ' . $badge[0] . '"><i class="bi ' . $badge[1] . ' me-1"></i>' . $status . '</span>';
+    $m = $map[$s] ?? ['neutral', 'bi-info-circle'];
+    return '<span class="badge-pill ' . $m[0] . '"><i class="bi ' . $m[1] . '"></i>' . e($s !== '' ? $s : '—') . '</span>';
 }
+
+
+
+
+
 
 function safeDate($v, $dash='—'){
     $v = trim((string)$v);
@@ -147,9 +275,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $specifications = !empty($_POST['specifications']) ? trim($_POST['specifications']) : null;
     $drawing_number = !empty($_POST['drawing_number']) ? trim($_POST['drawing_number']) : null;
     
-    // Check if saving as draft or submitting
-    $submit_action = $_POST['submit_action'] ?? 'update';
-    $status = ($submit_action === 'draft') ? 'Draft' : 'Pending Assignment';
+    // Draft button removed: edit page always updates and submits to Pending Assignment.
+    $submit_action = 'submit';
+    $status = 'Pending Assignment';
     
     // Validate required fields
     if (empty($title) || empty($quotation_type) || empty($site_id) || empty($description)) {
@@ -174,7 +302,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (isset($_FILES['drawing_file']) && $_FILES['drawing_file']['error'] === UPLOAD_ERR_OK) {
                 // Delete old file if exists
                 if ($drawing_file && file_exists($drawing_file)) {
-                    unlink($drawing_file);
+                    @unlink($drawing_file);
                 }
                 
                 // Upload new file
@@ -192,8 +320,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
-            // Keep existing additional documents
-            $additional_documents_json = $request['additional_documents_json'];
+            // Keep existing additional documents and append newly uploaded files.
+            $existing_docs = [];
+            if (!empty($request['additional_documents_json']) && $request['additional_documents_json'] !== '[]') {
+                $decoded_docs = json_decode($request['additional_documents_json'], true);
+                if (is_array($decoded_docs)) {
+                    $existing_docs = $decoded_docs;
+                }
+            }
+
+            if (isset($_FILES['additional_files']) && !empty($_FILES['additional_files']['name'][0])) {
+                $doc_dir = 'uploads/quotation_requests/documents/';
+                if (!file_exists($doc_dir)) {
+                    mkdir($doc_dir, 0777, true);
+                }
+
+                foreach ($_FILES['additional_files']['name'] as $idx => $original_name) {
+                    if ($_FILES['additional_files']['error'][$idx] !== UPLOAD_ERR_OK) {
+                        continue;
+                    }
+
+                    if ($_FILES['additional_files']['size'][$idx] > 25 * 1024 * 1024) {
+                        continue;
+                    }
+
+                    $extension = pathinfo($original_name, PATHINFO_EXTENSION);
+                    $safe_name = uniqid('doc_', true) . '_' . time() . '.' . $extension;
+                    $target_path = $doc_dir . $safe_name;
+
+                    if (move_uploaded_file($_FILES['additional_files']['tmp_name'][$idx], $target_path)) {
+                        $existing_docs[] = [
+                            'file_name' => $original_name,
+                            'file_path' => $target_path,
+                            'file_size' => $_FILES['additional_files']['size'][$idx],
+                            'uploaded_at' => date('Y-m-d H:i:s')
+                        ];
+                    }
+                }
+            }
+
+            $additional_documents_json = json_encode($existing_docs, JSON_UNESCAPED_UNICODE);
             
             // Update the request
             $update_query = "UPDATE quotation_requests SET
@@ -231,20 +397,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             
             if (mysqli_stmt_execute($stmt)) {
-                // Log the activity
-                $log_query = "INSERT INTO activity_logs (user_id, user_name, user_role, action_type, module, module_id, module_name, description, created_at) 
-                              VALUES (?, ?, (SELECT designation FROM employees WHERE id = ?), 'UPDATE', 'quotation_requests', ?, ?, ?, NOW())";
-                $log_stmt = mysqli_prepare($conn, $log_query);
-                if ($log_stmt) {
-                    $description = ($submit_action === 'draft') ? 'Updated draft: ' . $title : 'Updated and submitted: ' . $title;
-                    mysqli_stmt_bind_param($log_stmt, "isisis", $user_id, $user_name, $user_id, $request_id, $title, $description);
-                    mysqli_stmt_execute($log_stmt);
-                    mysqli_stmt_close($log_stmt);
-                }
+                // Log the activity using current DB activity_logs columns.
+                logQuotationEditActivity(
+                    $conn,
+                    $user_id,
+                    'Updated and submitted quotation request: ' . $title,
+                    $request_id,
+                    $request,
+                    [
+                        'quotation_type' => $quotation_type,
+                        'site_id' => $site_id,
+                        'priority' => $priority,
+                        'request_date' => $request_date,
+                        'required_by_date' => $required_by_date,
+                        'title' => $title,
+                        'status' => $status
+                    ]
+                );
+
+mysqli_stmt_close($stmt);
                 
-                mysqli_stmt_close($stmt);
-                
-                $message = ($submit_action === 'draft') ? 'Quotation request saved as draft successfully!' : 'Quotation request updated and submitted successfully!';
+                $message = 'Quotation request updated and submitted successfully!';
                 header("Location: my-quotation-requests.php?status=success&message=" . urlencode($message));
                 exit();
             } else {
@@ -805,7 +978,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             fileItem.innerHTML = `
         <i class="bi bi-file-earmark"></i>
-        <span class="file-name">${file.name}</span>
+        <span class="file-name"></span>
         <span class="file-size">${displaySize} ${sizeUnit}</span>
         <i class="bi bi-x-circle remove-file"></i>
       `;

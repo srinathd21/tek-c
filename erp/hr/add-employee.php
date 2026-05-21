@@ -15,19 +15,44 @@ if (!$conn) {
 
 /**
  * ------------------------------------------------------------
- * ✅ AUTH: Allow HR to add employees
- * - HR if designation == 'HR' OR department == 'HR'
+ * AUTH: Allow HR and Admin to add employees
+ * - HR if designation/department contains HR
+ * - Admin if designation is admin/director/VP/GM
  * ------------------------------------------------------------
  */
 if (empty($_SESSION['employee_id'])) {
     header("Location: ../login.php");
     exit;
 }
+
+$current_employee_id = (int)$_SESSION['employee_id'];
 $designation = trim((string)($_SESSION['designation'] ?? ''));
 $department  = trim((string)($_SESSION['department'] ?? ''));
 
-$isHr = (strtolower($designation) === 'hr') || (strtolower($department) === 'hr');
-if (!$isHr) {
+function roleKeyFromDesignation(string $designation, string $department = ''): string {
+    $d = strtolower(trim($designation));
+    $dept = strtolower(trim($department));
+
+    if (
+        str_contains($d, 'admin') ||
+        str_contains($d, 'administrator') ||
+        str_contains($d, 'director') ||
+        str_contains($d, 'vice president') ||
+        str_contains($d, 'general manager')
+    ) return 'admin';
+
+    if (str_contains($d, 'hr') || str_contains($dept, 'hr') || str_contains($dept, 'human resource')) {
+        return 'hr';
+    }
+
+    return 'other';
+}
+
+$currentRoleKey = roleKeyFromDesignation($designation, $department);
+$isHr = ($currentRoleKey === 'hr');
+$isAdmin = ($currentRoleKey === 'admin');
+
+if (!in_array($currentRoleKey, ['hr', 'admin'], true)) {
     $fallback = $_SESSION['role_redirect'] ?? '../login.php';
     header("Location: " . $fallback);
     exit;
@@ -35,6 +60,157 @@ if (!$isHr) {
 
 // Helpers
 function e($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+
+function tableExists($conn, string $table): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function columnExists($conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $col = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$col'");
+    if (!$res) return false;
+    $ok = mysqli_num_rows($res) > 0;
+    mysqli_free_result($res);
+    return $ok;
+}
+
+function createNotificationCurrentDb(
+    $conn,
+    int $employeeId,
+    string $title,
+    string $message,
+    string $module,
+    int $referenceId,
+    string $link,
+    string $type = 'employee'
+): bool {
+    if ($employeeId <= 0 || !$conn || !tableExists($conn, 'notifications')) {
+        return false;
+    }
+
+    $columns = [];
+    $placeholders = [];
+    $types = '';
+    $values = [];
+
+    $map = [
+        'employee_id'  => ['i', $employeeId],
+        'title'        => ['s', $title],
+        'message'      => ['s', $message],
+        'type'         => ['s', $type],
+        'module'       => ['s', $module],
+        'reference_id' => ['i', $referenceId],
+        'link'         => ['s', $link],
+        'priority'     => ['s', 'normal'],
+        'is_read'      => ['i', 0],
+        'created_at'   => ['raw', 'NOW()'],
+    ];
+
+    foreach ($map as $column => $pair) {
+        if (columnExists($conn, 'notifications', $column)) {
+            $columns[] = "`$column`";
+            if ($pair[0] === 'raw') {
+                $placeholders[] = $pair[1];
+            } else {
+                $placeholders[] = '?';
+                $types .= $pair[0];
+                $values[] = $pair[1];
+            }
+        }
+    }
+
+    if (!$columns) return false;
+
+    $sql = "INSERT INTO notifications (" . implode(',', $columns) . ") VALUES (" . implode(',', $placeholders) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    if ($values) {
+        mysqli_stmt_bind_param($stmt, $types, ...$values);
+    }
+
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    return $ok;
+}
+
+function logEmployeeActivity($conn, int $actorId, string $activityType, string $description, int $referenceId, array $newData = []): bool {
+    if (!$conn || !tableExists($conn, 'activity_logs')) return false;
+
+    $newJson = $newData ? json_encode($newData, JSON_UNESCAPED_UNICODE) : null;
+    $employeeName = $_SESSION['employee_name'] ?? $_SESSION['username'] ?? 'System';
+    $username = $_SESSION['username'] ?? '';
+    $designation = $_SESSION['designation'] ?? '';
+    $department = $_SESSION['department'] ?? '';
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+
+    $map = [
+        'employee_id'   => ['i', $actorId],
+        'employee_name' => ['s', $employeeName],
+        'username'      => ['s', $username],
+        'designation'   => ['s', $designation],
+        'department'    => ['s', $department],
+        'activity_type' => ['s', $activityType],
+        'module'        => ['s', 'employees'],
+        'description'   => ['s', $description],
+        'reference_id'  => ['i', $referenceId],
+        'new_data'      => ['s', $newJson],
+        'ip_address'    => ['s', $ipAddress],
+    ];
+
+    $cols = [];
+    $types = '';
+    $values = [];
+
+    foreach ($map as $column => $pair) {
+        if (columnExists($conn, 'activity_logs', $column)) {
+            $cols[] = "`$column`";
+            $types .= $pair[0];
+            $values[] = $pair[1];
+        }
+    }
+
+    if (!$cols) return false;
+
+    $sql = "INSERT INTO activity_logs (" . implode(',', $cols) . ") VALUES (" . implode(',', array_fill(0, count($cols), '?')) . ")";
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) return false;
+
+    mysqli_stmt_bind_param($stmt, $types, ...$values);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    return $ok;
+}
+
+function getAdminEmployees($conn): array {
+    $admins = [];
+    $sql = "SELECT id, full_name
+            FROM employees
+            WHERE employee_status = 'active'
+              AND (
+                    LOWER(COALESCE(designation,'')) LIKE '%admin%'
+                 OR LOWER(COALESCE(designation,'')) LIKE '%administrator%'
+                 OR LOWER(COALESCE(designation,'')) LIKE '%director%'
+                 OR LOWER(COALESCE(designation,'')) LIKE '%vice president%'
+                 OR LOWER(COALESCE(designation,'')) LIKE '%general manager%'
+              )
+            ORDER BY full_name";
+    $res = mysqli_query($conn, $sql);
+    if ($res) {
+        while ($row = mysqli_fetch_assoc($res)) {
+            $admins[] = $row;
+        }
+        mysqli_free_result($res);
+    }
+    return $admins;
+}
+
 
 // Departments and designations arrays (match your ENUM values)
 $departments = ['PM', 'CM', 'IFM', 'QS', 'HR', 'ACCOUNTS'];
@@ -310,6 +486,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
 
             if (mysqli_stmt_execute($stmt)) {
+                $new_employee_id = (int)mysqli_insert_id($conn);
+
+                logEmployeeActivity(
+                    $conn,
+                    $current_employee_id,
+                    'CREATE',
+                    'Added new employee: ' . $full_name . ' (' . $employee_code . ')',
+                    $new_employee_id,
+                    [
+                        'employee_id' => $new_employee_id,
+                        'full_name' => $full_name,
+                        'employee_code' => $employee_code,
+                        'department' => $department,
+                        'designation' => $designationSel,
+                        'employee_status' => $employee_status,
+                        'created_by_role' => $currentRoleKey
+                    ]
+                );
+
+                // When HR adds employee, notify all active Admin users.
+                if ($isHr) {
+                    $admins = getAdminEmployees($conn);
+                    foreach ($admins as $admin) {
+                        $adminId = (int)$admin['id'];
+                        if ($adminId <= 0 || $adminId === $current_employee_id) {
+                            continue;
+                        }
+
+                        createNotificationCurrentDb(
+                            $conn,
+                            $adminId,
+                            'New employee added',
+                            'HR added new employee ' . $full_name . ' (' . $employee_code . ').',
+                            'employees',
+                            $new_employee_id,
+                            'employees.php',
+                            'employee'
+                        );
+                    }
+                }
+
                 $success = "Employee added successfully!";
                 $_POST = [];
             } else {
@@ -335,40 +552,351 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
     <link rel="manifest" href="assets/fav/site.webmanifest">
 
-    <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
 
-    <!-- TEK-C Custom Styles -->
     <link href="assets/css/layout-styles.css" rel="stylesheet" />
     <link href="assets/css/topbar.css" rel="stylesheet" />
     <link href="assets/css/footer.css" rel="stylesheet" />
 
     <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-    .form-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 25px; margin-bottom: 30px; }
-    .section-header { display: flex; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #f0f4f8; }
-    .section-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--blue); display: flex; align-items: center; justify-content: center; margin-right: 15px; font-size: 20px; color: white; }
-    .section-title { font-size: 18px; font-weight: 800; color: #2d3748; margin: 0; }
-    .section-subtitle { font-size: 14px; color: #718096; margin-top: 4px; }
-    .form-label { font-weight: 700; color: #4a5568; margin-bottom: 8px; font-size: 14px; }
-    .required-label::after { content: " *"; color: #e53e3e; font-weight: 900; }
-    .form-control, .form-select { border: 2px solid #e2e8f0; border-radius: 10px; padding: 12px 15px; font-size: 14px; transition: all 0.3s; }
-    .form-control:focus, .form-select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(45, 156, 219, 0.1); }
-    .file-upload-container { border: 2px dashed #cbd5e0; border-radius: 12px; padding: 20px; text-align: center; background: #f8fafc; cursor: pointer; transition: all 0.3s; margin-top: 5px; }
-    .file-upload-container:hover { border-color: var(--blue); background: #f0f4ff; }
-    .file-upload-icon { font-size: 40px; color: #a0aec0; margin-bottom: 10px; }
-    .file-preview { width: 120px; height: 120px; border-radius: 12px; overflow: hidden; margin: 10px auto; border: 3px solid #e2e8f0; background: white; position: relative; }
-    .file-preview img { width: 100%; height: 100%; object-fit: cover; }
-    .file-remove { position: absolute; top: -8px; right: -8px; width: 28px; height: 28px; background: #e53e3e; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; border: 2px solid white; }
-    .btn-back { background: transparent; border: 1px solid var(--border); border-radius: 10px; padding: 8px 16px; color: #4a5568; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
-    .btn-back:hover { background: var(--bg); color: var(--blue); border-color: var(--blue); }
-    .btn-submit { background: var(--blue); color: white; border: none; padding: 14px 35px; border-radius: 12px; font-weight: 800; font-size: 15px; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 8px 20px rgba(45, 156, 219, 0.2); transition: all 0.3s; }
-    .btn-submit:hover { background: #2a8bc9; transform: translateY(-2px); box-shadow: 0 12px 25px rgba(45, 156, 219, 0.3); color: white; }
-    .form-section-heading { font-size: 16px; font-weight: 800; color: #4a5568; margin: 20px 0 15px; padding-left: 12px; border-left: 4px solid var(--blue); }
-    .alert { border-radius: var(--radius); border: none; box-shadow: var(--shadow); margin-bottom: 20px; }
-    .optional-badge { font-size: 11px; color: #718096; font-weight: 600; margin-left: 5px; }
+    :root{
+        --page-bg:#f5f7fb;
+        --card-bg:#ffffff;
+        --border:#e5e7eb;
+        --text:#111827;
+        --muted:#6b7280;
+        --soft:#f8fafc;
+        --shadow:0 10px 26px rgba(15,23,42,.055);
+        --radius:15px;
+        --blue:#2f80ed;
+        --green:#27ae60;
+        --orange:#f2994a;
+        --red:#eb5757;
+        --purple:#7c3aed;
+    }
+
+    body{background:var(--page-bg);}
+    .content-scroll{flex:1 1 auto;overflow:auto;padding:16px;}
+    .projects-wrapper{width:100%;}
+
+    .page-heading{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:12px;
+        margin-bottom:14px;
+    }
+
+    .page-heading h1{
+        font-size:19px;
+        font-weight:950;
+        color:var(--text);
+        margin:0;
+    }
+
+    .page-heading p{
+        margin:3px 0 0;
+        color:var(--muted);
+        font-size:12px;
+        font-weight:650;
+    }
+
+    .primary-btn,.secondary-btn,.submit-btn{
+        min-height:36px;
+        padding:0 14px;
+        border-radius:11px;
+        font-size:12px;
+        font-weight:900;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:7px;
+        text-decoration:none;
+        white-space:nowrap;
+        border:0;
+        line-height:1;
+    }
+
+    .primary-btn,.submit-btn{background:#111827;color:#fff;}
+    .primary-btn:hover,.submit-btn:hover{background:#020617;color:#fff;}
+
+    .secondary-btn{
+        border:1px solid var(--border);
+        background:#fff;
+        color:#334155;
+    }
+
+    .secondary-btn:hover{
+        border-color:#cbd5e1;
+        background:#f8fafc;
+        color:#111827;
+    }
+
+    .badge-pill{
+        border-radius:999px;
+        padding:5px 8px;
+        font-weight:900;
+        font-size:10px;
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        border:1px solid transparent;
+        text-decoration:none;
+        white-space:nowrap;
+    }
+
+    .badge-role{
+        color:#2563eb;
+        background:#dbeafe;
+        border-color:#bfdbfe;
+    }
+
+    .form-panel{
+        background:var(--card-bg);
+        border:1px solid var(--border);
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+        padding:13px;
+        margin-bottom:14px;
+    }
+
+    .section-header{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        margin-bottom:12px;
+        padding-bottom:10px;
+        border-bottom:1px solid #eef2f7;
+    }
+
+    .section-header-left{
+        display:flex;
+        align-items:center;
+        gap:10px;
+    }
+
+    .section-icon{
+        width:38px;
+        height:38px;
+        border-radius:12px;
+        background:#111827;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:16px;
+        color:white;
+        flex:0 0 auto;
+    }
+
+    .section-icon.blue{background:var(--blue);}
+    .section-icon.red{background:var(--red);}
+    .section-icon.green{background:var(--green);}
+    .section-icon.orange{background:var(--orange);}
+    .section-icon.purple{background:var(--purple);}
+
+    .section-title{
+        font-size:14px;
+        font-weight:950;
+        color:#111827;
+        margin:0;
+    }
+
+    .section-subtitle{
+        font-size:11px;
+        color:#64748b;
+        margin-top:2px;
+        font-weight:700;
+    }
+
+    .form-label{
+        font-size:11px;
+        font-weight:900;
+        color:#475569;
+        text-transform:uppercase;
+        margin-bottom:6px;
+    }
+
+    .required-label::after{
+        content:" *";
+        color:var(--red);
+        font-weight:950;
+    }
+
+    .form-control,.form-select{
+        min-height:38px;
+        border:1px solid var(--border);
+        border-radius:11px;
+        font-size:12px;
+        font-weight:800;
+        color:#111827;
+        padding:8px 11px;
+        background:#fff;
+    }
+
+    .form-control:focus,.form-select:focus{
+        border-color:#bfdbfe;
+        box-shadow:0 0 0 3px rgba(59,130,246,.10);
+    }
+
+    textarea.form-control{min-height:78px;}
+
+    .optional-badge{
+        font-size:10px;
+        color:#94a3b8;
+        font-weight:800;
+        text-transform:none;
+        margin-left:4px;
+    }
+
+    .form-section-heading{
+        font-size:12px;
+        font-weight:950;
+        color:#111827;
+        margin:12px 0 4px;
+        padding-left:10px;
+        border-left:4px solid var(--blue);
+    }
+
+    .file-upload-container{
+        border:1.5px dashed #cbd5e1;
+        border-radius:14px;
+        padding:18px;
+        text-align:center;
+        background:#f8fafc;
+        cursor:pointer;
+        transition:.15s ease;
+        margin-top:5px;
+    }
+
+    .file-upload-container:hover{
+        border-color:#93c5fd;
+        background:#eff6ff;
+    }
+
+    .file-upload-icon{
+        font-size:30px;
+        color:#94a3b8;
+        margin-bottom:8px;
+    }
+
+    .file-upload-text{
+        color:#475569;
+        font-weight:900;
+        font-size:12px;
+    }
+
+    .file-upload-subtext{
+        color:#94a3b8;
+        font-weight:700;
+        font-size:10.5px;
+        margin-top:2px;
+    }
+
+    .file-preview{
+        width:120px;
+        height:120px;
+        border-radius:14px;
+        overflow:hidden;
+        margin:10px auto 0;
+        border:1px solid var(--border);
+        background:white;
+        position:relative;
+        box-shadow:var(--shadow);
+    }
+
+    .file-preview img{
+        width:100%;
+        height:100%;
+        object-fit:cover;
+    }
+
+    .file-remove{
+        position:absolute;
+        top:6px;
+        right:6px;
+        width:26px;
+        height:26px;
+        background:#dc2626;
+        color:white;
+        border-radius:999px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:14px;
+        cursor:pointer;
+        border:2px solid white;
+    }
+
+    .input-group .form-control{
+        border-top-right-radius:0;
+        border-bottom-right-radius:0;
+    }
+
+    .input-group .icon-btn{
+        width:40px;
+        min-height:38px;
+        border:1px solid var(--border);
+        background:#fff;
+        color:#334155;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+    }
+
+    .input-group .icon-btn:hover{
+        background:#f8fafc;
+        color:#111827;
+    }
+
+    .alert{
+        border-radius:14px;
+        border:1px solid transparent;
+        box-shadow:var(--shadow);
+        margin-bottom:14px;
+        font-size:12px;
+        font-weight:850;
+    }
+
+    .alert-success{background:#dcfce7;border-color:#bbf7d0;color:#166534;}
+    .alert-danger{background:#fee2e2;border-color:#fecaca;color:#991b1b;}
+    .alert-warning{background:#fffbeb;border-color:#fde68a;color:#92400e;}
+
+    .submit-strip{
+        background:#fff;
+        border:1px solid var(--border);
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+        padding:13px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        margin:14px 0;
+    }
+
+    .submit-note{
+        color:#64748b;
+        font-size:11px;
+        font-weight:750;
+        margin:0;
+    }
+
+    @media(max-width:991.98px){
+        .main{margin-left:0!important;width:100%!important;max-width:100%!important;}
+        .sidebar{position:fixed!important;transform:translateX(-100%);z-index:1040!important;}
+        .sidebar.open,.sidebar.active,.sidebar.show{transform:translateX(0)!important;}
+    }
+
+    @media(max-width:768px){
+        .content-scroll{padding:12px 10px!important;}
+        .container-fluid.projects-wrapper{padding-left:0!important;padding-right:0!important;}
+        .page-heading,.submit-strip{flex-direction:column;align-items:flex-start;}
+        .form-panel{padding:12px;}
+        .section-header{align-items:flex-start;}
+        .primary-btn,.secondary-btn,.submit-btn{width:100%;}
+    }
     </style>
 </head>
 <body>
@@ -379,13 +907,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php include 'includes/topbar.php'; ?>
 
         <div id="contentScroll" class="content-scroll">
-            <div class="container-fluid maxw">
-                <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <div class="container-fluid projects-wrapper px-0">
+                <div class="page-heading">
                     <div>
-                        <h1 class="h3 fw-bold text-dark mb-1">Add New Employee</h1>
-                        <p class="text-muted mb-0">Complete essential details to register a new team member</p>
+                        <div class="d-flex gap-2 align-items-center flex-wrap mb-1">
+                            <h1>Add New Employee</h1>
+                            <span class="badge-pill badge-role">
+                                <i class="bi bi-shield-check"></i>
+                                <?php echo strtoupper($currentRoleKey); ?>
+                            </span>
+                        </div>
+                        <p>Register a new employee, upload documents, and create system login credentials.</p>
                     </div>
-                    <a href="employees.php" class="btn-back">
+
+                    <a href="employees.php" class="secondary-btn">
                         <i class="bi bi-arrow-left"></i> Back to Directory
                     </a>
                 </div>
@@ -419,20 +954,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 <?php endif; ?>
 
-                <!-- FORM (Same structure as your original, kept unchanged except upload storage) -->
                 <form method="POST" enctype="multipart/form-data" id="employeeForm" novalidate>
-
                     <!-- Identity -->
                     <div class="form-panel">
                         <div class="section-header">
-                            <div class="section-icon"><i class="bi bi-person-badge"></i></div>
-                            <div>
-                                <h3 class="section-title">Identity Details</h3>
-                                <p class="section-subtitle">Basic personal information</p>
+                            <div class="section-header-left">
+                                <div class="section-icon blue"><i class="bi bi-person-badge"></i></div>
+                                <div>
+                                    <h3 class="section-title">Identity Details</h3>
+                                    <p class="section-subtitle">Basic personal information</p>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="row g-4">
+                        <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="full_name" class="form-label required-label">Full Name</label>
                                 <input type="text" class="form-control" id="full_name" name="full_name"
@@ -494,14 +1029,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <!-- Contact -->
                     <div class="form-panel">
                         <div class="section-header">
-                            <div class="section-icon" style="background:#f5576c;"><i class="bi bi-telephone"></i></div>
-                            <div>
-                                <h3 class="section-title">Contact Details</h3>
-                                <p class="section-subtitle">Communication information</p>
+                            <div class="section-header-left">
+                                <div class="section-icon red"><i class="bi bi-telephone"></i></div>
+                                <div>
+                                    <h3 class="section-title">Contact Details</h3>
+                                    <p class="section-subtitle">Communication information</p>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="row g-4">
+                        <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="mobile_number" class="form-label required-label">Mobile Number</label>
                                 <input type="tel" class="form-control" id="mobile_number" name="mobile_number"
@@ -536,14 +1073,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <!-- Employment -->
                     <div class="form-panel">
                         <div class="section-header">
-                            <div class="section-icon" style="background:#4facfe;"><i class="bi bi-briefcase"></i></div>
-                            <div>
-                                <h3 class="section-title">Employment Details</h3>
-                                <p class="section-subtitle">Professional information</p>
+                            <div class="section-header-left">
+                                <div class="section-icon orange"><i class="bi bi-briefcase"></i></div>
+                                <div>
+                                    <h3 class="section-title">Employment Details</h3>
+                                    <p class="section-subtitle">Professional information</p>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="row g-4">
+                        <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="date_of_joining" class="form-label required-label">Date of Joining</label>
                                 <input type="date" class="form-control" id="date_of_joining" name="date_of_joining"
@@ -616,14 +1155,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <!-- Login -->
                     <div class="form-panel">
                         <div class="section-header">
-                            <div class="section-icon" style="background:#fa709a;"><i class="bi bi-key"></i></div>
-                            <div>
-                                <h3 class="section-title">Login Credentials</h3>
-                                <p class="section-subtitle">System access credentials</p>
+                            <div class="section-header-left">
+                                <div class="section-icon purple"><i class="bi bi-key"></i></div>
+                                <div>
+                                    <h3 class="section-title">Login Credentials</h3>
+                                    <p class="section-subtitle">System access credentials</p>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="row g-4">
+                        <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="username" class="form-label required-label">Username</label>
                                 <input type="text" class="form-control" id="username" name="username"
@@ -634,8 +1175,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <label for="password" class="form-label required-label">Password</label>
                                 <div class="input-group">
                                     <input type="password" class="form-control" id="password" name="password" required>
-                                    <button class="btn btn-outline-secondary" type="button" id="togglePassword"><i class="bi bi-eye"></i></button>
-                                    <button class="btn btn-outline-secondary" type="button" id="generatePasswordBtn"><i class="bi bi-shuffle"></i></button>
+                                    <button class="icon-btn" type="button" id="togglePassword" title="Show/Hide"><i class="bi bi-eye"></i></button>
+                                    <button class="icon-btn" type="button" id="generatePasswordBtn" title="Generate"><i class="bi bi-shuffle"></i></button>
                                 </div>
                             </div>
                         </div>
@@ -644,14 +1185,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <!-- Compliance -->
                     <div class="form-panel">
                         <div class="section-header">
-                            <div class="section-icon" style="background:#30cfd0;"><i class="bi bi-shield-check"></i></div>
-                            <div>
-                                <h3 class="section-title">Compliance Documents <span class="optional-badge">(Optional)</span></h3>
-                                <p class="section-subtitle">Official documents (can be added later)</p>
+                            <div class="section-header-left">
+                                <div class="section-icon blue"><i class="bi bi-shield-check"></i></div>
+                                <div>
+                                    <h3 class="section-title">Compliance Documents <span class="optional-badge">(Optional)</span></h3>
+                                    <p class="section-subtitle">Official documents can be added later</p>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="row g-4">
+                        <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="aadhar_card_number" class="form-label">Aadhar Card Number</label>
                                 <input type="text" class="form-control" id="aadhar_card_number" name="aadhar_card_number"
@@ -669,14 +1212,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <!-- Bank -->
                     <div class="form-panel">
                         <div class="section-header">
-                            <div class="section-icon" style="background:#43e97b;"><i class="bi bi-bank"></i></div>
-                            <div>
-                                <h3 class="section-title">Banking Information <span class="optional-badge">(Optional)</span></h3>
-                                <p class="section-subtitle">Salary details (can be added later)</p>
+                            <div class="section-header-left">
+                                <div class="section-icon green"><i class="bi bi-bank"></i></div>
+                                <div>
+                                    <h3 class="section-title">Banking Information <span class="optional-badge">(Optional)</span></h3>
+                                    <p class="section-subtitle">Salary details can be added later</p>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="row g-4">
+                        <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="bank_account_number" class="form-label">Bank Account Number</label>
                                 <input type="text" class="form-control" id="bank_account_number" name="bank_account_number"
@@ -694,7 +1239,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <div class="file-upload-container" onclick="document.getElementById('passbook_photo').click()" id="passbook_photoUploadContainer">
                                     <div class="file-upload-icon"><i class="bi bi-file-image"></i></div>
                                     <div class="file-upload-text">Upload passbook or cheque</div>
-                                    <div class="file-upload-subtext">Max 5MB</div>
+                                    <div class="file-upload-subtext">JPG, PNG, WebP (Max 5MB)</div>
                                     <input type="file" class="d-none" id="passbook_photo" name="passbook_photo" accept="image/*">
                                 </div>
                                 <div class="file-preview d-none" id="passbook_photoPreview">
@@ -706,14 +1251,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
 
                     <!-- Submit -->
-                    <div class="text-center mt-5">
-                        <button type="submit" class="btn-submit">
-                            <i class="bi bi-person-plus"></i> Add Employee to System
-                        </button>
-                        <p class="text-muted mt-3" style="font-size: 14px;">
+                    <div class="submit-strip">
+                        <p class="submit-note">
                             <i class="bi bi-info-circle me-1"></i>
                             Fields marked with * are required. Other fields can be added later.
+                            <?php if ($isHr): ?>
+                                Admin users will be notified after employee creation.
+                            <?php endif; ?>
                         </p>
+
+                        <button type="submit" class="submit-btn" id="addEmployeeBtn">
+                            <i class="bi bi-person-plus"></i> Add Employee
+                        </button>
                     </div>
                 </form>
 
@@ -729,8 +1278,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('employeeForm');
+    const submitBtn = document.getElementById('addEmployeeBtn');
 
-    // File preview
+    if (form && submitBtn) {
+        form.addEventListener('submit', function() {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Adding...';
+        });
+    }
+
     const fileInputs = ['photo', 'passbook_photo'];
 
     fileInputs.forEach(inputId => {
@@ -764,7 +1321,6 @@ document.addEventListener('DOMContentLoaded', function() {
         container.classList.remove('d-none');
     };
 
-    // Toggle password
     const togglePassword = document.getElementById('togglePassword');
     const passwordInput = document.getElementById('password');
 
@@ -776,7 +1332,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Generate password
     const generatePasswordBtn = document.getElementById('generatePasswordBtn');
     if (generatePasswordBtn && passwordInput) {
         generatePasswordBtn.addEventListener('click', function() {
@@ -789,7 +1344,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Auto-fill username from employee code
     const employeeCodeInput = document.getElementById('employee_code');
     const usernameInput = document.getElementById('username');
     if (employeeCodeInput && usernameInput) {
@@ -800,7 +1354,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Real-time format helpers
     const pancardInput = document.getElementById('pancard_number');
     if (pancardInput) pancardInput.addEventListener('input', function(){ this.value = this.value.toUpperCase(); });
 
@@ -812,11 +1365,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const bankInput = document.getElementById('bank_account_number');
     if (bankInput) bankInput.addEventListener('input', function(){ this.value = this.value.replace(/\D/g,''); });
-
 });
 </script>
 
 </body>
 </html>
-
-
