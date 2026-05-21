@@ -37,6 +37,131 @@ function fmtTime($ts){
     return $t ? date('h:i A', $t) : '—';
 }
 
+function tableExists(mysqli $conn, string $table): bool {
+    $safe = mysqli_real_escape_string($conn, $table);
+    $res = mysqli_query($conn, "SHOW TABLES LIKE '{$safe}'");
+    return $res && mysqli_num_rows($res) > 0;
+}
+
+function columnExists(mysqli $conn, string $table, string $column): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $column = mysqli_real_escape_string($conn, $column);
+    $res = mysqli_query($conn, "SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
+    return $res && mysqli_num_rows($res) > 0;
+}
+
+function getExistingColumn(mysqli $conn, string $table, array $columns): string {
+    foreach ($columns as $column) {
+        if (columnExists($conn, $table, $column)) {
+            return $column;
+        }
+    }
+    return '';
+}
+
+function indexExists(mysqli $conn, string $table, string $index): bool {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $index = mysqli_real_escape_string($conn, $index);
+    $res = mysqli_query($conn, "SHOW INDEX FROM `{$table}` WHERE Key_name = '{$index}'");
+    return $res && mysqli_num_rows($res) > 0;
+}
+
+
+function createNotification(mysqli $conn, int $employeeId, string $title, string $message, string $type, string $module, int $referenceId, string $link): bool {
+    if ($employeeId <= 0 || !tableExists($conn, 'notifications')) {
+        return false;
+    }
+
+    $sql = "
+        INSERT INTO notifications
+            (employee_id, title, message, type, module, reference_id, link, is_read)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+    ";
+
+    $st = mysqli_prepare($conn, $sql);
+    if (!$st) {
+        return false;
+    }
+
+    mysqli_stmt_bind_param($st, "issssis", $employeeId, $title, $message, $type, $module, $referenceId, $link);
+    $ok = mysqli_stmt_execute($st);
+    mysqli_stmt_close($st);
+
+    return $ok;
+}
+
+function fetchReportRowsForDate(mysqli $conn, array $rt, string $targetYmd): array {
+    $map = [];
+
+    if (!tableExists($conn, $rt['table'])) {
+        return $map;
+    }
+
+    $siteField = getExistingColumn($conn, $rt['table'], ['site_id', 'project_id']);
+    $employeeField = getExistingColumn($conn, $rt['table'], ['employee_id', 'created_by', 'prepared_by_id', 'created_user_id', 'user_id']);
+    $noField = getExistingColumn($conn, $rt['table'], $rt['noFields']);
+    $createdField = getExistingColumn($conn, $rt['table'], ['created_at', 'submitted_at', 'updated_at']);
+
+    $dateFields = [];
+    foreach ($rt['dateFields'] as $df) {
+        if (columnExists($conn, $rt['table'], $df) && !in_array($df, $dateFields, true)) {
+            $dateFields[] = $df;
+        }
+    }
+
+    foreach (['created_at', 'submitted_at', 'updated_at'] as $df) {
+        if (columnExists($conn, $rt['table'], $df) && !in_array($df, $dateFields, true)) {
+            $dateFields[] = $df;
+        }
+    }
+
+    if ($siteField === '' || $employeeField === '' || empty($dateFields)) {
+        return $map;
+    }
+
+    $selectNo = $noField !== '' ? "`{$noField}` AS doc_no" : "'' AS doc_no";
+    $selectCreated = $createdField !== '' ? "`{$createdField}` AS created_at" : "NULL AS created_at";
+    $orderBy = $createdField !== '' ? "`{$createdField}` DESC, id DESC" : "id DESC";
+
+    $dateWhere = [];
+    foreach ($dateFields as $df) {
+        $dateWhere[] = "DATE(`{$df}`) = ?";
+    }
+
+    $sql = "
+        SELECT id, `{$siteField}` AS site_id, `{$employeeField}` AS employee_id, {$selectNo}, {$selectCreated}
+        FROM `{$rt['table']}`
+        WHERE (" . implode(' OR ', $dateWhere) . ")
+        ORDER BY {$orderBy}
+    ";
+
+    $st = mysqli_prepare($conn, $sql);
+    if (!$st) {
+        return $map;
+    }
+
+    $types = str_repeat('s', count($dateFields));
+    $values = array_fill(0, count($dateFields), $targetYmd);
+    mysqli_stmt_bind_param($st, $types, ...$values);
+    mysqli_stmt_execute($st);
+    $res = mysqli_stmt_get_result($st);
+
+    while ($row = mysqli_fetch_assoc($res)) {
+        $k = (int)$row['employee_id'] . '_' . (int)$row['site_id'];
+        if (!isset($map[$k])) {
+            $map[$k] = [
+                'id' => (int)$row['id'],
+                'doc_no' => $row['doc_no'] ?? '',
+                'created_at' => $row['created_at'] ?? '',
+            ];
+        }
+    }
+
+    mysqli_stmt_close($st);
+    return $map;
+}
+
+
 function normalizeRole(string $designation, string $sessionRole = ''): string {
     $d = strtolower(trim($designation));
     $r = strtolower(trim($sessionRole));
@@ -57,6 +182,11 @@ if (!in_array($currentRole, $allowedRoles, true)) {
 }
 
 $todayYmd = date('Y-m-d');
+$filterDate = trim((string)($_GET['date'] ?? date('Y-m-d')));
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filterDate)) {
+    $filterDate = date('Y-m-d');
+}
+$todayYmd = $filterDate;
 $currentPage = 'emp-reports';
 
 // ---------------------------------------------------------
@@ -70,6 +200,8 @@ CREATE TABLE IF NOT EXISTS employee_report_remarks (
     site_id INT(11) NOT NULL,
     report_key VARCHAR(30) NOT NULL,
     reviewer_id INT(11) NOT NULL,
+    recipient_id INT(11) DEFAULT NULL,
+    recipient_role VARCHAR(30) DEFAULT NULL,
     remark TEXT DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -83,41 +215,116 @@ CREATE TABLE IF NOT EXISTS employee_report_remarks (
 ";
 @mysqli_query($conn, $createRemarksTable);
 
+/*
+ * Safe one-time migration.
+ * It avoids duplicate column/index fatal errors on repeated page loads.
+ */
+if (tableExists($conn, 'employee_report_remarks')) {
+    if (!columnExists($conn, 'employee_report_remarks', 'recipient_id')) {
+        mysqli_query($conn, "ALTER TABLE employee_report_remarks ADD COLUMN recipient_id INT(11) DEFAULT NULL AFTER reviewer_id");
+    }
+
+    if (!columnExists($conn, 'employee_report_remarks', 'recipient_role')) {
+        mysqli_query($conn, "ALTER TABLE employee_report_remarks ADD COLUMN recipient_role VARCHAR(30) DEFAULT NULL AFTER recipient_id");
+    }
+
+    if (indexExists($conn, 'employee_report_remarks', 'uq_report_remark') && !indexExists($conn, 'employee_report_remarks', 'uq_report_remark_recipient')) {
+        mysqli_query($conn, "ALTER TABLE employee_report_remarks DROP INDEX uq_report_remark");
+    }
+
+    if (!indexExists($conn, 'employee_report_remarks', 'uq_report_remark_recipient')) {
+        mysqli_query($conn, "ALTER TABLE employee_report_remarks ADD UNIQUE KEY uq_report_remark_recipient (report_date, employee_id, site_id, report_key, recipient_id)");
+    }
+}
+
 // ---------------------------------------------------------
-// HANDLE REMARK SAVE
+// HANDLE REMARK SAVE + NOTIFICATION
 // ---------------------------------------------------------
 $message = '';
 $messageType = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_remark'])) {
-    $remarkDate   = trim((string)($_POST['report_date'] ?? $todayYmd));
-    $targetEmpId  = (int)($_POST['employee_id'] ?? 0);
-    $targetSiteId = (int)($_POST['site_id'] ?? 0);
-    $reportKey    = trim((string)($_POST['report_key'] ?? ''));
-    $remarkText   = trim((string)($_POST['remark'] ?? ''));
+    $remarkDate    = trim((string)($_POST['report_date'] ?? $todayYmd));
+    $targetEmpId   = (int)($_POST['employee_id'] ?? 0);
+    $targetSiteId  = (int)($_POST['site_id'] ?? 0);
+    $reportKey     = trim((string)($_POST['report_key'] ?? ''));
+    $remarkText    = trim((string)($_POST['remark'] ?? ''));
+    $recipientId   = (int)($_POST['recipient_id'] ?? 0);
+    $recipientRole = strtolower(trim((string)($_POST['recipient_role'] ?? '')));
 
-    $validReportKeys = ['dpr','dar','checklist','ma','mom','mpt'];
+    $validReportKeys = [
+        'dpr','dar','ma','mpt','mom','mom-short','rfi','checklist','sat','dlar',
+        'ait','mas','pd','pms','vfs','vft','wpt','dds','ddt','dpt'
+    ];
 
-    if ($targetEmpId > 0 && $targetSiteId > 0 && in_array($reportKey, $validReportKeys, true)) {
+    $allowedRecipientRoles = [];
+    if ($currentRole === 'tl') {
+        $allowedRecipientRoles = ['pe'];
+    } elseif ($currentRole === 'manager') {
+        $allowedRecipientRoles = ['pe', 'tl'];
+    } elseif ($currentRole === 'admin') {
+        $allowedRecipientRoles = ['pe', 'tl', 'manager'];
+    }
+
+    if (
+        $targetEmpId > 0 &&
+        $targetSiteId > 0 &&
+        $recipientId > 0 &&
+        $remarkText !== '' &&
+        in_array($reportKey, $validReportKeys, true) &&
+        in_array($recipientRole, $allowedRecipientRoles, true)
+    ) {
         $saveSql = "
             INSERT INTO employee_report_remarks (
-                report_date, employee_id, site_id, report_key, reviewer_id, remark
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                report_date, employee_id, site_id, report_key, reviewer_id, recipient_id, recipient_role, remark
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 reviewer_id = VALUES(reviewer_id),
+                recipient_id = VALUES(recipient_id),
+                recipient_role = VALUES(recipient_role),
                 remark = VALUES(remark),
                 updated_at = CURRENT_TIMESTAMP
         ";
+
         $st = mysqli_prepare($conn, $saveSql);
+
         if ($st) {
-            mysqli_stmt_bind_param($st, "siisis", $remarkDate, $targetEmpId, $targetSiteId, $reportKey, $employeeId, $remarkText);
+            mysqli_stmt_bind_param(
+                $st,
+                "siisiiss",
+                $remarkDate,
+                $targetEmpId,
+                $targetSiteId,
+                $reportKey,
+                $employeeId,
+                $recipientId,
+                $recipientRole,
+                $remarkText
+            );
+
             if (mysqli_stmt_execute($st)) {
-                $message = "Remark saved successfully.";
+                $title = "Time Management Remark";
+                $msg = "You received a remark for " . strtoupper($reportKey) . " on " . date('d M Y', strtotime($remarkDate)) . ".";
+                $link = "emp-reports.php?status=all&site_id=" . $targetSiteId . "&date=" . urlencode($remarkDate) . "&report=" . urlencode($reportKey);
+
+                createNotification(
+                    $conn,
+                    $recipientId,
+                    $title,
+                    $msg,
+                    'remark',
+                    'time_management',
+                    $targetSiteId,
+                    $link
+                );
+
+                $message = "Remark sent successfully and notification created.";
                 $messageType = "success";
             } else {
                 $message = "Failed to save remark.";
                 $messageType = "danger";
             }
+
             mysqli_stmt_close($st);
         } else {
             $message = "Unable to prepare remark query.";
@@ -154,63 +361,243 @@ $loggedUserName = $loggedUser['full_name'] ?? ($_SESSION['employee_name'] ?? 'Us
 $reportTypes = [
     [
         'key' => 'dpr',
-        'label' => 'Daily DPR',
+        'label' => 'DPR',
         'icon' => 'bi-file-text',
         'table' => 'dpr_reports',
-        'dateField' => 'dpr_date',
-        'noField' => 'dpr_no',
-        'openUrl' => 'dpr.php?site_id={sid}',
+        'dateFields' => ['dpr_date', 'report_date', 'created_at'],
+        'noFields' => ['dpr_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/dpr.php?site_id={sid}',
         'printFile' => '../project-engineer/report-print.php',
+        'downloadSupported' => true,
+        'specialDownloadUrl' => '',
     ],
     [
         'key' => 'dar',
-        'label' => 'Daily Activity Report (DAR)',
+        'label' => 'DAR',
         'icon' => 'bi-journal-text',
         'table' => 'dar_reports',
-        'dateField' => 'dar_date',
-        'noField' => 'dar_no',
-        'openUrl' => 'dar.php?site_id={sid}',
+        'dateFields' => ['dar_date', 'report_date', 'created_at'],
+        'noFields' => ['dar_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/dar.php?site_id={sid}',
         'printFile' => '../project-engineer/report-dar-print.php',
+        'downloadSupported' => true,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'ma',
+        'label' => 'MA',
+        'icon' => 'bi-clipboard2-check',
+        'table' => 'ma_reports',
+        'dateFields' => ['ma_date', 'report_date', 'created_at'],
+        'noFields' => ['ma_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/ma.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-ma-print.php',
+        'downloadSupported' => true,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'mpt',
+        'label' => 'MPT',
+        'icon' => 'bi-graph-up',
+        'table' => 'mpt_reports',
+        'dateFields' => ['mpt_date', 'report_date', 'created_at'],
+        'noFields' => ['mpt_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/mpt.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-mpt-print.php',
+        'downloadSupported' => true,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'mom',
+        'label' => 'MOM',
+        'icon' => 'bi-people',
+        'table' => 'mom_main',
+        'dateFields' => ['mom_date', 'meeting_date', 'report_date', 'created_at'],
+        'noFields' => ['mom_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/mom.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-mom-main-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'mom-short',
+        'label' => 'MOM Short-term',
+        'icon' => 'bi-chat-left-quote',
+        'table' => 'mom_reports',
+        'dateFields' => ['mom_date', 'meeting_date', 'report_date', 'created_at'],
+        'noFields' => ['mom_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/mom-short.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-mom-print.php',
+        'downloadSupported' => true,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'rfi',
+        'label' => 'RFI',
+        'icon' => 'bi-question-circle',
+        'table' => 'rfi_reports',
+        'dateFields' => ['rfi_date', 'report_date', 'created_at'],
+        'noFields' => ['rfi_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/rfi.php?site_id={sid}',
+        'printFile' => '',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
     ],
     [
         'key' => 'checklist',
         'label' => 'Checklist',
         'icon' => 'bi-card-checklist',
         'table' => 'checklist_reports',
-        'dateField' => 'checklist_date',
-        'noField' => 'doc_no',
-        'openUrl' => 'checklist.php?site_id={sid}',
+        'dateFields' => ['checklist_date', 'report_date', 'created_at'],
+        'noFields' => ['doc_no', 'checklist_no', 'report_no'],
+        'openUrl' => '../project-engineer/checklist.php?site_id={sid}',
         'printFile' => '../project-engineer/report-checklist-print.php',
+        'downloadSupported' => true,
+        'specialDownloadUrl' => '',
     ],
     [
-        'key' => 'ma',
-        'label' => 'Meeting Agenda (MA)',
-        'icon' => 'bi-clipboard2-check',
-        'table' => 'ma_reports',
-        'dateField' => 'ma_date',
-        'noField' => 'ma_no',
-        'openUrl' => 'ma.php?site_id={sid}',
-        'printFile' => '../project-engineer/report-ma-print.php',
+        'key' => 'sat',
+        'label' => 'SAT',
+        'icon' => 'bi-bar-chart-steps',
+        'table' => 'sat_reports',
+        'dateFields' => ['sat_date', 'report_date', 'created_at'],
+        'noFields' => ['sat_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/sat.php?site_id={sid}',
+        'printFile' => '',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '../project-engineer/sat_report_pdf.php?batch_id={rid}',
     ],
     [
-        'key' => 'mom',
-        'label' => 'Minutes of Meeting (MOM)',
-        'icon' => 'bi-people',
-        'table' => 'mom_reports',
-        'dateField' => 'mom_date',
-        'noField' => 'mom_no',
-        'openUrl' => 'mom.php?site_id={sid}',
-        'printFile' => '../project-engineer/report-mom-print.php',
+        'key' => 'dlar',
+        'label' => 'DLAR',
+        'icon' => 'bi-file-earmark-spreadsheet',
+        'table' => 'dlar_reports',
+        'dateFields' => ['dlar_date', 'report_date', 'created_at'],
+        'noFields' => ['dlar_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/dlar.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-dlar-print.php',
+        'downloadSupported' => true,
+        'specialDownloadUrl' => '',
     ],
     [
-        'key' => 'mpt',
-        'label' => 'Monthly Project Tracker (MPT)',
+        'key' => 'ait',
+        'label' => 'AIT',
+        'icon' => 'bi-cpu',
+        'table' => 'ait_main',
+        'dateFields' => ['ait_date', 'report_date', 'created_at'],
+        'noFields' => ['ait_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/ait.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-ait-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'mas',
+        'label' => 'MAS',
+        'icon' => 'bi-diagram-3',
+        'table' => 'mas_main',
+        'dateFields' => ['mas_date', 'report_date', 'created_at'],
+        'noFields' => ['mas_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/mas.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-mas-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'pd',
+        'label' => 'PD',
         'icon' => 'bi-graph-up',
-        'table' => 'mpt_reports',
-        'dateField' => 'mpt_date',
-        'noField' => 'mpt_no',
-        'openUrl' => 'mpt.php?site_id={sid}',
-        'printFile' => '../project-engineer/report-mpt-print.php',
+        'table' => 'pd_main',
+        'dateFields' => ['pd_date', 'report_date', 'created_at'],
+        'noFields' => ['pd_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/pd.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-pd-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'pms',
+        'label' => 'PMS',
+        'icon' => 'bi-tools',
+        'table' => 'pms_main',
+        'dateFields' => ['pms_date', 'report_date', 'created_at'],
+        'noFields' => ['pms_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/pms.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-pms-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'vfs',
+        'label' => 'VFS',
+        'icon' => 'bi-eye',
+        'table' => 'vfs_main',
+        'dateFields' => ['vfs_date', 'report_date', 'created_at'],
+        'noFields' => ['vfs_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/vfs.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-vfs-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'vft',
+        'label' => 'VFT',
+        'icon' => 'bi-eye-fill',
+        'table' => 'vft_main',
+        'dateFields' => ['vft_date', 'report_date', 'created_at'],
+        'noFields' => ['vft_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/vft.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-vft-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'wpt',
+        'label' => 'WPT',
+        'icon' => 'bi-database',
+        'table' => 'wpt_main',
+        'dateFields' => ['week_ends_on', 'wpt_date', 'report_date', 'created_at'],
+        'noFields' => ['wpt_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/wpt.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-wpt-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'dds',
+        'label' => 'DDS',
+        'icon' => 'bi-database',
+        'table' => 'dds_main',
+        'dateFields' => ['dds_date', 'report_date', 'created_at'],
+        'noFields' => ['dds_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/dds.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-dds-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'ddt',
+        'label' => 'DDT',
+        'icon' => 'bi-table',
+        'table' => 'ddt_main',
+        'dateFields' => ['ddt_date', 'report_date', 'created_at'],
+        'noFields' => ['ddt_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/ddt.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-ddt-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
+    ],
+    [
+        'key' => 'dpt',
+        'label' => 'DPT',
+        'icon' => 'bi-pie-chart',
+        'table' => 'dpt_main',
+        'dateFields' => ['dpt_date', 'report_date', 'created_at'],
+        'noFields' => ['dpt_no', 'doc_no', 'report_no'],
+        'openUrl' => '../project-engineer/dpt.php?site_id={sid}',
+        'printFile' => '../project-engineer/report-dpt-print.php',
+        'downloadSupported' => false,
+        'specialDownloadUrl' => '',
     ],
 ];
 
@@ -219,11 +606,18 @@ $reportTypes = [
 // ---------------------------------------------------------
 $filterStatus = strtolower(trim((string)($_GET['status'] ?? 'all')));
 $filterSiteId = (int)($_GET['site_id'] ?? 0);
+$filterReport = strtolower(trim((string)($_GET['report'] ?? 'all')));
+$filterEmployeeId = (int)($_GET['employee_id'] ?? 0);
 $search = trim((string)($_GET['search'] ?? ''));
 
 $validStatuses = ['all', 'completed', 'incomplete'];
 if (!in_array($filterStatus, $validStatuses, true)) {
     $filterStatus = 'all';
+}
+
+$validReportKeys = array_column($reportTypes, 'key');
+if ($filterReport !== 'all' && !in_array($filterReport, $validReportKeys, true)) {
+    $filterReport = 'all';
 }
 
 // ---------------------------------------------------------
@@ -446,42 +840,39 @@ if ($filterSiteId > 0) {
     }));
 }
 
+if ($filterEmployeeId > 0) {
+    $rows = array_values(array_filter($rows, function($r) use ($filterEmployeeId){
+        return (int)$r['employee_id'] === $filterEmployeeId;
+    }));
+}
+
 // ---------------------------------------------------------
-// LOAD COMPLETION DATA FOR TODAY
+// LOAD COMPLETION DATA FOR SELECTED DATE
 // key: reportKey_employeeId_siteId => data
 // ---------------------------------------------------------
 $reportStatusMap = [];
 $latestAnyCreatedAt = null;
 
 foreach ($reportTypes as $rt) {
-    $sql = "
-        SELECT id, site_id, employee_id, {$rt['noField']} AS doc_no, created_at
-        FROM {$rt['table']}
-        WHERE {$rt['dateField']} = ?
-        ORDER BY created_at DESC, id DESC
-    ";
-    $st = mysqli_prepare($conn, $sql);
-    if ($st) {
-        mysqli_stmt_bind_param($st, "s", $todayYmd);
-        mysqli_stmt_execute($st);
-        $res = mysqli_stmt_get_result($st);
-        while ($row = mysqli_fetch_assoc($res)) {
-            $k = $rt['key'] . '_' . (int)$row['employee_id'] . '_' . (int)$row['site_id'];
-            if (!isset($reportStatusMap[$k])) {
-                $reportStatusMap[$k] = [
-                    'id' => (int)$row['id'],
-                    'doc_no' => $row['doc_no'],
-                    'created_at' => $row['created_at'],
-                    'key' => $rt['key'],
-                ];
-            }
-            if (!empty($row['created_at'])) {
-                if ($latestAnyCreatedAt === null || strtotime($row['created_at']) > strtotime($latestAnyCreatedAt)) {
-                    $latestAnyCreatedAt = $row['created_at'];
-                }
+    $reportMap = fetchReportRowsForDate($conn, $rt, $todayYmd);
+
+    foreach ($reportMap as $baseKey => $row) {
+        $k = $rt['key'] . '_' . $baseKey;
+
+        if (!isset($reportStatusMap[$k])) {
+            $reportStatusMap[$k] = [
+                'id' => (int)$row['id'],
+                'doc_no' => $row['doc_no'] ?? '',
+                'created_at' => $row['created_at'] ?? '',
+                'key' => $rt['key'],
+            ];
+        }
+
+        if (!empty($row['created_at'])) {
+            if ($latestAnyCreatedAt === null || strtotime($row['created_at']) > strtotime($latestAnyCreatedAt)) {
+                $latestAnyCreatedAt = $row['created_at'];
             }
         }
-        mysqli_stmt_close($st);
     }
 }
 
@@ -490,9 +881,11 @@ foreach ($reportTypes as $rt) {
 // ---------------------------------------------------------
 $remarksMap = [];
 $remarksSql = "
-    SELECT report_date, employee_id, site_id, report_key, remark
-    FROM employee_report_remarks
-    WHERE report_date = ?
+    SELECT er.report_date, er.employee_id, er.site_id, er.report_key, er.recipient_role, er.recipient_id, er.remark, emp.full_name AS recipient_name
+    FROM employee_report_remarks er
+    LEFT JOIN employees emp ON emp.id = er.recipient_id
+    WHERE er.report_date = ?
+    ORDER BY er.updated_at DESC, er.created_at DESC
 ";
 $st = mysqli_prepare($conn, $remarksSql);
 if ($st) {
@@ -501,7 +894,15 @@ if ($st) {
     $res = mysqli_stmt_get_result($st);
     while ($r = mysqli_fetch_assoc($res)) {
         $rk = $r['report_key'] . '_' . (int)$r['employee_id'] . '_' . (int)$r['site_id'];
-        $remarksMap[$rk] = $r['remark'] ?? '';
+        if (!isset($remarksMap[$rk])) {
+            $remarksMap[$rk] = [];
+        }
+
+        $remarksMap[$rk][] = [
+            'recipient_role' => $r['recipient_role'] ?? '',
+            'recipient_name' => $r['recipient_name'] ?? '',
+            'remark' => $r['remark'] ?? '',
+        ];
     }
     mysqli_stmt_close($st);
 }
@@ -513,6 +914,10 @@ $displayRows = [];
 
 foreach ($rows as $base) {
     foreach ($reportTypes as $rt) {
+        if ($filterReport !== 'all' && $filterReport !== $rt['key']) {
+            continue;
+        }
+
         $rk = $rt['key'] . '_' . $base['employee_id'] . '_' . $base['site_id'];
         $completed = isset($reportStatusMap[$rk]);
         $reportData = $completed ? $reportStatusMap[$rk] : null;
@@ -520,10 +925,20 @@ foreach ($rows as $base) {
         $printUrl = '';
         $downloadUrl = '';
 
-        if ($completed && !empty($reportData['id']) && !empty($rt['printFile'])) {
+        if ($completed && !empty($reportData['id'])) {
             $rid = (int)$reportData['id'];
-            $printUrl = $rt['printFile'] . '?view=' . urlencode((string)$rid);
-            $downloadUrl = $rt['printFile'] . '?view=' . urlencode((string)$rid) . '&dl=1';
+
+            if (!empty($rt['printFile'])) {
+                $printUrl = $rt['printFile'] . '?view=' . urlencode((string)$rid);
+
+                if (!empty($rt['downloadSupported'])) {
+                    $downloadUrl = $rt['printFile'] . '?view=' . urlencode((string)$rid) . '&dl=1';
+                }
+            }
+
+            if (!empty($rt['specialDownloadUrl'])) {
+                $downloadUrl = str_replace('{rid}', urlencode((string)$rid), $rt['specialDownloadUrl']);
+            }
         }
 
         $displayRows[] = [
@@ -536,7 +951,10 @@ foreach ($rows as $base) {
             'employee_designation' => $base['employee_designation'],
             'department' => $base['department'],
             'manager_name' => $base['manager_name'],
+            'tl_id' => (int)($base['tl_id'] ?? 0),
             'tl_name' => $base['tl_name'],
+            'manager_id' => (int)($base['manager_id'] ?? 0),
+            'manager_name' => $base['manager_name'],
             'report_key' => $rt['key'],
             'report_label' => $rt['label'],
             'report_icon' => $rt['icon'],
@@ -547,7 +965,14 @@ foreach ($rows as $base) {
             'report_id' => $reportData['id'] ?? 0,
             'print_url' => $printUrl,
             'download_url' => $downloadUrl,
-            'remark' => $remarksMap[$rk] ?? '',
+            'remarks' => $remarksMap[$rk] ?? [],
+            'remark' => !empty($remarksMap[$rk]) ? implode("\n", array_map(function($item) {
+                $role = strtoupper((string)($item['recipient_role'] ?? ''));
+                $name = trim((string)($item['recipient_name'] ?? ''));
+                $text = trim((string)($item['remark'] ?? ''));
+                $prefix = trim($role . ($name !== '' ? ' - ' . $name : ''));
+                return ($prefix !== '' ? $prefix . ': ' : '') . $text;
+            }, $remarksMap[$rk])) : '',
         ];
     }
 }
@@ -604,168 +1029,796 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
     <link href="assets/css/footer.css" rel="stylesheet" />
 
     <style>
-        .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-        .panel{
-            background: var(--surface);
-            border:1px solid var(--border);
-            border-radius: 16px;
-            box-shadow: var(--shadow);
-            padding:16px 16px 12px;
-            height:100%;
-            margin-bottom:14px;
-        }
-        .stat-card{
-            background: var(--surface);
-            border:1px solid var(--border);
-            border-radius: 16px;
-            box-shadow: var(--shadow);
-            padding:14px 16px;
-            height:90px;
-            display:flex;
-            align-items:center;
-            gap:14px;
-        }
-        .stat-ic{
-            width:46px; height:46px;
-            border-radius:14px;
-            display:grid; place-items:center;
-            color:#fff; font-size:20px;
-            flex:0 0 auto;
-        }
-        .stat-ic.blue{ background: var(--blue); }
-        .stat-ic.green{ background: #10b981; }
-        .stat-ic.yellow{ background: #f59e0b; }
-        .stat-ic.red{ background: #ef4444; }
-        .stat-label{ color:#4b5563; font-weight:800; font-size:13px; }
-        .stat-value{ font-size:30px; font-weight:1000; line-height:1; margin-top:2px; }
-        .small-muted{ color:#6b7280; font-weight:800; font-size:12px; }
+    :root {
+        --page-bg: #f5f7fb;
+        --card-bg: #ffffff;
+        --border: #e5e7eb;
+        --text: #111827;
+        --muted: #6b7280;
+        --soft: #f8fafc;
+        --shadow: 0 10px 26px rgba(15, 23, 42, .055);
+        --radius: 15px;
+    }
 
-        .h-title{ font-weight:1000; color:#111827; margin:0; }
-        .h-sub{ color:#6b7280; font-weight:800; font-size:13px; margin:4px 0 0; }
+    body {
+        background: var(--page-bg);
+    }
 
-        .badge-pill{
-            display:inline-flex; align-items:center; gap:8px;
-            padding:6px 10px; border-radius:999px;
-            border:1px solid var(--border);
-            background:#fff;
-            font-weight:900; font-size:12px;
-            color:#111827;
+    .content-scroll {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 16px;
+    }
+
+    .projects-wrapper {
+        width: 100%;
+    }
+
+    .page-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .page-heading h1 {
+        font-size: 19px;
+        font-weight: 900;
+        color: var(--text);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .page-heading p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .primary-btn {
+        border: 0;
+        background: #111827;
+        color: #fff;
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .primary-btn:hover {
+        background: #020617;
+        color: #fff;
+    }
+
+    .secondary-btn {
+        border: 1px solid var(--border) !important;
+        background: #fff !important;
+        color: #334155 !important;
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .secondary-btn:hover {
+        border-color: #cbd5e1 !important;
+        background: #f8fafc !important;
+        color: #111827 !important;
+    }
+
+    .stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 12px 13px;
+        min-height: 78px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .stat-ic {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 17px;
+        flex: 0 0 auto;
+    }
+
+    .blue { background: #2f80ed; }
+    .orange { background: #f2994a; }
+    .green { background: #27ae60; }
+    .red { background: #eb5757; }
+    .gray { background: #64748b; }
+
+    .stat-label {
+        color: var(--muted);
+        font-weight: 800;
+        font-size: 10.5px;
+        text-transform: uppercase;
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: 950;
+        color: #111827;
+        line-height: 1;
+    }
+
+    .panel {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 13px;
+    }
+
+    .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        gap: 10px;
+    }
+
+    .panel-title {
+        font-weight: 900;
+        font-size: 14px;
+        margin: 0;
+        color: #111827;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .panel-title i {
+        color: #2563eb;
+        font-size: 14px;
+    }
+
+    .panel-subtitle {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+
+    .filter-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .search-box {
+        position: relative;
+        flex: 1 1 260px;
+        max-width: 430px;
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 13px;
+    }
+
+    .search-box input,
+    .filter-select,
+    .filter-date {
+        height: 36px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        color: var(--text);
+        outline: none;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 0 12px 0 34px;
+        font-weight: 700;
+    }
+
+    .filter-select {
+        padding: 0 42px 0 12px;
+        min-width: 145px;
+    }
+
+    .filter-date {
+        padding: 0 12px;
+        min-width: 145px;
+    }
+
+    .search-box input:focus,
+    .filter-select:focus,
+    .filter-date:focus {
+        border-color: #bfdbfe;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+    }
+
+    .compact-table-wrap {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .compact-table {
+        width: 100%;
+        margin: 0;
+        table-layout: auto;
+    }
+
+    .compact-table thead th {
+        background: var(--soft);
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 900;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 8px 9px !important;
+        white-space: nowrap;
+    }
+
+    .compact-table tbody td {
+        padding: 8px 9px !important;
+        vertical-align: middle;
+        border-color: #eef2f7;
+        color: #334155;
+        font-weight: 700;
+        font-size: 11.5px;
+    }
+
+    .compact-table tbody tr:hover {
+        background: #fbfdff;
+    }
+
+    .table-title-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .table-icon {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        background: #eff6ff;
+        color: #2563eb;
+        font-size: 13px;
+        flex: 0 0 auto;
+    }
+
+    .table-primary-text {
+        color: #111827;
+        font-size: 11.5px;
+        font-weight: 900;
+    }
+
+    .table-secondary-text {
+        color: #64748b;
+        font-size: 10px;
+        font-weight: 700;
+        margin-top: 1px;
+    }
+
+    .badge-pill {
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-weight: 900;
+        font-size: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        text-decoration: none;
+    }
+
+    .ontrack,
+    .status-green {
+        color: #15803d;
+        background: #dcfce7;
+        border-color: #bbf7d0;
+    }
+
+    .progressing {
+        color: #2563eb;
+        background: #dbeafe;
+        border-color: #bfdbfe;
+    }
+
+    .pending {
+        color: #6d28d9;
+        background: #ede9fe;
+        border-color: #ddd6fe;
+    }
+
+    .atrisk,
+    .status-yellow {
+        color: #b45309;
+        background: #ffedd5;
+        border-color: #fed7aa;
+    }
+
+    .neutral {
+        color: #475569;
+        background: #f1f5f9;
+        border-color: #e2e8f0;
+    }
+
+    .status-badge {
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-weight: 900;
+        font-size: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        text-transform: uppercase;
+    }
+
+    .action-group {
+        display: flex;
+        justify-content: flex-end;
+        gap: 5px;
+    }
+
+    .action-btn {
+        width: 27px;
+        height: 27px;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: #fff;
+        display: grid;
+        place-items: center;
+        text-decoration: none;
+        color: #475569;
+    }
+
+    .view-btn {
+        color: #475569;
+        background: #f8fafc;
+    }
+
+    .file-btn {
+        color: #10b981;
+        background: #ecfdf5;
+    }
+
+    .report-btn {
+        color: #2563eb;
+        background: #eff6ff;
+    }
+
+    .action-btn:hover {
+        border-color: #cbd5e1;
+        background: #fff;
+    }
+
+    .team-text {
+        font-size: 10px;
+        color: #64748b;
+        line-height: 1.5;
+        font-weight: 750;
+    }
+
+    .team-text b {
+        color: #111827;
+    }
+
+    .reason-cell {
+        max-width: 260px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .remark-column {
+        min-width: 220px;
+    }
+
+    .remark-preview {
+        max-width: 310px;
+        color: #64748b;
+        font-size: 10.5px;
+        font-weight: 750;
+        line-height: 1.35;
+        white-space: pre-wrap;
+        background: #f8fafc;
+        border: 1px solid #eef2f7;
+        border-radius: 10px;
+        padding: 7px 9px;
+        margin-bottom: 7px;
+    }
+
+    .remark-preview.empty {
+        color: #94a3b8;
+        font-style: italic;
+    }
+
+    .remark-buttons {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .remark-btn {
+        min-height: 29px;
+        padding: 0 10px;
+        border-radius: 10px;
+        border: 1px solid #dbeafe;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: 11px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .remark-btn:hover {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .remark-btn.rtl {
+        border-color: #ede9fe;
+        background: #f5f3ff;
+        color: #6d28d9;
+    }
+
+    .remark-btn.rm {
+        border-color: #ffedd5;
+        background: #fff7ed;
+        color: #c2410c;
+    }
+
+    .empty-state {
+        text-align: center;
+        color: #64748b;
+        padding: 30px 12px;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .empty-state i {
+        font-size: 34px;
+        display: block;
+        margin-bottom: 8px;
+        opacity: .45;
+    }
+
+    .pagination-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding-top: 12px;
+        flex-wrap: wrap;
+    }
+
+    .pagination-info {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .alert {
+        border-radius: var(--radius);
+        border: none;
+        box-shadow: var(--shadow);
+        margin-bottom: 14px;
+    }
+
+    .modal-content {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 24px 65px rgba(15,23,42,.18);
+    }
+
+    .modal-header,
+    .modal-footer {
+        border-color: #eef2f7;
+    }
+
+    .modal-title {
+        font-size: 15px;
+        font-weight: 950;
+        color: #111827;
+    }
+
+    .modal-info {
+        background: #f8fafc;
+        border: 1px solid #eef2f7;
+        border-radius: 14px;
+        padding: 11px 12px;
+        margin-bottom: 12px;
+    }
+
+    .modal-info .label {
+        color: #64748b;
+        font-size: 10px;
+        font-weight: 950;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+    }
+
+    .modal-info .value {
+        color: #111827;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .remark-textarea {
+        min-height: 90px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 800;
+        color: #111827;
+        padding: 10px 11px;
+        background: #fff;
+        box-shadow: none !important;
+    }
+
+    @media(max-width:991.98px) {
+        .main {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
         }
 
-        .table-responsive{ overflow-x:auto; }
-        .table thead th{
-            font-size: 11px; color:#6b7280; font-weight:900;
-            border-bottom:1px solid var(--border)!important;
-            padding:10px 10px !important;
-            white-space:nowrap;
-            background:#f9fafb;
-        }
-        .table td{
-            vertical-align:top;
-            border-color:var(--border);
-            font-weight:800; color:#111827;
-            padding:10px 10px !important;
-            white-space:normal;
-            word-break: break-word;
+        .sidebar {
+            position: fixed !important;
+            transform: translateX(-100%);
+            z-index: 1040 !important;
         }
 
-        .status-badge{
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-size: 10px;
-            font-weight: 1000;
-            letter-spacing: .3px;
-            display:inline-flex;
-            align-items:center;
-            gap:6px;
-            white-space: nowrap;
-            text-transform: uppercase;
-            border:1px solid transparent;
+        .sidebar.open,
+        .sidebar.active,
+        .sidebar.show {
+            transform: translateX(0) !important;
         }
-        .status-green{ background: rgba(16,185,129,.12); color:#10b981; border-color: rgba(16,185,129,.22); }
-        .status-yellow{ background: rgba(245,158,11,.12); color:#f59e0b; border-color: rgba(245,158,11,.22); }
+    }
 
-        .btn-action{
+    @media(max-width:1199px) {
+        .compact-table-wrap {
+            border: 0;
+            border-radius: 0;
+            overflow: visible;
             background: transparent;
+        }
+
+        .compact-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 0;
+        }
+
+        .compact-table thead {
+            display: none;
+        }
+
+        .compact-table,
+        .compact-table tbody,
+        .compact-table tr,
+        .compact-table td {
+            display: block;
+            width: 100%;
+        }
+
+        .compact-table tbody tr {
+            background: #fff;
             border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, .045);
+            padding: 12px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .compact-table tbody tr:hover {
+            background: #fff;
+        }
+
+        .compact-table tbody td {
+            border: 0 !important;
+            display: grid !important;
+            grid-template-columns: 92px minmax(0, 1fr);
+            column-gap: 10px;
+            align-items: flex-start;
+            padding: 8px 0 !important;
+            color: #334155;
+            text-align: left !important;
+            min-width: 0;
+        }
+
+        .compact-table tbody td::before {
+            content: attr(data-label);
+            grid-column: 1;
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 950;
+            letter-spacing: .02em;
+            text-transform: uppercase;
+            line-height: 1.25;
+            padding-top: 2px;
+            min-width: 0;
+        }
+
+        .compact-table tbody td>* {
+            grid-column: 2;
+            min-width: 0;
+        }
+
+        .table-title-cell {
+            align-items: flex-start;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .table-title-cell>div:last-child {
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .table-icon {
+            width: 24px;
+            height: 24px;
             border-radius: 8px;
-            width: 36px;
-            height: 36px;
-            padding: 0;
-            color: #374151;
-            font-size: 13px;
-            font-weight: 1000;
-            text-decoration:none;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            line-height:1;
-            flex:0 0 36px;
-        }
-        .btn-action.primary{
-            background: var(--blue);
-            border-color: var(--blue);
-            color:#fff;
-        }
-        .btn-action:hover{ background:#f9fafb; color:var(--blue); }
-        .btn-action.primary:hover{ filter:brightness(.98); color:#fff; background:var(--blue); }
-
-        .filter-input, .filter-select, .remark-textarea {
-            border:1px solid var(--border);
-            border-radius:12px;
-            font-weight:800;
-            font-size:13px;
-            padding:10px 12px;
-            box-shadow:none !important;
+            font-size: 12px;
+            flex: 0 0 24px;
+            margin-top: 1px;
         }
 
-        .task-card{
-            border:1px solid var(--border);
-            border-radius:16px;
-            background: var(--surface);
-            box-shadow: var(--shadow);
-            padding:12px;
-        }
-        .task-top{
-            display:flex;
-            align-items:flex-start;
-            justify-content:space-between;
-            gap:10px;
-        }
-        .task-title{ font-weight:1000; color:#111827; font-size:14px; line-height:1.2; margin:0; }
-        .task-sub{ color:#6b7280; font-weight:800; font-size:12px; margin-top:6px; }
-        .task-kv{ margin-top:10px; display:grid; gap:8px; }
-        .task-row{ display:flex; gap:10px; align-items:flex-start; }
-        .task-key{ flex:0 0 95px; color:#6b7280; font-weight:1000; font-size:12px; }
-        .task-val{ flex:1 1 auto; font-weight:900; color:#111827; font-size:13px; line-height:1.25; }
-        .task-actions{ margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
-        .remark-box{
-            margin-top:12px;
-            border-top:1px dashed var(--border);
-            padding-top:12px;
-        }
-        .desk-remark-form{
-            min-width:250px;
+        .table-primary-text,
+        .table-secondary-text,
+        .team-text,
+        .team-text div {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+            word-break: normal;
         }
 
-        @media (max-width: 991.98px){
-            .main{ margin-left:0 !important; width:100% !important; max-width:100% !important; }
-            .sidebar{ position:fixed !important; transform:translateX(-100%); z-index:1040 !important; }
-            .sidebar.open, .sidebar.active, .sidebar.show{ transform:translateX(0) !important; }
+        .reason-cell,
+        .remark-preview {
+            max-width: 100%;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: unset;
+            text-align: left;
         }
-        @media (max-width: 768px){
-            .content-scroll{ padding:12px 10px 12px !important; }
-            .container-fluid.maxw{ padding-left:6px !important; padding-right:6px !important; }
-            .panel{ padding:12px !important; margin-bottom:12px; border-radius:14px; }
-            .stat-card{ height:auto; min-height:86px; }
-            .stat-value{ font-size:24px; }
-            .btn-action{
-                width:34px;
-                height:34px;
-                flex:0 0 34px;
-                font-size:12px;
-            }
+
+        .badge-pill,
+        .status-badge {
+            justify-self: flex-start;
+            max-width: 100%;
+            white-space: normal;
+            line-height: 1.25;
+            padding: 5px 9px;
         }
+
+        .action-group {
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            gap: 7px;
+        }
+
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+        }
+    }
+
+    @media(max-width:768px) {
+        .content-scroll {
+            padding: 12px 10px 12px !important;
+        }
+
+        .page-heading {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .page-heading .d-flex {
+            width: 100%;
+        }
+
+        .filter-bar {
+            align-items: stretch;
+        }
+
+        .search-box {
+            max-width: none;
+            width: 100%;
+            flex: 1 1 100%;
+        }
+
+        .filter-select,
+        .filter-date,
+        .primary-btn,
+        .secondary-btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .panel {
+            padding: 12px;
+            border-radius: 14px;
+        }
+
+        .compact-table tbody td {
+            grid-template-columns: 84px minmax(0, 1fr);
+            column-gap: 9px;
+            padding: 7px 0 !important;
+        }
+
+        .compact-table tbody tr {
+            padding: 11px;
+            border-radius: 13px;
+        }
+
+        .pagination-info {
+            width: 100%;
+            line-height: 1.45;
+        }
+
+        .modal-footer {
+            flex-direction: column-reverse;
+            align-items: stretch;
+        }
+    }
+
+    @media(max-width:420px) {
+        .compact-table tbody td {
+            grid-template-columns: 76px minmax(0, 1fr);
+            column-gap: 8px;
+        }
+
+        .action-btn {
+            width: 31px;
+            height: 31px;
+        }
+    }
     </style>
 </head>
 
@@ -776,38 +1829,32 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         <?php include 'includes/topbar.php'; ?>
 
         <div id="contentScroll" class="content-scroll">
-            <div class="container-fluid maxw">
+            <div class="container-fluid projects-wrapper px-0">
 
-                <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                <div class="page-heading">
                     <div>
-                        <h1 class="h-title">Employee Reports</h1>
-                        <p class="h-sub">
-                            Today report monitoring for <?php echo e(date('d M Y')); ?> (<?php echo e($todayYmd); ?>)
-                            • Panel: <b style="color:#111827;"><?php echo strtoupper(e($currentRole)); ?></b>
-                        </p>
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                            <h1><i class="bi bi-file-earmark-check"></i> Employee Time Management Reports</h1>
+                            <span class="badge-pill">
+                                <i class="bi bi-calendar-event"></i>
+                                <?php echo e(date('d M Y', strtotime($todayYmd))); ?>
+                            </span>
+                            <span class="badge-pill">
+                                <i class="bi bi-person-badge"></i>
+                                <?php echo strtoupper(e($currentRole)); ?>
+                            </span>
+                        </div>
+                        <p>Common monitoring page for TL, Manager, and Admin. Use the Remark buttons to notify the selected employee.</p>
                     </div>
+
                     <div class="d-flex gap-2 flex-wrap">
                         <span class="badge-pill"><i class="bi bi-person"></i> <?php echo e($loggedUserName); ?></span>
-                        <span class="badge-pill"><i class="bi bi-award"></i> <?php echo e($designationRaw); ?></span>
-                        <a class="btn-action" href="emp-reports.php" title="Refresh"><i class="bi bi-arrow-clockwise"></i></a>
+                        <a class="secondary-btn" href="emp-reports.php" title="Refresh">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            Refresh
+                        </a>
                     </div>
                 </div>
-
-                <?php if ($message !== ''): ?>
-                    <div class="alert alert-<?php echo e($messageType ?: 'info'); ?> border-0 shadow-sm" style="border-radius:16px;">
-                        <i class="bi bi-info-circle me-2"></i><?php echo e($message); ?>
-                    </div>
-                <?php endif; ?>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic blue"><i class="bi bi-people"></i></div>
-                            <div>
-                                <div class="stat-label">Employees</div>
-                                <div class="stat-value"><?php echo (int)$totalEmployees; ?></div>
-                            </div>
-                        </div>
                     </div>
                     <div class="col-12 col-md-6 col-xl-3">
                         <div class="stat-card">
@@ -815,7 +1862,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                             <div>
                                 <div class="stat-label">Completed</div>
                                 <div class="stat-value"><?php echo (int)$completedCount; ?></div>
-                                <div class="small-muted">Today</div>
+                                <div class="small-muted">Selected Date</div>
                             </div>
                         </div>
                     </div>
@@ -825,7 +1872,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                             <div>
                                 <div class="stat-label">Incomplete</div>
                                 <div class="stat-value"><?php echo (int)$incompleteCount; ?></div>
-                                <div class="small-muted">Today</div>
+                                <div class="small-muted">Selected Date</div>
                             </div>
                         </div>
                     </div>
@@ -835,31 +1882,34 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                             <div>
                                 <div class="stat-label">Latest Submit</div>
                                 <div class="stat-value" style="font-size:22px;"><?php echo e($latestSubmitTime); ?></div>
-                                <div class="small-muted">Today</div>
+                                <div class="small-muted">Selected Date</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="panel">
-                    <form method="get" class="row g-2 align-items-end mb-3">
-                        <div class="col-12 col-md-4 col-lg-4">
-                            <label class="small-muted mb-1">Search</label>
-                            <input type="text" name="search" class="form-control filter-input"
-                                   placeholder="Employee / project / manager / TL / report"
-                                   value="<?php echo e($search); ?>">
-                        </div>
-                        <div class="col-6 col-md-3 col-lg-2">
-                            <label class="small-muted mb-1">Status</label>
-                            <select name="status" class="form-select filter-select">
-                                <option value="all" <?php echo $filterStatus==='all'?'selected':''; ?>>All</option>
+                    <form method="get" class="filter-bar">
+                            <div class="search-box">
+                                <i class="bi bi-search"></i>
+                                <input
+                                    type="text"
+                                    name="search"
+                                    id="reportSearch"
+                                    placeholder="Search employee, project, manager, TL or report..."
+                                    value="<?php echo e($search); ?>"
+                                >
+                            </div>
+
+                            <select name="status" class="filter-select">
+                                <option value="all" <?php echo $filterStatus==='all'?'selected':''; ?>>All Status</option>
                                 <option value="completed" <?php echo $filterStatus==='completed'?'selected':''; ?>>Completed</option>
                                 <option value="incomplete" <?php echo $filterStatus==='incomplete'?'selected':''; ?>>Incomplete</option>
                             </select>
-                        </div>
-                        <div class="col-6 col-md-3 col-lg-3">
-                            <label class="small-muted mb-1">Project</label>
-                            <select name="site_id" class="form-select filter-select">
+
+                            <input type="date" name="date" class="filter-date" value="<?php echo e($todayYmd); ?>">
+
+                            <select name="site_id" class="filter-select">
                                 <option value="0">All Projects</option>
                                 <?php foreach ($sitesById as $sid => $site): ?>
                                     <option value="<?php echo (int)$sid; ?>" <?php echo $filterSiteId===(int)$sid?'selected':''; ?>>
@@ -867,14 +1917,33 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                        </div>
-                        <div class="col-12 col-md-2 col-lg-3 d-flex gap-2 align-items-center">
-                            <button class="btn-action primary" type="submit" title="Filter"><i class="bi bi-funnel"></i></button>
-                            <a class="btn-action" href="emp-reports.php" title="Clear"><i class="bi bi-x-circle"></i></a>
-                        </div>
-                    </form>
 
-                    <div style="font-weight:1000; font-size:14px; color:#111827;">Employee Report Status</div>
+                            <select name="report" class="filter-select">
+                                <option value="all">All Documents</option>
+                                <?php foreach ($reportTypes as $rtFilter): ?>
+                                    <option value="<?php echo e($rtFilter['key']); ?>" <?php echo $filterReport===$rtFilter['key']?'selected':''; ?>>
+                                        <?php echo e($rtFilter['label']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+
+                            <button class="primary-btn" type="submit">
+                                <i class="bi bi-funnel"></i>
+                                Filter
+                            </button>
+
+                            <a class="secondary-btn" href="emp-reports.php">
+                                <i class="bi bi-x-circle"></i>
+                                Clear
+                            </a>
+                        </form>
+
+                    <div class="panel-header">
+                            <div>
+                                <h3 class="panel-title">Employee Report Status</h3>
+                                <div class="panel-subtitle">Showing <?php echo count($displayRows); ?> document row(s) based on selected filters</div>
+                            </div>
+                        </div>
                     <div class="small-muted">
                         <?php if ($currentRole === 'admin'): ?>
                             Admin view: all project employees with their manager and TL.
@@ -952,13 +2021,16 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                                         <?php if ($row['is_completed']): ?>
                                             <div class="task-actions">
                                                 
+                                                <a class="action-btn view-btn" href="<?php echo e($row['open_url']); ?>" title="Open">
+                                                    <i class="bi bi-box-arrow-up-right"></i>
+                                                </a>
                                                 <?php if (!empty($row['print_url'])): ?>
-                                                    <a class="btn-action" href="<?php echo e($row['print_url']); ?>" target="_blank" rel="noopener noreferrer" title="Print">
+                                                    <a class="action-btn view-btn" href="<?php echo e($row['print_url']); ?>" target="_blank" rel="noopener noreferrer" title="Print">
                                                         <i class="bi bi-printer"></i>
                                                     </a>
                                                 <?php endif; ?>
                                                 <?php if (!empty($row['download_url'])): ?>
-                                                    <a class="btn-action" href="<?php echo e($row['download_url']); ?>" rel="noopener noreferrer" title="Download">
+                                                    <a class="action-btn view-btn" href="<?php echo e($row['download_url']); ?>" rel="noopener noreferrer" title="Download">
                                                         <i class="bi bi-download"></i>
                                                     </a>
                                                 <?php endif; ?>
@@ -966,19 +2038,61 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                                         <?php endif; ?>
 
                                         <div class="remark-box">
-                                            <form method="post">
-                                                <input type="hidden" name="save_remark" value="1">
-                                                <input type="hidden" name="report_date" value="<?php echo e($todayYmd); ?>">
-                                                <input type="hidden" name="employee_id" value="<?php echo (int)$row['employee_id']; ?>">
-                                                <input type="hidden" name="site_id" value="<?php echo (int)$row['site_id']; ?>">
-                                                <input type="hidden" name="report_key" value="<?php echo e($row['report_key']); ?>">
+<?php if (!empty($row['remark'])): ?>
+                                                <div class="remark-preview"><?php echo e($row['remark']); ?></div>
+                                            <?php else: ?>
+                                                <div class="remark-preview empty">No remark sent yet.</div>
+                                            <?php endif; ?>
 
-                                                <label class="small-muted mb-1">Remark</label>
-                                                <textarea name="remark" class="form-control remark-textarea" rows="3" placeholder="Enter remark..."><?php echo e($row['remark']); ?></textarea>
-                                                <button type="submit" class="btn-action primary mt-2" title="Save Remark">
-                                                    <i class="bi bi-save"></i>
-                                                </button>
-                                            </form>
+                                            <div class="remark-buttons">
+                                                <?php if ($currentRole === 'tl' || $currentRole === 'manager' || $currentRole === 'admin'): ?>
+                                                    <button type="button" class="remark-btn open-remark-modal" data-bs-toggle="modal" data-bs-target="#remarkModal"
+                                                        data-recipient-id="<?php echo (int)$row['employee_id']; ?>"
+                                                        data-recipient-role="pe"
+                                                        data-recipient-label="Project Engineer"
+                                                        data-employee-id="<?php echo (int)$row['employee_id']; ?>"
+                                                        data-site-id="<?php echo (int)$row['site_id']; ?>"
+                                                        data-report-key="<?php echo e($row['report_key']); ?>"
+                                                        data-report-date="<?php echo e($todayYmd); ?>"
+                                                        data-employee-name="<?php echo e($row['employee_name']); ?>"
+                                                        data-project-name="<?php echo e($row['project_name']); ?>"
+                                                        data-report-label="<?php echo e($row['report_label']); ?>">
+                                                        <i class="bi bi-chat-left-text"></i> RPE
+                                                    </button>
+                                                <?php endif; ?>
+
+                                                <?php if (($currentRole === 'manager' || $currentRole === 'admin') && !empty($row['tl_id'])): ?>
+                                                    <button type="button" class="remark-btn rtl open-remark-modal" data-bs-toggle="modal" data-bs-target="#remarkModal"
+                                                        data-recipient-id="<?php echo (int)$row['tl_id']; ?>"
+                                                        data-recipient-role="tl"
+                                                        data-recipient-label="Team Lead"
+                                                        data-employee-id="<?php echo (int)$row['employee_id']; ?>"
+                                                        data-site-id="<?php echo (int)$row['site_id']; ?>"
+                                                        data-report-key="<?php echo e($row['report_key']); ?>"
+                                                        data-report-date="<?php echo e($todayYmd); ?>"
+                                                        data-employee-name="<?php echo e($row['employee_name']); ?>"
+                                                        data-project-name="<?php echo e($row['project_name']); ?>"
+                                                        data-report-label="<?php echo e($row['report_label']); ?>">
+                                                        <i class="bi bi-chat-left-text"></i> RTL
+                                                    </button>
+                                                <?php endif; ?>
+
+                                                <?php if ($currentRole === 'admin' && !empty($row['manager_id'])): ?>
+                                                    <button type="button" class="remark-btn rm open-remark-modal" data-bs-toggle="modal" data-bs-target="#remarkModal"
+                                                        data-recipient-id="<?php echo (int)$row['manager_id']; ?>"
+                                                        data-recipient-role="manager"
+                                                        data-recipient-label="Manager"
+                                                        data-employee-id="<?php echo (int)$row['employee_id']; ?>"
+                                                        data-site-id="<?php echo (int)$row['site_id']; ?>"
+                                                        data-report-key="<?php echo e($row['report_key']); ?>"
+                                                        data-report-date="<?php echo e($todayYmd); ?>"
+                                                        data-employee-name="<?php echo e($row['employee_name']); ?>"
+                                                        data-project-name="<?php echo e($row['project_name']); ?>"
+                                                        data-report-label="<?php echo e($row['report_label']); ?>">
+                                                        <i class="bi bi-chat-left-text"></i> RM
+                                                    </button>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
@@ -988,7 +2102,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                         <!-- Desktop Table -->
                         <div class="d-none d-md-block">
                             <div class="table-responsive">
-                                <table class="table align-middle mb-0">
+                                <table class="table compact-table align-middle">
                                     <thead>
                                         <tr>
                                             <th style="width:60px;">#</th>
@@ -1010,8 +2124,8 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                                     <tbody>
                                         <?php $i = 1; foreach ($displayRows as $row): ?>
                                             <tr>
-                                                <td style="font-weight:1000;"><?php echo $i++; ?></td>
-                                                <td>
+                                                <td data-label="#" style="font-weight:1000;"><?php echo $i++; ?></td>
+                                                <td data-label="Employee">
                                                     <div style="font-weight:1000; color:#111827;"><?php echo e($row['employee_name']); ?></div>
                                                     <div class="small-muted">
                                                         <?php echo e($row['employee_designation'] ?: 'Employee'); ?>
@@ -1020,29 +2134,35 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                                                         <?php endif; ?>
                                                     </div>
                                                 </td>
-                                                <td>
-                                                    <div style="font-weight:1000;"><?php echo e($row['project_name']); ?></div>
-                                                    <div class="small-muted"><?php echo e($row['project_location']); ?></div>
+                                                <td data-label="Project">
+                                                    <div class="table-primary-text"><?php echo e($row['project_name']); ?></div>
+                                                    <div class="table-secondary-text">
+                                                        <i class="bi bi-geo-alt"></i>
+                                                        <?php echo e($row['project_location']); ?>
+                                                    </div>
                                                 </td>
-                                                <td style="font-weight:1000;">
-                                                    <i class="bi <?php echo e($row['report_icon']); ?> me-1"></i> <?php echo e($row['report_label']); ?>
+                                                <td data-label="Report">
+                                                    <div class="table-title-cell">
+                                                        <div class="table-icon"><i class="bi <?php echo e($row['report_icon']); ?>"></i></div>
+                                                        <div class="table-primary-text"><?php echo e($row['report_label']); ?></div>
+                                                    </div>
                                                 </td>
 
                                                 <?php if ($currentRole === 'admin'): ?>
-                                                    <td><?php echo e($row['manager_name'] ?: '—'); ?></td>
-                                                    <td><?php echo e($row['tl_name'] ?: '—'); ?></td>
+                                                    <td data-label="Manager"><?php echo e($row['manager_name'] ?: '—'); ?></td>
+                                                    <td data-label="TL"><?php echo e($row['tl_name'] ?: '—'); ?></td>
                                                 <?php elseif ($currentRole === 'manager'): ?>
-                                                    <td><?php echo e($row['tl_name'] ?: '—'); ?></td>
+                                                    <td data-label="TL"><?php echo e($row['tl_name'] ?: '—'); ?></td>
                                                 <?php endif; ?>
 
-                                                <td>
+                                                <td data-label="Status">
                                                     <?php if ($row['is_completed']): ?>
                                                         <span class="status-badge status-green"><i class="bi bi-check2-circle"></i> Completed</span>
                                                     <?php else: ?>
                                                         <span class="status-badge status-yellow"><i class="bi bi-hourglass-split"></i> Incomplete</span>
                                                     <?php endif; ?>
                                                 </td>
-                                                <td>
+                                                <td data-label="Doc / Time">
                                                     <?php if ($row['is_completed']): ?>
                                                         <div style="font-weight:1000;"><?php echo e($row['doc_no']); ?></div>
                                                         <div class="small-muted"><?php echo e(fmtTime($row['created_at'])); ?></div>
@@ -1050,30 +2170,77 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                                                         <span class="small-muted">—</span>
                                                     <?php endif; ?>
                                                 </td>
-                                                <td>
-                                                    <form method="post" class="desk-remark-form">
-                                                        <input type="hidden" name="save_remark" value="1">
-                                                        <input type="hidden" name="report_date" value="<?php echo e($todayYmd); ?>">
-                                                        <input type="hidden" name="employee_id" value="<?php echo (int)$row['employee_id']; ?>">
-                                                        <input type="hidden" name="site_id" value="<?php echo (int)$row['site_id']; ?>">
-                                                        <input type="hidden" name="report_key" value="<?php echo e($row['report_key']); ?>">
-                                                        <textarea name="remark" class="form-control remark-textarea mb-2" rows="2" placeholder="Enter remark..."><?php echo e($row['remark']); ?></textarea>
-                                                        <button type="submit" class="btn-action primary" title="Save">
-                                                            <i class="bi bi-save"></i>
-                                                        </button>
-                                                    </form>
+                                                <td data-label="Remark" class="remark-column">
+                                                    <?php if (!empty($row['remark'])): ?>
+                                                        <div class="remark-preview"><?php echo e($row['remark']); ?></div>
+                                                    <?php else: ?>
+                                                        <div class="remark-preview empty">No remark sent yet.</div>
+                                                    <?php endif; ?>
+
+                                                    <div class="remark-buttons">
+                                                        <?php if ($currentRole === 'tl' || $currentRole === 'manager' || $currentRole === 'admin'): ?>
+                                                            <button type="button" class="remark-btn open-remark-modal" data-bs-toggle="modal" data-bs-target="#remarkModal"
+                                                                data-recipient-id="<?php echo (int)$row['employee_id']; ?>"
+                                                                data-recipient-role="pe"
+                                                                data-recipient-label="Project Engineer"
+                                                                data-employee-id="<?php echo (int)$row['employee_id']; ?>"
+                                                                data-site-id="<?php echo (int)$row['site_id']; ?>"
+                                                                data-report-key="<?php echo e($row['report_key']); ?>"
+                                                                data-report-date="<?php echo e($todayYmd); ?>"
+                                                                data-employee-name="<?php echo e($row['employee_name']); ?>"
+                                                                data-project-name="<?php echo e($row['project_name']); ?>"
+                                                                data-report-label="<?php echo e($row['report_label']); ?>">
+                                                                <i class="bi bi-chat-left-text"></i> RPE
+                                                            </button>
+                                                        <?php endif; ?>
+
+                                                        <?php if (($currentRole === 'manager' || $currentRole === 'admin') && !empty($row['tl_id'])): ?>
+                                                            <button type="button" class="remark-btn rtl open-remark-modal" data-bs-toggle="modal" data-bs-target="#remarkModal"
+                                                                data-recipient-id="<?php echo (int)$row['tl_id']; ?>"
+                                                                data-recipient-role="tl"
+                                                                data-recipient-label="Team Lead"
+                                                                data-employee-id="<?php echo (int)$row['employee_id']; ?>"
+                                                                data-site-id="<?php echo (int)$row['site_id']; ?>"
+                                                                data-report-key="<?php echo e($row['report_key']); ?>"
+                                                                data-report-date="<?php echo e($todayYmd); ?>"
+                                                                data-employee-name="<?php echo e($row['employee_name']); ?>"
+                                                                data-project-name="<?php echo e($row['project_name']); ?>"
+                                                                data-report-label="<?php echo e($row['report_label']); ?>">
+                                                                <i class="bi bi-chat-left-text"></i> RTL
+                                                            </button>
+                                                        <?php endif; ?>
+
+                                                        <?php if ($currentRole === 'admin' && !empty($row['manager_id'])): ?>
+                                                            <button type="button" class="remark-btn rm open-remark-modal" data-bs-toggle="modal" data-bs-target="#remarkModal"
+                                                                data-recipient-id="<?php echo (int)$row['manager_id']; ?>"
+                                                                data-recipient-role="manager"
+                                                                data-recipient-label="Manager"
+                                                                data-employee-id="<?php echo (int)$row['employee_id']; ?>"
+                                                                data-site-id="<?php echo (int)$row['site_id']; ?>"
+                                                                data-report-key="<?php echo e($row['report_key']); ?>"
+                                                                data-report-date="<?php echo e($todayYmd); ?>"
+                                                                data-employee-name="<?php echo e($row['employee_name']); ?>"
+                                                                data-project-name="<?php echo e($row['project_name']); ?>"
+                                                                data-report-label="<?php echo e($row['report_label']); ?>">
+                                                                <i class="bi bi-chat-left-text"></i> RM
+                                                            </button>
+                                                        <?php endif; ?>
+                                                    </div>
                                                 </td>
-                                                <td class="text-end">
+                                                <td data-label="Actions">
                                                     <?php if ($row['is_completed']): ?>
                                                         <div class="d-flex justify-content-end gap-2 flex-wrap">
                                                             
+                                                            <a class="action-btn view-btn" href="<?php echo e($row['open_url']); ?>" title="Open">
+                                                                <i class="bi bi-box-arrow-up-right"></i>
+                                                            </a>
                                                             <?php if (!empty($row['print_url'])): ?>
-                                                                <a class="btn-action" href="<?php echo e($row['print_url']); ?>" target="_blank" rel="noopener noreferrer" title="Print">
+                                                                <a class="action-btn view-btn" href="<?php echo e($row['print_url']); ?>" target="_blank" rel="noopener noreferrer" title="Print">
                                                                     <i class="bi bi-printer"></i>
                                                                 </a>
                                                             <?php endif; ?>
                                                             <?php if (!empty($row['download_url'])): ?>
-                                                                <a class="btn-action" href="<?php echo e($row['download_url']); ?>" rel="noopener noreferrer" title="Download">
+                                                                <a class="action-btn view-btn" href="<?php echo e($row['download_url']); ?>" rel="noopener noreferrer" title="Download">
                                                                     <i class="bi bi-download"></i>
                                                                 </a>
                                                             <?php endif; ?>
@@ -1103,15 +2270,109 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
     </main>
 </div>
 
+<!-- Remark Modal -->
+<div class="modal fade" id="remarkModal" tabindex="-1" aria-labelledby="remarkModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" id="remarkModalForm">
+                <input type="hidden" name="save_remark" value="1">
+                <input type="hidden" name="report_date" id="modal_report_date">
+                <input type="hidden" name="employee_id" id="modal_employee_id">
+                <input type="hidden" name="site_id" id="modal_site_id">
+                <input type="hidden" name="report_key" id="modal_report_key">
+                <input type="hidden" name="recipient_id" id="modal_recipient_id">
+                <input type="hidden" name="recipient_role" id="modal_recipient_role">
+
+                <div class="modal-header">
+                    <h5 class="modal-title" id="remarkModalLabel">
+                        <i class="bi bi-chat-left-text me-2"></i>
+                        Send Remark
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="modal-info">
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="label">To</div>
+                                <div class="value" id="modal_recipient_label">—</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="label">Employee</div>
+                                <div class="value" id="modal_employee_name">—</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="label">Project</div>
+                                <div class="value" id="modal_project_name">—</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="label">Document</div>
+                                <div class="value" id="modal_report_label">—</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <label class="form-label">Remark</label>
+                    <textarea
+                        name="remark"
+                        id="modal_remark"
+                        class="form-control remark-textarea"
+                        rows="5"
+                        placeholder="Enter remark and click Send..."
+                        required
+                    ></textarea>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="secondary-btn" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i>
+                        Cancel
+                    </button>
+                    <button type="submit" class="primary-btn">
+                        <i class="bi bi-send"></i>
+                        Send Remark
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="assets/js/sidebar-toggle.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const modal = document.getElementById('remarkModal');
+    if (!modal) return;
+
+    modal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        if (!button) return;
+
+        const dataset = button.dataset;
+
+        document.getElementById('modal_report_date').value = dataset.reportDate || '';
+        document.getElementById('modal_employee_id').value = dataset.employeeId || '';
+        document.getElementById('modal_site_id').value = dataset.siteId || '';
+        document.getElementById('modal_report_key').value = dataset.reportKey || '';
+        document.getElementById('modal_recipient_id').value = dataset.recipientId || '';
+        document.getElementById('modal_recipient_role').value = dataset.recipientRole || '';
+
+        document.getElementById('modal_recipient_label').textContent = dataset.recipientLabel || '—';
+        document.getElementById('modal_employee_name').textContent = dataset.employeeName || '—';
+        document.getElementById('modal_project_name').textContent = dataset.projectName || '—';
+        document.getElementById('modal_report_label').textContent = dataset.reportLabel || '—';
+
+        const textarea = document.getElementById('modal_remark');
+        textarea.value = '';
+        setTimeout(function () {
+            textarea.focus();
+        }, 250);
+    });
+});
+</script>
+
 </body>
 </html>
 
-<?php
-try {
-    if (isset($conn) && $conn instanceof mysqli) {
-        $conn->close();
-    }
-} catch (Throwable $e) {}
-?>
