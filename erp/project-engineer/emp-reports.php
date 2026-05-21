@@ -704,874 +704,1044 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
 ?>
 <!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Time Management Pending Documents - TEK-C</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Time Management Pending Documents - TEK-C</title>
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
 
-  <link href="assets/css/layout-styles.css" rel="stylesheet" />
-  <link href="assets/css/topbar.css" rel="stylesheet" />
-  <link href="assets/css/footer.css" rel="stylesheet" />
+    <link href="assets/css/layout-styles.css" rel="stylesheet" />
+    <link href="assets/css/topbar.css" rel="stylesheet" />
+    <link href="assets/css/footer.css" rel="stylesheet" />
 
-  <style>
-    :root{
-      --page-bg:#f5f7fb;
-      --card-bg:#ffffff;
-      --border:#e5e7eb;
-      --text:#111827;
-      --muted:#6b7280;
-      --soft:#f8fafc;
-      --shadow:0 10px 26px rgba(15,23,42,.055);
-      --radius:15px;
-      --blue:#2f80ed;
-      --green:#27ae60;
-      --orange:#f2994a;
-      --red:#eb5757;
-      --purple:#7c3aed;
+    <style>
+    :root {
+        --page-bg: #f5f7fb;
+        --card-bg: #ffffff;
+        --border: #e5e7eb;
+        --text: #111827;
+        --muted: #6b7280;
+        --soft: #f8fafc;
+        --shadow: 0 10px 26px rgba(15, 23, 42, .055);
+        --radius: 15px;
+        --blue: #2f80ed;
+        --green: #27ae60;
+        --orange: #f2994a;
+        --red: #eb5757;
+        --purple: #7c3aed;
     }
 
-    body{ background:var(--page-bg); }
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:16px; }
-    .projects-wrapper{ width:100%; }
-
-    .page-heading{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:12px;
-      margin-bottom:14px;
+    body {
+        background: var(--page-bg);
     }
 
-    .page-heading h1{
-      font-size:19px;
-      font-weight:950;
-      color:var(--text);
-      margin:0;
-      display:flex;
-      align-items:center;
-      gap:8px;
+    .content-scroll {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 16px;
     }
 
-    .page-heading p{
-      margin:3px 0 0;
-      color:var(--muted);
-      font-size:12px;
-      font-weight:650;
+    .projects-wrapper {
+        width: 100%;
     }
 
-    .panel,.filter-card{
-      background:var(--card-bg);
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:13px;
-      margin-bottom:14px;
+    .page-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
     }
 
-    .panel-header{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      margin-bottom:12px;
+    .page-heading h1 {
+        font-size: 19px;
+        font-weight: 950;
+        color: var(--text);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
-    .panel-title{
-      font-weight:950;
-      font-size:14px;
-      color:var(--text);
-      margin:0;
-      display:flex;
-      align-items:center;
-      gap:8px;
+    .page-heading p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
     }
 
-    .panel-title i{ color:var(--blue); font-size:16px; }
-    .panel-subtitle{ color:#64748b; font-size:11px; font-weight:700; margin-top:2px; }
-
-    .stat-card{
-      background:#fff;
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:12px 13px;
-      min-height:78px;
-      display:flex;
-      align-items:center;
-      gap:11px;
-      transition:.15s ease;
+    .panel,
+    .filter-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 13px;
+        margin-bottom: 14px;
     }
 
-    .stat-card:hover{ transform:translateY(-1px); box-shadow:0 14px 32px rgba(15,23,42,.09); }
-
-    .stat-ic{
-      width:38px;
-      height:38px;
-      border-radius:12px;
-      display:grid;
-      place-items:center;
-      color:#fff;
-      font-size:17px;
-      flex:0 0 auto;
+    .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
     }
 
-    .stat-ic.blue{ background:var(--blue); }
-    .stat-ic.green{ background:var(--green); }
-    .stat-ic.yellow{ background:var(--orange); }
-    .stat-ic.red{ background:var(--red); }
-
-    .stat-label{
-      color:#64748b;
-      font-weight:850;
-      font-size:10.5px;
-      text-transform:uppercase;
+    .panel-title {
+        font-weight: 950;
+        font-size: 14px;
+        color: var(--text);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
-    .stat-value{
-      font-size:24px;
-      font-weight:950;
-      line-height:1;
-      color:#111827;
-      margin-top:2px;
+    .panel-title i {
+        color: var(--blue);
+        font-size: 16px;
     }
 
-    .small-muted{
-      color:#64748b;
-      font-weight:750;
-      font-size:11px;
+    .panel-subtitle {
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 2px;
     }
 
-    .badge-pill{
-      border-radius:999px;
-      padding:6px 9px;
-      font-weight:900;
-      font-size:11px;
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      border:1px solid var(--border);
-      background:#fff;
-      color:#111827;
-      text-decoration:none;
-      white-space:nowrap;
+    .stat-card {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 12px 13px;
+        min-height: 78px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        transition: .15s ease;
     }
 
-    .form-label{
-      font-size:11px;
-      font-weight:900;
-      color:#475569;
-      text-transform:uppercase;
-      margin-bottom:6px;
+    .stat-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 32px rgba(15, 23, 42, .09);
     }
 
-    .form-control,.form-select{
-      min-height:38px;
-      border:1px solid var(--border);
-      border-radius:11px;
-      font-size:12px;
-      font-weight:800;
-      color:#111827;
-      padding:8px 11px;
-      background:#fff;
+    .stat-ic {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 17px;
+        flex: 0 0 auto;
     }
 
-    .form-control:focus,.form-select:focus{
-      border-color:#bfdbfe;
-      box-shadow:0 0 0 3px rgba(59,130,246,.10);
+    .stat-ic.blue {
+        background: var(--blue);
     }
 
-    .primary-btn,.secondary-btn,.btn-action{
-      min-height:36px;
-      padding:0 14px;
-      border-radius:11px;
-      font-size:12px;
-      font-weight:900;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:7px;
-      text-decoration:none;
-      white-space:nowrap;
-      line-height:1;
-      border:0;
+    .stat-ic.green {
+        background: var(--green);
     }
 
-    .primary-btn{
-      background:#111827;
-      color:#fff;
+    .stat-ic.yellow {
+        background: var(--orange);
     }
 
-    .primary-btn:hover{ background:#020617; color:#fff; }
-
-    .secondary-btn,.btn-action{
-      border:1px solid var(--border);
-      background:#fff;
-      color:#334155;
+    .stat-ic.red {
+        background: var(--red);
     }
 
-    .secondary-btn:hover,.btn-action:hover{
-      border-color:#cbd5e1;
-      background:#f8fafc;
-      color:#111827;
+    .stat-label {
+        color: #64748b;
+        font-weight: 850;
+        font-size: 10.5px;
+        text-transform: uppercase;
     }
 
-    .btn-action{
-      min-height:31px;
-      min-width:31px;
-      width:31px;
-      padding:0;
-      border-radius:10px;
+    .stat-value {
+        font-size: 24px;
+        font-weight: 950;
+        line-height: 1;
+        color: #111827;
+        margin-top: 2px;
     }
 
-    .btn-action.primary{
-      background:#111827;
-      color:#fff;
-      border-color:#111827;
+    .small-muted {
+        color: #64748b;
+        font-weight: 750;
+        font-size: 11px;
     }
 
-    .btn-action.primary:hover{
-      background:#020617;
-      color:#fff;
-      border-color:#020617;
+    .badge-pill {
+        border-radius: 999px;
+        padding: 6px 9px;
+        font-weight: 900;
+        font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--border);
+        background: #fff;
+        color: #111827;
+        text-decoration: none;
+        white-space: nowrap;
     }
 
-    .status-badge{
-      border-radius:999px;
-      padding:5px 8px;
-      font-weight:900;
-      font-size:10px;
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      border:1px solid transparent;
-      white-space:nowrap;
-      text-transform:uppercase;
+    .form-label {
+        font-size: 11px;
+        font-weight: 900;
+        color: #475569;
+        text-transform: uppercase;
+        margin-bottom: 6px;
     }
 
-    .status-green{ color:#15803d; background:#dcfce7; border-color:#bbf7d0; }
-    .status-yellow{ color:#b45309; background:#ffedd5; border-color:#fed7aa; }
-
-    .compact-table-wrap{
-      width:100%;
-      border:1px solid var(--border);
-      border-radius:13px;
-      overflow:hidden;
-      background:#fff;
+    .form-control,
+    .form-select {
+        min-height: 38px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 800;
+        color: #111827;
+        padding: 8px 11px;
+        background: #fff;
     }
 
-    .compact-table{ width:100%; margin:0; table-layout:auto; }
-
-    .compact-table thead th{
-      background:var(--soft);
-      color:#64748b;
-      font-size:10px;
-      text-transform:uppercase;
-      font-weight:900;
-      border-bottom:1px solid var(--border)!important;
-      padding:8px 9px;
-      white-space:nowrap;
+    .form-control:focus,
+    .form-select:focus {
+        border-color: #bfdbfe;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
     }
 
-    .compact-table tbody td{
-      padding:8px 9px;
-      vertical-align:middle;
-      border-color:#eef2f7;
-      color:#334155;
-      font-weight:700;
-      font-size:11.5px;
+    .primary-btn,
+    .secondary-btn,
+    .btn-action {
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        text-decoration: none;
+        white-space: nowrap;
+        line-height: 1;
+        border: 0;
     }
 
-    .compact-table tbody tr:hover{ background:#fbfdff; }
-
-    .task-card{
-      border:1px solid var(--border);
-      border-radius:14px;
-      background:#fff;
-      box-shadow:var(--shadow);
-      padding:12px;
+    .primary-btn {
+        background: #111827;
+        color: #fff;
     }
 
-    .task-top{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:10px;
+    .primary-btn:hover {
+        background: #020617;
+        color: #fff;
     }
 
-    .task-title{
-      font-weight:950;
-      color:#111827;
-      font-size:13px;
-      line-height:1.25;
-      margin:0;
+    .secondary-btn,
+    .btn-action {
+        border: 1px solid var(--border);
+        background: #fff;
+        color: #334155;
     }
 
-    .task-sub{
-      color:#64748b;
-      font-weight:750;
-      font-size:11px;
-      margin-top:5px;
+    .secondary-btn:hover,
+    .btn-action:hover {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+        color: #111827;
     }
 
-    .task-kv{ margin-top:10px; display:grid; gap:7px; }
-    .task-row{ display:flex; gap:10px; align-items:flex-start; }
-    .task-key{ flex:0 0 90px; color:#64748b; font-weight:950; font-size:11px; text-transform:uppercase; }
-    .task-val{ flex:1 1 auto; font-weight:850; color:#111827; font-size:12px; line-height:1.3; }
-
-    .task-actions{
-      margin-top:12px;
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
+    .btn-action {
+        min-height: 31px;
+        min-width: 31px;
+        width: 31px;
+        padding: 0;
+        border-radius: 10px;
     }
 
-    .remark-box{
-      margin-top:12px;
-      padding:10px 12px;
-      border-radius:12px;
-      border:1px dashed #f59e0b;
-      background:#fffaf0;
+    .btn-action.primary {
+        background: #111827;
+        color: #fff;
+        border-color: #111827;
     }
 
-    .remark-title{
-      font-size:10px;
-      font-weight:950;
-      color:#b45309;
-      text-transform:uppercase;
-      margin-bottom:4px;
-      letter-spacing:.3px;
+    .btn-action.primary:hover {
+        background: #020617;
+        color: #fff;
+        border-color: #020617;
     }
 
-    .remark-text{
-      font-size:12px;
-      font-weight:800;
-      color:#111827;
-      line-height:1.35;
-      white-space:pre-wrap;
+    .status-badge {
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-weight: 900;
+        font-size: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        text-transform: uppercase;
     }
 
-    .empty-state{
-      text-align:center;
-      padding:30px 12px;
-      color:#64748b;
-      font-size:12px;
-      font-weight:900;
+    .status-green {
+        color: #15803d;
+        background: #dcfce7;
+        border-color: #bbf7d0;
     }
 
-    .empty-state i{
-      display:block;
-      font-size:34px;
-      opacity:.45;
-      margin-bottom:8px;
+    .status-yellow {
+        color: #b45309;
+        background: #ffedd5;
+        border-color: #fed7aa;
     }
 
-    @media (max-width:991.98px){
-      .main{ margin-left:0!important; width:100%!important; max-width:100%!important; }
-      .sidebar{ position:fixed!important; transform:translateX(-100%); z-index:1040!important; }
-      .sidebar.open,.sidebar.active,.sidebar.show{ transform:translateX(0)!important; }
+    .compact-table-wrap {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        overflow: hidden;
+        background: #fff;
     }
 
-    @media (max-width:1199px){
-      .compact-table thead{ display:none; }
-      .compact-table,.compact-table tbody,.compact-table tr,.compact-table td{ display:block; width:100%; }
-      .compact-table tbody tr{ border-bottom:1px solid var(--border); padding:10px; }
-      .compact-table tbody td{
-        border:0;
-        display:flex;
-        justify-content:space-between;
-        gap:12px;
-      }
-      .compact-table tbody td::before{
-        content:attr(data-label);
-        font-size:10px;
-        font-weight:900;
-        color:#64748b;
-        text-transform:uppercase;
-        flex:0 0 105px;
-      }
-      .compact-table tbody td:first-child{ display:block; }
-      .compact-table tbody td:first-child::before{ display:none; }
+    .compact-table {
+        width: 100%;
+        margin: 0;
+        table-layout: auto;
     }
 
-    @media (max-width:768px){
-      .content-scroll{ padding:12px 10px!important; }
-      .container-fluid.projects-wrapper{ padding-left:0!important; padding-right:0!important; }
-      .page-heading{ align-items:flex-start; flex-direction:column; }
-      .panel,.filter-card{ padding:12px; }
-      .primary-btn,.secondary-btn{ width:100%; }
+    .compact-table thead th {
+        background: var(--soft);
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 900;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 8px 9px;
+        white-space: nowrap;
     }
-  </style>
+
+    .compact-table tbody td {
+        padding: 8px 9px;
+        vertical-align: middle;
+        border-color: #eef2f7;
+        color: #334155;
+        font-weight: 700;
+        font-size: 11.5px;
+    }
+
+    .compact-table tbody tr:hover {
+        background: #fbfdff;
+    }
+
+    .task-card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: var(--shadow);
+        padding: 12px;
+    }
+
+    .task-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .task-title {
+        font-weight: 950;
+        color: #111827;
+        font-size: 13px;
+        line-height: 1.25;
+        margin: 0;
+    }
+
+    .task-sub {
+        color: #64748b;
+        font-weight: 750;
+        font-size: 11px;
+        margin-top: 5px;
+    }
+
+    .task-kv {
+        margin-top: 10px;
+        display: grid;
+        gap: 7px;
+    }
+
+    .task-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .task-key {
+        flex: 0 0 90px;
+        color: #64748b;
+        font-weight: 950;
+        font-size: 11px;
+        text-transform: uppercase;
+    }
+
+    .task-val {
+        flex: 1 1 auto;
+        font-weight: 850;
+        color: #111827;
+        font-size: 12px;
+        line-height: 1.3;
+    }
+
+    .task-actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .remark-box {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px dashed #f59e0b;
+        background: #fffaf0;
+    }
+
+    .remark-title {
+        font-size: 10px;
+        font-weight: 950;
+        color: #b45309;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+        letter-spacing: .3px;
+    }
+
+    .remark-text {
+        font-size: 12px;
+        font-weight: 800;
+        color: #111827;
+        line-height: 1.35;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        margin: 0;
+    }
+
+    .remark-box .remark-text {
+        white-space: pre-wrap;
+    }
+
+    .remark-cell {
+        width: 24%;
+        max-width: 360px;
+        min-width: 220px;
+        text-align: left;
+        vertical-align: middle !important;
+    }
+
+    .remark-cell .remark-text {
+        max-width: 100%;
+    }
+
+    .action-cell {
+        width: 150px;
+        min-width: 130px;
+        text-align: right;
+        vertical-align: middle !important;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 30px 12px;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .empty-state i {
+        display: block;
+        font-size: 34px;
+        opacity: .45;
+        margin-bottom: 8px;
+    }
+
+    @media (max-width:991.98px) {
+        .main {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        .sidebar {
+            position: fixed !important;
+            transform: translateX(-100%);
+            z-index: 1040 !important;
+        }
+
+        .sidebar.open,
+        .sidebar.active,
+        .sidebar.show {
+            transform: translateX(0) !important;
+        }
+    }
+
+    @media (max-width:1199px) {
+        .compact-table thead {
+            display: none;
+        }
+
+        .compact-table,
+        .compact-table tbody,
+        .compact-table tr,
+        .compact-table td {
+            display: block;
+            width: 100%;
+        }
+
+        .compact-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            padding: 10px;
+        }
+
+        .compact-table tbody td {
+            border: 0;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .compact-table tbody td::before {
+            content: attr(data-label);
+            font-size: 10px;
+            font-weight: 900;
+            color: #64748b;
+            text-transform: uppercase;
+            flex: 0 0 105px;
+        }
+
+        .compact-table tbody td:first-child {
+            display: block;
+        }
+
+        .compact-table tbody td:first-child::before {
+            display: none;
+        }
+
+        .remark-cell,
+        .action-cell {
+            width: 100%;
+            min-width: 0;
+            max-width: none;
+            text-align: left;
+        }
+
+        .remark-cell .remark-text {
+            text-align: right;
+            flex: 1 1 auto;
+        }
+    }
+
+    @media (max-width:768px) {
+        .content-scroll {
+            padding: 12px 10px !important;
+        }
+
+        .container-fluid.projects-wrapper {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        .page-heading {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .panel,
+        .filter-card {
+            padding: 12px;
+        }
+
+        .primary-btn,
+        .secondary-btn {
+            width: 100%;
+        }
+    }
+    </style>
 </head>
 
 <body>
-<div class="app">
+    <div class="app">
 
-  <?php include 'includes/sidebar.php'; ?>
+        <?php include 'includes/sidebar.php'; ?>
 
-  <main class="main" aria-label="Main">
+        <main class="main" aria-label="Main">
 
-    <?php include 'includes/topbar.php'; ?>
+            <?php include 'includes/topbar.php'; ?>
 
-    <div id="contentScroll" class="content-scroll">
-      <div class="container-fluid projects-wrapper px-0">
+            <div id="contentScroll" class="content-scroll">
+                <div class="container-fluid projects-wrapper px-0">
 
-        <div class="page-heading">
-          <div>
-            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
-              <h1><i class="bi bi-clock-history"></i> Time Management Documents</h1>
-              <span class="badge-pill">
-                <i class="bi bi-calendar-event"></i>
-                <?php echo e(date('d M Y', strtotime($targetYmd))); ?>
-              </span>
-            </div>
-            <p>
-              Submitted / not submitted document status for assigned projects using current DB tables.
-              <?php if ($filterSiteId > 0 && !empty($sites[0])): ?>
-                • Filtered Project: <b style="color:#111827;"><?php echo e($sites[0]['project_name']); ?></b>
-              <?php endif; ?>
-            </p>
-          </div>
-
-          <div class="d-flex gap-2 flex-wrap">
-            <span class="badge-pill">
-              <i class="bi bi-person"></i>
-              <?php echo e($employeeName); ?>
-            </span>
-
-            <span class="badge-pill">
-              <i class="bi bi-award"></i>
-              <?php echo e($empRow['designation'] ?? ($_SESSION['designation'] ?? '')); ?>
-            </span>
-
-            <a
-              class="secondary-btn"
-              href="emp-reports.php"
-              title="Reset Filters"
-            >
-              <i class="bi bi-arrow-counterclockwise"></i>
-              Reset
-            </a>
-          </div>
-        </div>
-
-        <!-- Stats -->
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic blue">
-                <i class="bi bi-building"></i>
-              </div>
-              <div>
-                <div class="stat-label">Total Projects</div>
-                <div class="stat-value"><?php echo (int)$totalProjects; ?></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic green">
-                <i class="bi bi-check2-circle"></i>
-              </div>
-              <div>
-                <div class="stat-label">Submitted</div>
-                <div class="stat-value"><?php echo (int)$allCompletedCount; ?></div>
-                <div class="small-muted">Time Management</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic yellow">
-                <i class="bi bi-hourglass-split"></i>
-              </div>
-              <div>
-                <div class="stat-label">Not Submitted</div>
-                <div class="stat-value"><?php echo (int)$allPendingCount; ?></div>
-                <div class="small-muted">Time Management</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
-              <div class="stat-ic red">
-                <i class="bi bi-clock"></i>
-              </div>
-              <div>
-                <div class="stat-label">Latest Submitted</div>
-                <div class="stat-value" style="font-size:22px;">
-                  <?php echo e($latestSubmitTime); ?>
-                </div>
-                <div class="small-muted">Selected date</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Filters -->
-        <div class="filter-card">
-          <form method="GET" class="row g-2 align-items-end">
-            <div class="col-12 col-md-3">
-              <label class="form-label">Project</label>
-              <select name="site_id" class="form-select">
-                <option value="0">All Projects</option>
-                <?php foreach ($sites as $siteOption): ?>
-                  <option value="<?php echo (int)$siteOption['id']; ?>" <?php echo $filterSiteId === (int)$siteOption['id'] ? 'selected' : ''; ?>>
-                    <?php echo e($siteOption['project_name']); ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-
-            <div class="col-12 col-md-3">
-              <label class="form-label">Document</label>
-              <select name="report" class="form-select">
-                <option value="all">All Documents</option>
-                <?php foreach ($reportTypes as $typeOption): ?>
-                  <option value="<?php echo e($typeOption['key']); ?>" <?php echo $filterReport === $typeOption['key'] ? 'selected' : ''; ?>>
-                    <?php echo e($typeOption['label']); ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-
-            <div class="col-12 col-md-2">
-              <label class="form-label">Status</label>
-              <select name="status" class="form-select">
-                <option value="pending" <?php echo $filterStatus === 'pending' ? 'selected' : ''; ?>>Not Submitted</option>
-                <option value="completed" <?php echo $filterStatus === 'completed' ? 'selected' : ''; ?>>Submitted</option>
-                <option value="all" <?php echo $filterStatus === 'all' ? 'selected' : ''; ?>>All</option>
-              </select>
-            </div>
-
-            <div class="col-12 col-md-2">
-              <label class="form-label">Date</label>
-              <input type="date" name="date" class="form-control" value="<?php echo e($targetYmd); ?>">
-            </div>
-
-            <div class="col-12 col-md-2 d-flex gap-2">
-              <button type="submit" class="primary-btn flex-fill">
-                <i class="bi bi-funnel"></i>
-                Filter
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <!-- Task List -->
-        <div class="panel">
-          <div style="font-weight:1000; font-size:14px; color:#111827;">
-            My Projects — Time Management
-          </div>
-
-          <div class="small-muted">
-            All Time Management documents are listed below based on the selected filters.
-          </div>
-
-          <hr style="border-color:#eef2f7;">
-
-          <?php if (empty($sites)): ?>
-
-            <div class="alert alert-warning mb-0" style="border-radius:16px; border:none; box-shadow:var(--shadow);">
-              <i class="bi bi-info-circle me-2"></i>
-              No projects assigned to you currently.
-            </div>
-
-          <?php else: ?>
-
-            <?php if (empty($taskRows)): ?>
-              <div class="empty-state">
-                <i class="bi bi-inbox"></i>
-                No documents found for selected filters.
-              </div>
-            <?php else: ?>
-
-            <!-- Mobile cards -->
-            <div class="d-block d-md-none">
-              <div class="d-grid gap-3">
-
-                <?php foreach ($taskRows as $row): ?>
-                  <div class="task-card">
-
-                    <div class="task-top">
-                      <div style="flex:1 1 auto;">
-                        <h3 class="task-title">
-                          <?php echo e($row['project_name']); ?>
-                        </h3>
-
-                        <div class="task-sub">
-                          <i class="bi bi-geo-alt"></i>
-                          <?php echo e($row['project_location']); ?>
-
-                          &nbsp;•&nbsp;
-
-                          <i class="bi bi-person-badge"></i>
-                          <?php echo e($row['client_name']); ?>
+                    <div class="page-heading">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                <h1><i class="bi bi-clock-history"></i> Time Management Documents</h1>
+                                <span class="badge-pill">
+                                    <i class="bi bi-calendar-event"></i>
+                                    <?php echo e(date('d M Y', strtotime($targetYmd))); ?>
+                                </span>
+                            </div>
+                            <p>
+                                Submitted / not submitted document status for assigned projects using current DB tables.
+                                <?php if ($filterSiteId > 0 && !empty($sites[0])): ?>
+                                • Filtered Project: <b
+                                    style="color:#111827;"><?php echo e($sites[0]['project_name']); ?></b>
+                                <?php endif; ?>
+                            </p>
                         </div>
-                      </div>
 
-                      <?php if ($row['is_done']): ?>
-                        <span class="status-badge status-green">
-                          <i class="bi bi-check2-circle"></i>
-                          Completed
-                        </span>
-                      <?php else: ?>
-                        <span class="status-badge status-yellow">
-                          <i class="bi bi-hourglass-split"></i>
-                          Pending
-                        </span>
-                      <?php endif; ?>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="badge-pill">
+                                <i class="bi bi-person"></i>
+                                <?php echo e($employeeName); ?>
+                            </span>
+
+                            <span class="badge-pill">
+                                <i class="bi bi-award"></i>
+                                <?php echo e($empRow['designation'] ?? ($_SESSION['designation'] ?? '')); ?>
+                            </span>
+
+                            <a class="secondary-btn" href="emp-reports.php" title="Reset Filters">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                                Reset
+                            </a>
+                        </div>
                     </div>
 
-                    <div class="task-kv">
-                      <div class="task-row">
-                        <div class="task-key">Task</div>
-                        <div class="task-val">
-                          <i class="bi <?php echo e($row['report_icon']); ?> me-1"></i>
-                          <?php echo e($row['report_label']); ?>
+                    <!-- Stats -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic blue">
+                                    <i class="bi bi-building"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">Total Projects</div>
+                                    <div class="stat-value"><?php echo (int)$totalProjects; ?></div>
+                                </div>
+                            </div>
                         </div>
-                      </div>
 
-                      <?php if ($row['is_done']): ?>
-                        <div class="task-row">
-                          <div class="task-key">Completed</div>
-                          <div class="task-val">
-                            No: <?php echo e($row['doc_no'] ?: '—'); ?>
-                          </div>
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic green">
+                                    <i class="bi bi-check2-circle"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">Submitted</div>
+                                    <div class="stat-value"><?php echo (int)$allCompletedCount; ?></div>
+                                    <div class="small-muted">Time Management</div>
+                                </div>
+                            </div>
                         </div>
-                      <?php else: ?>
-                        <div class="task-row">
-                          <div class="task-key">Status</div>
-                          <div class="task-val">Not submitted yet</div>
+
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic yellow">
+                                    <i class="bi bi-hourglass-split"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">Not Submitted</div>
+                                    <div class="stat-value"><?php echo (int)$allPendingCount; ?></div>
+                                    <div class="small-muted">Time Management</div>
+                                </div>
+                            </div>
                         </div>
-                      <?php endif; ?>
+
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic red">
+                                    <i class="bi bi-clock"></i>
+                                </div>
+                                <div>
+                                    <div class="stat-label">Latest Submitted</div>
+                                    <div class="stat-value" style="font-size:22px;">
+                                        <?php echo e($latestSubmitTime); ?>
+                                    </div>
+                                    <div class="small-muted">Selected date</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <?php if (trim((string)$row['remark']) !== ''): ?>
-                      <div class="remark-box">
-                        <div class="remark-title">
-                          <i class="bi bi-chat-left-text me-1"></i>
-                          Remark
+                    <!-- Filters -->
+                    <div class="filter-card">
+                        <form method="GET" class="row g-2 align-items-end">
+                            <div class="col-12 col-md-3">
+                                <label class="form-label">Project</label>
+                                <select name="site_id" class="form-select">
+                                    <option value="0">All Projects</option>
+                                    <?php foreach ($sites as $siteOption): ?>
+                                    <option value="<?php echo (int)$siteOption['id']; ?>"
+                                        <?php echo $filterSiteId === (int)$siteOption['id'] ? 'selected' : ''; ?>>
+                                        <?php echo e($siteOption['project_name']); ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-3">
+                                <label class="form-label">Document</label>
+                                <select name="report" class="form-select">
+                                    <option value="all">All Documents</option>
+                                    <?php foreach ($reportTypes as $typeOption): ?>
+                                    <option value="<?php echo e($typeOption['key']); ?>"
+                                        <?php echo $filterReport === $typeOption['key'] ? 'selected' : ''; ?>>
+                                        <?php echo e($typeOption['label']); ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-2">
+                                <label class="form-label">Status</label>
+                                <select name="status" class="form-select">
+                                    <option value="pending"
+                                        <?php echo $filterStatus === 'pending' ? 'selected' : ''; ?>>Not Submitted
+                                    </option>
+                                    <option value="completed"
+                                        <?php echo $filterStatus === 'completed' ? 'selected' : ''; ?>>Submitted
+                                    </option>
+                                    <option value="all" <?php echo $filterStatus === 'all' ? 'selected' : ''; ?>>All
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-2">
+                                <label class="form-label">Date</label>
+                                <input type="date" name="date" class="form-control"
+                                    value="<?php echo e($targetYmd); ?>">
+                            </div>
+
+                            <div class="col-12 col-md-2 d-flex gap-2">
+                                <button type="submit" class="primary-btn flex-fill">
+                                    <i class="bi bi-funnel"></i>
+                                    Filter
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Task List -->
+                    <div class="panel">
+                        <div style="font-weight:1000; font-size:14px; color:#111827;">
+                            My Projects — Time Management
                         </div>
-                        <div class="remark-text">
-                          <?php echo e($row['remark']); ?>
+
+                        <div class="small-muted">
+                            All Time Management documents are listed below based on the selected filters.
                         </div>
-                      </div>
-                    <?php endif; ?>
 
-                    <div class="task-actions">
-                      <?php if ($row['is_done']): ?>
+                        <hr style="border-color:#eef2f7;">
 
-                        <a class="btn-action" href="<?php echo e($row['open_url']); ?>" title="Open">
-                          <i class="bi bi-box-arrow-up-right"></i>
-                        </a>
+                        <?php if (empty($sites)): ?>
 
-                        <?php if ($row['print_url'] !== ''): ?>
-                          <a 
-                            class="btn-action" 
-                            href="<?php echo e($row['print_url']); ?>" 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            title="Print"
-                          >
-                            <i class="bi bi-printer"></i>
-                          </a>
+                        <div class="alert alert-warning mb-0"
+                            style="border-radius:16px; border:none; box-shadow:var(--shadow);">
+                            <i class="bi bi-info-circle me-2"></i>
+                            No projects assigned to you currently.
+                        </div>
 
-                          <a 
-                            class="btn-action" 
-                            href="<?php echo e($row['download_url']); ?>" 
-                            rel="noopener noreferrer" 
-                            title="Download"
-                          >
-                            <i class="bi bi-download"></i>
-                          </a>
+                        <?php else: ?>
 
-                          <a class="btn-action primary" href="<?php echo e($row['mail_url']); ?>" title="Send Mail">
-                            <i class="bi bi-envelope"></i>
-                          </a>
+                        <?php if (empty($taskRows)): ?>
+                        <div class="empty-state">
+                            <i class="bi bi-inbox"></i>
+                            No documents found for selected filters.
+                        </div>
+                        <?php else: ?>
+
+                        <!-- Mobile cards -->
+                        <div class="d-block d-md-none">
+                            <div class="d-grid gap-3">
+
+                                <?php foreach ($taskRows as $row): ?>
+                                <div class="task-card">
+
+                                    <div class="task-top">
+                                        <div style="flex:1 1 auto;">
+                                            <h3 class="task-title">
+                                                <?php echo e($row['project_name']); ?>
+                                            </h3>
+
+                                            <div class="task-sub">
+                                                <i class="bi bi-geo-alt"></i>
+                                                <?php echo e($row['project_location']); ?>
+
+                                                &nbsp;•&nbsp;
+
+                                                <i class="bi bi-person-badge"></i>
+                                                <?php echo e($row['client_name']); ?>
+                                            </div>
+                                        </div>
+
+                                        <?php if ($row['is_done']): ?>
+                                        <span class="status-badge status-green">
+                                            <i class="bi bi-check2-circle"></i>
+                                            Completed
+                                        </span>
+                                        <?php else: ?>
+                                        <span class="status-badge status-yellow">
+                                            <i class="bi bi-hourglass-split"></i>
+                                            Pending
+                                        </span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="task-kv">
+                                        <div class="task-row">
+                                            <div class="task-key">Task</div>
+                                            <div class="task-val">
+                                                <i class="bi <?php echo e($row['report_icon']); ?> me-1"></i>
+                                                <?php echo e($row['report_label']); ?>
+                                            </div>
+                                        </div>
+
+                                        <?php if ($row['is_done']): ?>
+                                        <div class="task-row">
+                                            <div class="task-key">Completed</div>
+                                            <div class="task-val">
+                                                No: <?php echo e($row['doc_no'] ?: '—'); ?>
+                                            </div>
+                                        </div>
+                                        <?php else: ?>
+                                        <div class="task-row">
+                                            <div class="task-key">Status</div>
+                                            <div class="task-val">Not submitted yet</div>
+                                        </div>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <?php if (trim((string)$row['remark']) !== ''): ?>
+                                    <div class="remark-box">
+                                        <div class="remark-title">
+                                            <i class="bi bi-chat-left-text me-1"></i>
+                                            Remark
+                                        </div>
+                                        <div class="remark-text">
+                                            <?php echo e($row['remark']); ?>
+                                        </div>
+                                    </div>
+                                    <?php endif; ?>
+
+                                    <div class="task-actions">
+                                        <?php if ($row['is_done']): ?>
+
+                                        <a class="btn-action" href="<?php echo e($row['open_url']); ?>" title="Open">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </a>
+
+                                        <?php if ($row['print_url'] !== ''): ?>
+                                        <a class="btn-action" href="<?php echo e($row['print_url']); ?>" target="_blank"
+                                            rel="noopener noreferrer" title="Print">
+                                            <i class="bi bi-printer"></i>
+                                        </a>
+
+                                        <a class="btn-action" href="<?php echo e($row['download_url']); ?>"
+                                            rel="noopener noreferrer" title="Download">
+                                            <i class="bi bi-download"></i>
+                                        </a>
+
+                                        <a class="btn-action primary" href="<?php echo e($row['mail_url']); ?>"
+                                            title="Send Mail">
+                                            <i class="bi bi-envelope"></i>
+                                        </a>
+                                        <?php endif; ?>
+
+                                        <?php else: ?>
+
+                                        <a class="btn-action primary" href="<?php echo e($row['submit_url']); ?>"
+                                            title="Submit Document">
+                                            <i class="bi bi-plus-circle"></i>
+                                        </a>
+
+                                        <a class="btn-action" href="<?php echo e($row['open_url']); ?>"
+                                            title="Open Page">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </a>
+
+                                        <?php endif; ?>
+                                    </div>
+
+                                </div>
+                                <?php endforeach; ?>
+
+                            </div>
+                        </div>
+
+                        <!-- Desktop table -->
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive">
+                                <table class="table compact-table align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:60px;">#</th>
+                                            <th>Project</th>
+                                            <th>Location</th>
+                                            <th>Client</th>
+                                            <th>Task</th>
+                                            <th>Status</th>
+                                            <th class="remark-cell">Remark</th>
+                                            <th class="action-cell">Action</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        <?php $i = 1; foreach ($taskRows as $row): ?>
+                                        <tr>
+                                            <td data-label="#" style="font-weight:1000;">
+                                                <?php echo $i++; ?>
+                                            </td>
+
+                                            <td data-label="Project" style="font-weight:1000; color:#111827;">
+                                                <?php echo e($row['project_name']); ?>
+                                            </td>
+
+                                            <td data-label="Location">
+                                                <?php echo e($row['project_location']); ?>
+                                            </td>
+
+                                            <td data-label="Client">
+                                                <?php echo e($row['client_name']); ?>
+
+                                                <?php if (!empty($row['client_email'])): ?>
+                                                <div class="small-muted">
+                                                    <?php echo e($row['client_email']); ?>
+                                                </div>
+                                                <?php endif; ?>
+                                            </td>
+
+                                            <td data-label="#" style="font-weight:1000;">
+                                                <i class="bi <?php echo e($row['report_icon']); ?> me-1"></i>
+                                                <?php echo e($row['report_label']); ?>
+                                            </td>
+
+                                            <td data-label="Status">
+                                                <?php if ($row['is_done']): ?>
+                                                <span class="status-badge status-green">
+                                                    <i class="bi bi-check2-circle"></i>
+                                                    Completed
+                                                </span>
+                                                <?php else: ?>
+                                                <span class="status-badge status-yellow">
+                                                    <i class="bi bi-hourglass-split"></i>
+                                                    Pending
+                                                </span>
+                                                <?php endif; ?>
+                                            </td>
+
+                                            <td data-label="Remark" class="remark-cell">
+                                                <?php if (trim((string)$row['remark']) !== ''): ?>
+                                                <div class="remark-text"><?php echo e(trim((string)$row['remark'])); ?>
+                                                </div>
+                                                <?php else: ?>
+                                                <span class="small-muted">No remark</span>
+                                                <?php endif; ?>
+                                            </td>
+
+                                            <td data-label="Action" class="action-cell">
+                                                <?php if ($row['is_done']): ?>
+
+                                                <div
+                                                    class="d-flex justify-content-end gap-2 flex-wrap align-items-center">
+                                                    <span class="small-muted align-self-center">
+                                                        Completed &nbsp; No:
+                                                        <b style="color:#111827;">
+                                                            <?php echo e($row['doc_no'] ?: ''); ?>
+                                                        </b>
+                                                    </span>
+
+                                                    <a class="btn-action" href="<?php echo e($row['open_url']); ?>"
+                                                        title="Open">
+                                                        <i class="bi bi-box-arrow-up-right"></i>
+                                                    </a>
+
+                                                    <?php if ($row['print_url'] !== ''): ?>
+                                                    <a class="btn-action" href="<?php echo e($row['print_url']); ?>"
+                                                        target="_blank" rel="noopener noreferrer" title="Print / View">
+                                                        <i class="bi bi-printer"></i>
+                                                    </a>
+                                                    <?php endif; ?>
+
+                                                    <?php if ($row['download_url'] !== ''): ?>
+                                                    <a class="btn-action" href="<?php echo e($row['download_url']); ?>"
+                                                        rel="noopener noreferrer" title="Download">
+                                                        <i class="bi bi-download"></i>
+                                                    </a>
+                                                    <?php endif; ?>
+
+                                                    <?php if ($row['mail_url'] !== ''): ?>
+                                                    <a class="btn-action primary"
+                                                        href="<?php echo e($row['mail_url']); ?>" title="Send Mail">
+                                                        <i class="bi bi-envelope"></i>
+                                                    </a>
+                                                    <?php endif; ?>
+                                                </div>
+
+                                                <?php else: ?>
+
+                                                <div class="d-flex justify-content-end gap-2 flex-wrap">
+                                                    <a class="btn-action primary"
+                                                        href="<?php echo e($row['submit_url']); ?>"
+                                                        title="Submit Document">
+                                                        <i class="bi bi-plus-circle"></i>
+                                                    </a>
+
+                                                    <a class="btn-action" href="<?php echo e($row['open_url']); ?>"
+                                                        title="Open">
+                                                        <i class="bi bi-box-arrow-up-right"></i>
+                                                    </a>
+                                                </div>
+
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="small-muted mt-2">
+                                Note: All Time Management documents are listed based on filters.
+                            </div>
+                        </div>
+
                         <?php endif; ?>
 
-                      <?php else: ?>
+                        <?php endif; ?>
 
-                        <a class="btn-action primary" href="<?php echo e($row['submit_url']); ?>" title="Submit Document">
-                          <i class="bi bi-plus-circle"></i>
-                        </a>
-
-                        <a class="btn-action" href="<?php echo e($row['open_url']); ?>" title="Open Page">
-                          <i class="bi bi-box-arrow-up-right"></i>
-                        </a>
-
-                      <?php endif; ?>
                     </div>
 
-                  </div>
-                <?php endforeach; ?>
-
-              </div>
+                </div>
             </div>
 
-            <!-- Desktop table -->
-            <div class="d-none d-md-block">
-              <div class="table-responsive">
-                <table class="table compact-table align-middle mb-0">
-                  <thead>
-                    <tr>
-                      <th style="width:60px;">#</th>
-                      <th>Project</th>
-                      <th>Location</th>
-                      <th>Client</th>
-                      <th>Task</th>
-                      <th>Status</th>
-                      <th>Remark</th>
-                      <th class="text-end" style="min-width:320px;">Action</th>
-                    </tr>
-                  </thead>
+            <?php include 'includes/footer.php'; ?>
 
-                  <tbody>
-                    <?php $i = 1; foreach ($taskRows as $row): ?>
-                      <tr>
-                        <td data-label="#" style="font-weight:1000;">
-                          <?php echo $i++; ?>
-                        </td>
-
-                        <td data-label="Project" style="font-weight:1000; color:#111827;">
-                          <?php echo e($row['project_name']); ?>
-                        </td>
-
-                        <td data-label="Location">
-                          <?php echo e($row['project_location']); ?>
-                        </td>
-
-                        <td data-label="Client">
-                          <?php echo e($row['client_name']); ?>
-
-                          <?php if (!empty($row['client_email'])): ?>
-                            <div class="small-muted">
-                              <?php echo e($row['client_email']); ?>
-                            </div>
-                          <?php endif; ?>
-                        </td>
-
-                        <td data-label="#" style="font-weight:1000;">
-                          <i class="bi <?php echo e($row['report_icon']); ?> me-1"></i>
-                          <?php echo e($row['report_label']); ?>
-                        </td>
-
-                        <td data-label="Status">
-                          <?php if ($row['is_done']): ?>
-                            <span class="status-badge status-green">
-                              <i class="bi bi-check2-circle"></i>
-                              Completed
-                            </span>
-                          <?php else: ?>
-                            <span class="status-badge status-yellow">
-                              <i class="bi bi-hourglass-split"></i>
-                              Pending
-                            </span>
-                          <?php endif; ?>
-                        </td>
-
-                        <td data-label="Remark">
-                          <?php if (trim((string)$row['remark']) !== ''): ?>
-                            <div class="remark-text">
-                              <?php echo e($row['remark']); ?>
-                            </div>
-                          <?php else: ?>
-                            <span class="small-muted">No remark</span>
-                          <?php endif; ?>
-                        </td>
-
-                        <td data-label="Action" class="text-end">
-                          <?php if ($row['is_done']): ?>
-
-                            <div class="d-flex justify-content-end gap-2 flex-wrap align-items-center">
-                              <span class="small-muted align-self-center">
-                                Completed &nbsp; No:
-                                <b style="color:#111827;">
-                                  <?php echo e($row['doc_no'] ?: ''); ?>
-                                </b>
-                              </span>
-
-                              <a class="btn-action" href="<?php echo e($row['open_url']); ?>" title="Open">
-                                <i class="bi bi-box-arrow-up-right"></i>
-                              </a>
-
-                              <?php if ($row['print_url'] !== ''): ?>
-                                <a
-                                  class="btn-action"
-                                  href="<?php echo e($row['print_url']); ?>"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title="Print / View"
-                                >
-                                  <i class="bi bi-printer"></i>
-                                </a>
-                              <?php endif; ?>
-
-                              <?php if ($row['download_url'] !== ''): ?>
-                                <a
-                                  class="btn-action"
-                                  href="<?php echo e($row['download_url']); ?>"
-                                  rel="noopener noreferrer"
-                                  title="Download"
-                                >
-                                  <i class="bi bi-download"></i>
-                                </a>
-                              <?php endif; ?>
-
-                              <?php if ($row['mail_url'] !== ''): ?>
-                                <a class="btn-action primary" href="<?php echo e($row['mail_url']); ?>" title="Send Mail">
-                                  <i class="bi bi-envelope"></i>
-                                </a>
-                              <?php endif; ?>
-                            </div>
-
-                          <?php else: ?>
-
-                            <div class="d-flex justify-content-end gap-2 flex-wrap">
-                              <a class="btn-action primary" href="<?php echo e($row['submit_url']); ?>" title="Submit Document">
-                                <i class="bi bi-plus-circle"></i>
-                              </a>
-
-                              <a class="btn-action" href="<?php echo e($row['open_url']); ?>" title="Open">
-                                <i class="bi bi-box-arrow-up-right"></i>
-                              </a>
-                            </div>
-
-                          <?php endif; ?>
-                        </td>
-                      </tr>
-                    <?php endforeach; ?>
-                  </tbody>
-                </table>
-              </div>
-
-              <div class="small-muted mt-2">
-                Note: All Time Management documents are listed based on filters.
-              </div>
-            </div>
-
-            <?php endif; ?>
-
-          <?php endif; ?>
-
-        </div>
-
-      </div>
+        </main>
     </div>
 
-    <?php include 'includes/footer.php'; ?>
-
-  </main>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="assets/js/sidebar-toggle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/sidebar-toggle.js"></script>
 </body>
-</html>
 
+</html>

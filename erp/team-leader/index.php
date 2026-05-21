@@ -410,385 +410,1127 @@ function activityInitial($name){
 }
 
 $latestMyDprTime = $latestMyDprCreatedAt ? date('h:i A', strtotime($latestMyDprCreatedAt)) : '—';
+
+// ---------------- UI ROUTES ----------------
+$routes = [
+  'projects'     => 'my-sites.php',
+  'dpr_pending'  => 'dpr.php?mode=pending&date=' . $todayYmd,
+  'today_tasks'  => 'today-tasks.php',
+  'reports'      => 'report.php',
+  'punchin'      => 'punchin.php',
+  'attendance'   => 'my-attendance.php',
+  'apply_leave'  => 'apply-leave.php',
+  'leave_history'=> 'my-leave-history.php',
+];
+$displayRole = $empRow['designation'] ?? ($_SESSION['designation'] ?? 'Employee');
 ?>
 <!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TEK-C Dashboard</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TEK-C Dashboard</title>
 
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
-  <link rel="manifest" href="assets/fav/site.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/fav/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/fav/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/fav/favicon-16x16.png">
+    <link rel="manifest" href="assets/fav/site.webmanifest">
 
-  <!-- Bootstrap 5 -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
-  <!-- TEK-C Custom Styles -->
-  <link href="assets/css/layout-styles.css" rel="stylesheet" />
-  <link href="assets/css/topbar.css" rel="stylesheet" />
-  <link href="assets/css/footer.css" rel="stylesheet" />
+    <link href="assets/css/layout-styles.css" rel="stylesheet" />
+    <link href="assets/css/topbar.css" rel="stylesheet" />
+    <link href="assets/css/footer.css" rel="stylesheet" />
 
-  <style>
-    .content-scroll{ flex:1 1 auto; overflow:auto; padding:22px 22px 14px; }
-
-    .panel{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding:16px 16px 12px; height:100%; }
-    .panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-    .panel-title{ font-weight:900; font-size:18px; color:#1f2937; margin:0; }
-    .panel-menu{ width:36px; height:36px; border-radius:12px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:#6b7280; }
-
-    .stat-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-      padding:14px 16px; height:90px; display:flex; align-items:center; gap:14px; }
-    .stat-ic{ width:46px; height:46px; border-radius:14px; display:grid; place-items:center; color:#fff; font-size:20px; flex:0 0 auto; }
-    .stat-ic.blue{ background: var(--blue); }
-    .stat-ic.orange{ background: var(--orange); }
-    .stat-ic.green{ background: var(--green); }
-    .stat-ic.red{ background: var(--red); }
-    .stat-label{ color:#4b5563; font-weight:750; font-size:13px; }
-    .stat-value{ font-size:30px; font-weight:900; line-height:1; margin-top:2px; }
-
-    .table thead th{ font-size:12px; letter-spacing:.2px; color:#6b7280; font-weight:800; border-bottom:1px solid var(--border)!important; }
-    .table td{ vertical-align:middle; border-color: var(--border); font-weight:650; color:#374151; padding-top:14px; padding-bottom:14px; }
-
-    .badge-pill{ border-radius:999px; padding:8px 12px; font-weight:900; font-size:12px; border:1px solid transparent; display:inline-flex; align-items:center; gap:8px; }
-    .badge-pill .mini-dot{ width:8px; height:8px; border-radius:50%; background: currentColor; opacity:.9; }
-
-    .ontrack{ color: var(--green); background: rgba(39,174,96,.12); border-color: rgba(39,174,96,.18); }
-    .atrisk{ color: var(--red); background: rgba(235,87,87,.12); border-color: rgba(235,87,87,.18); }
-    .delayed{ color:#b7791f; background: rgba(242,201,76,.20); border-color: rgba(242,201,76,.28); }
-
-    .muted-link{ color:#6b7280; font-weight:800; text-decoration:none; }
-    .muted-link:hover{ color:#374151; }
-
-    .activity-item{ display:flex; gap:12px; padding:12px 0; border-top:1px solid var(--border); }
-    .activity-item:first-child{ border-top:0; padding-top:6px; }
-    .activity-avatar{ width:42px; height:42px; border-radius:50%;
-      background: linear-gradient(135deg, var(--yellow), #ffd66b);
-      display:grid; place-items:center; font-weight:900; color:#1f2937; flex:0 0 auto; }
-    .activity-title{ font-weight:850; margin:0; color:#1f2937; font-size:14px; }
-    .activity-sub{ margin:2px 0 0; color:#6b7280; font-weight:650; font-size:12px; }
-
-    .chart-wrap{ height:190px; }
-    .donut-wrap{ height:240px; }
-
-    .legend{ display:flex; flex-wrap:wrap; gap:18px 26px; padding:6px 2px 4px; align-items:center; }
-    .legend-item{ display:flex; align-items:center; gap:8px; font-weight:800; color:#374151; }
-    .legend-dot{ width:10px; height:10px; border-radius:50%; background:#999; }
-
-    @media (max-width: 991.98px){
-      .content-scroll{ padding:18px; }
+    <style>
+    :root {
+        --page-bg: #f5f7fb;
+        --surface: #ffffff;
+        --border: #e5e7eb;
+        --text: #111827;
+        --muted: #6b7280;
+        --soft: #f8fafc;
+        --shadow: 0 10px 26px rgba(15, 23, 42, .055);
+        --radius: 15px;
+        --blue: #2f80ed;
+        --orange: #f2994a;
+        --green: #27ae60;
+        --red: #eb5757;
+        --purple: #7c3aed;
+        --yellow: #f2c94c;
     }
-  </style>
+
+    body {
+        background: var(--page-bg);
+    }
+
+    .content-scroll {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 16px;
+    }
+
+    .projects-wrapper {
+        width: 100%;
+    }
+
+    .page-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .page-heading h1 {
+        font-size: 19px;
+        font-weight: 900;
+        color: var(--text);
+        margin: 0;
+    }
+
+    .page-heading p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .primary-btn,
+    .secondary-btn {
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .primary-btn {
+        border: 0;
+        background: #111827;
+        color: #fff;
+    }
+
+    .primary-btn:hover {
+        background: #020617;
+        color: #fff;
+    }
+
+    .secondary-btn {
+        border: 1px solid var(--border);
+        background: #fff;
+        color: #334155;
+    }
+
+    .secondary-btn:hover {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+        color: #111827;
+    }
+
+    .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 13px;
+        height: 100%;
+    }
+
+    .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .panel-title {
+        font-weight: 900;
+        font-size: 14px;
+        color: var(--text);
+        margin: 0;
+    }
+
+    .panel-subtitle {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+
+    .panel-menu {
+        width: 34px;
+        height: 34px;
+        border-radius: 11px;
+        border: 1px solid var(--border);
+        background: #fff;
+        display: grid;
+        place-items: center;
+        color: #64748b;
+        flex: 0 0 auto;
+    }
+
+    .panel-menu:hover {
+        background: #f8fafc;
+        color: #111827;
+    }
+
+    .stat-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+
+    .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 12px 13px;
+        min-height: 86px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        transition: .15s ease;
+    }
+
+    .stat-link:hover .stat-card,
+    .stat-card:hover {
+        border-color: #bfdbfe;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, .09);
+        transform: translateY(-1px);
+    }
+
+    .stat-ic {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 18px;
+        flex: 0 0 auto;
+    }
+
+    .stat-ic.blue {
+        background: var(--blue);
+    }
+
+    .stat-ic.orange {
+        background: var(--orange);
+    }
+
+    .stat-ic.green {
+        background: var(--green);
+    }
+
+    .stat-ic.red {
+        background: var(--red);
+    }
+
+    .stat-ic.purple {
+        background: var(--purple);
+    }
+
+    .stat-label {
+        color: var(--muted);
+        font-weight: 800;
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: .2px;
+    }
+
+    .stat-value {
+        font-size: 25px;
+        font-weight: 950;
+        line-height: 1;
+        margin-top: 3px;
+        color: var(--text);
+    }
+
+    .stat-hint {
+        font-size: 10.5px;
+        color: #64748b;
+        font-weight: 800;
+        margin-top: 4px;
+    }
+
+    .qa-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .qa-btn {
+        text-decoration: none;
+        border: 1px solid var(--border);
+        background: #fff;
+        border-radius: 14px;
+        padding: 11px;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, .04);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #111827;
+        font-weight: 900;
+        min-height: 58px;
+        transition: .15s ease;
+    }
+
+    .qa-btn:hover {
+        background: #f8fafc;
+        color: #111827;
+        border-color: #cbd5e1;
+        transform: translateY(-1px);
+    }
+
+    .qa-ic {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 17px;
+        flex: 0 0 auto;
+    }
+
+    .qa-txt {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+
+    .qa-title {
+        font-size: 12.5px;
+        line-height: 1.15;
+        font-weight: 950;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .qa-sub {
+        font-size: 10.5px;
+        font-weight: 800;
+        color: #64748b;
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .compact-table-wrap {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .compact-table {
+        width: 100%;
+        margin: 0;
+        table-layout: auto;
+    }
+
+    .compact-table thead th {
+        background: var(--soft);
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 900;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 8px 9px;
+    }
+
+    .compact-table tbody td {
+        padding: 8px 9px;
+        vertical-align: middle;
+        border-color: #eef2f7;
+        color: #334155;
+        font-weight: 700;
+        font-size: 11.5px;
+    }
+
+    .compact-table tbody tr:hover {
+        background: #fbfdff;
+    }
+
+    .table-primary-text {
+        color: #111827;
+        font-size: 11.5px;
+        font-weight: 950;
+    }
+
+    .table-secondary-text {
+        color: #64748b;
+        font-size: 10px;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+
+    .badge-pill {
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-weight: 900;
+        font-size: 10px;
+        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+    .badge-pill .mini-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .ontrack {
+        color: #15803d;
+        background: #dcfce7;
+        border-color: #bbf7d0;
+    }
+
+    .atrisk {
+        color: #b91c1c;
+        background: #fee2e2;
+        border-color: #fecaca;
+    }
+
+    .delayed {
+        color: #b45309;
+        background: #ffedd5;
+        border-color: #fed7aa;
+    }
+
+    .neutral {
+        color: #475569;
+        background: #f1f5f9;
+        border-color: #e2e8f0;
+    }
+
+    .pending {
+        color: #6d28d9;
+        background: #ede9fe;
+        border-color: #ddd6fe;
+    }
+
+    .muted-link {
+        color: #64748b;
+        font-weight: 900;
+        text-decoration: none;
+        font-size: 12px;
+    }
+
+    .muted-link:hover {
+        color: #111827;
+    }
+
+    .activity-item {
+        display: flex;
+        gap: 10px;
+        padding: 10px 0;
+        border-top: 1px solid #eef2f7;
+    }
+
+    .activity-item:first-child {
+        border-top: 0;
+        padding-top: 2px;
+    }
+
+    .activity-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        background: #111827;
+        display: grid;
+        place-items: center;
+        font-weight: 950;
+        color: #fff;
+        flex: 0 0 auto;
+        font-size: 13px;
+    }
+
+    .activity-title {
+        font-weight: 900;
+        margin: 0;
+        color: #111827;
+        font-size: 12px;
+        line-height: 1.35;
+    }
+
+    .activity-sub {
+        margin: 3px 0 0;
+        color: #64748b;
+        font-weight: 700;
+        font-size: 10.5px;
+    }
+
+    .chart-wrap {
+        height: 190px;
+    }
+
+    .donut-wrap {
+        height: 230px;
+    }
+
+    .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 20px;
+        padding: 6px 2px 4px;
+        align-items: center;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-weight: 800;
+        color: #475569;
+        font-size: 11px;
+    }
+
+    .legend-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #999;
+    }
+
+    .p-card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: var(--shadow);
+        padding: 12px;
+    }
+
+    .p-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .p-title {
+        font-weight: 950;
+        color: #111827;
+        font-size: 13px;
+        line-height: 1.25;
+        margin: 0;
+    }
+
+    .p-sub {
+        color: #64748b;
+        font-weight: 750;
+        font-size: 10.5px;
+        margin-top: 5px;
+        line-height: 1.35;
+    }
+
+    .p-kv {
+        margin-top: 10px;
+        display: grid;
+        gap: 7px;
+    }
+
+    .p-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .p-key {
+        flex: 0 0 72px;
+        color: #64748b;
+        font-weight: 900;
+        font-size: 10.5px;
+        text-transform: uppercase;
+    }
+
+    .p-val {
+        flex: 1 1 auto;
+        font-weight: 900;
+        color: #111827;
+        font-size: 11.5px;
+        line-height: 1.3;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 26px 12px;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .empty-state i {
+        display: block;
+        font-size: 32px;
+        margin-bottom: 8px;
+        opacity: .45;
+    }
+
+    @media(max-width:1199px) {
+        .compact-table thead {
+            display: none;
+        }
+
+        .compact-table,
+        .compact-table tbody,
+        .compact-table tr,
+        .compact-table td {
+            display: block;
+            width: 100%;
+        }
+
+        .compact-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            padding: 10px;
+        }
+
+        .compact-table tbody td {
+            border: 0;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .compact-table tbody td::before {
+            content: attr(data-label);
+            font-size: 10px;
+            font-weight: 900;
+            color: #64748b;
+            text-transform: uppercase;
+            flex: 0 0 92px;
+        }
+
+        .compact-table tbody td:first-child {
+            display: block;
+        }
+
+        .compact-table tbody td:first-child::before {
+            display: none;
+        }
+    }
+
+    @media(max-width:1199.98px) {
+        .qa-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @media(max-width:991.98px) {
+        .main {
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        .sidebar {
+            position: fixed !important;
+            transform: translateX(-100%);
+            z-index: 1040 !important;
+        }
+
+        .sidebar.open,
+        .sidebar.active,
+        .sidebar.show {
+            transform: translateX(0) !important;
+        }
+
+        .qa-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media(max-width:768px) {
+        .content-scroll {
+            padding: 12px 10px 12px !important;
+        }
+
+        .container-fluid.projects-wrapper {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        .page-heading {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .panel {
+            padding: 12px !important;
+            margin-bottom: 12px;
+            border-radius: 14px;
+        }
+
+        .stat-card {
+            min-height: 78px;
+        }
+
+        .stat-value {
+            font-size: 22px;
+        }
+
+        .qa-btn {
+            padding: 10px;
+        }
+
+        .qa-grid {
+            gap: 8px;
+        }
+    }
+    </style>
 </head>
+
 <body>
-  <div class="app">
+    <div class="app">
+        <?php include 'includes/sidebar.php'; ?>
 
-    <?php include 'includes/sidebar.php'; ?>
+        <main class="main" aria-label="Main">
+            <?php include 'includes/topbar.php'; ?>
 
-    <main class="main" aria-label="Main">
+            <div id="contentScroll" class="content-scroll">
+                <div class="container-fluid projects-wrapper px-0">
 
-      <?php include 'includes/topbar.php'; ?>
-
-      <div id="contentScroll" class="content-scroll">
-        <div class="container-fluid maxw">
-
-          <!-- Stats (dynamic) -->
-          <div class="row g-3 mb-3">
-            <div class="col-12 col-md-6 col-xl-3">
-              <div class="stat-card">
-                <div class="stat-ic blue"><i class="bi bi-folder2"></i></div>
-                <div>
-                  <div class="stat-label">Active Projects</div>
-                  <div class="stat-value"><?php echo (int)$activeProjects; ?></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="col-12 col-md-6 col-xl-3">
-              <div class="stat-card">
-                <div class="stat-ic orange"><i class="bi bi-clock-history"></i></div>
-                <div>
-                  <div class="stat-label">Today DPR Pending</div>
-                  <div class="stat-value"><?php echo (int)$myPending; ?></div>
-                  <div style="font-size:12px; color:#6b7280; font-weight:800;">Completed: <?php echo (int)$myCompleted; ?> (<?php echo (int)$completionPct; ?>%)</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="col-12 col-md-6 col-xl-3">
-              <div class="stat-card">
-                <div class="stat-ic green"><i class="bi bi-people-fill"></i></div>
-                <div>
-                  <div class="stat-label">On-Site Workers (Today)</div>
-                  <div class="stat-value"><?php echo (int)$onSiteWorkers; ?></div>
-                  <div style="font-size:12px; color:#6b7280; font-weight:800;">From today’s latest DPR/site</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="col-12 col-md-6 col-xl-3">
-              <div class="stat-card">
-                <div class="stat-ic red"><i class="bi bi-exclamation-triangle-fill"></i></div>
-                <div>
-                  <div class="stat-label">Alerts (Today)</div>
-                  <div class="stat-value"><?php echo (int)$alerts; ?></div>
-                  <div style="font-size:12px; color:#6b7280; font-weight:800;">Open constraints from DPR</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Middle row -->
-          <div class="row g-3 mb-3">
-            <div class="col-12 col-xl-8">
-              <div class="panel">
-                <div class="panel-header">
-                  <h3 class="panel-title">Ongoing Projects</h3>
-                  <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-                </div>
-
-                <div class="table-responsive">
-                  <table class="table align-middle mb-0">
-                    <thead>
-                      <tr>
-                        <th style="min-width:240px;">Project Name</th>
-                        <th style="min-width:140px;">Status</th>
-                        <th style="min-width:130px;">Start Date</th>
-                        <th style="min-width:130px;">End Date</th>
-                        <th class="text-end" style="width:60px;"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <?php if (empty($ongoingRows)): ?>
-                        <tr>
-                          <td colspan="5" class="text-muted" style="font-weight:800;">No active projects found in your scope.</td>
-                        </tr>
-                      <?php else: ?>
-                        <?php foreach ($ongoingRows as $p): ?>
-                          <?php
-                            [$label, $cls, $icon] = projectHealthBadge($p['start_date'] ?? '', $p['expected_completion_date'] ?? '');
-                          ?>
-                          <tr>
-                            <td>
-                              <div style="font-weight:900; color:#111827;"><?php echo e($p['project_name'] ?? ''); ?></div>
-                              <div style="font-size:12px; color:#6b7280; font-weight:800;">
-                                <i class="bi bi-geo-alt"></i> <?php echo e($p['project_location'] ?? ''); ?>
-                                &nbsp;•&nbsp; <i class="bi bi-person-badge"></i> <?php echo e($p['client_name'] ?? ''); ?>
-                              </div>
-                            </td>
-                            <td>
-                              <span class="badge-pill <?php echo e($cls); ?>">
-                                <span class="mini-dot"></span> <?php echo e($label); ?>
-                              </span>
-                            </td>
-                            <td><?php echo e(fmtDate($p['start_date'] ?? '')); ?></td>
-                            <td><?php echo e(fmtDate($p['expected_completion_date'] ?? '')); ?></td>
-                            <td class="text-end">
-                              <a class="muted-link" href="dpr.php?site_id=<?php echo (int)$p['id']; ?>" title="Open">
-                                <i class="bi bi-box-arrow-up-right"></i>
-                              </a>
-                            </td>
-                          </tr>
-                        <?php endforeach; ?>
-                      <?php endif; ?>
-                    </tbody>
-                  </table>
-                </div>
-
-              </div>
-            </div>
-
-            <div class="col-12 col-xl-4">
-              <div class="panel">
-                <div class="panel-header">
-                  <h3 class="panel-title">DPR Overview (Last 7 Days)</h3>
-                  <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-                </div>
-                <div class="chart-wrap">
-                  <canvas id="barChart"></canvas>
-                </div>
-                <div style="margin-top:8px; font-size:12px; color:#6b7280; font-weight:800;">
-                  Today total DPRs on your sites: <?php echo (int)$teamDprToday; ?>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Bottom row -->
-          <div class="row g-3 mb-4">
-            <div class="col-12 col-xl-8">
-              <div class="panel">
-                <div class="panel-header">
-                  <h3 class="panel-title">Recent Activity</h3>
-                  <a class="muted-link" href="today-tasks.php" style="font-size:12px;">View today tasks</a>
-                </div>
-
-                <?php if (empty($recent)): ?>
-                  <div class="text-muted" style="font-weight:800; padding:6px 0;">No recent DPR activity found.</div>
-                <?php else: ?>
-                  <?php foreach ($recent as $r): ?>
-                    <div class="activity-item">
-                      <div class="activity-avatar"><?php echo e(activityInitial($r['prepared_by'] ?? '')); ?></div>
-                      <div class="flex-grow-1">
-                        <p class="activity-title mb-0">
-                          <?php echo e($r['prepared_by'] ?? ''); ?>
-                          <span class="text-muted" style="font-weight:700;">submitted</span>
-                          <?php echo e($r['dpr_no'] ?? 'DPR'); ?>
-                          <span class="text-muted" style="font-weight:700;">for</span>
-                          <?php echo e($r['project_name'] ?? ''); ?>
-                        </p>
-                        <p class="activity-sub">
-                          DPR Date: <?php echo e(fmtDate($r['dpr_date'] ?? '')); ?>
-                          &nbsp;•&nbsp; Created: <?php echo e($r['created_at'] ? date('d M Y, h:i A', strtotime($r['created_at'])) : '—'); ?>
-                        </p>
-                      </div>
+                    <div class="page-heading">
+                        <div>
+                            <h1>Dashboard</h1>
+                            <p>Overview of assigned projects, DPR status, workforce, alerts and recent reports.</p>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="badge-pill neutral"><i
+                                    class="bi bi-person-badge"></i><?php echo e($displayRole); ?></span>
+                            <a href="<?php echo e($routes['projects']); ?>" class="secondary-btn"><i
+                                    class="bi bi-folder2"></i> Projects</a>
+                        </div>
                     </div>
-                  <?php endforeach; ?>
-                <?php endif; ?>
-              </div>
+
+                    <!-- Quick Actions -->
+                    <div class="panel mb-3">
+                        <div class="panel-header">
+                            <div>
+                                <h3 class="panel-title">Quick Actions</h3>
+                                <div class="panel-subtitle">Fast access to daily project and employee actions</div>
+                            </div>
+                            <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
+                        </div>
+                        <div class="qa-grid">
+                            <a class="qa-btn" href="<?php echo e($routes['punchin']); ?>">
+                                <div class="qa-ic" style="background:#2d9cdb;"><i class="bi bi-fingerprint"></i></div>
+                                <div class="qa-txt">
+                                    <div class="qa-title">Punch In</div>
+                                    <div class="qa-sub">Mark attendance</div>
+                                </div>
+                            </a>
+                            <a class="qa-btn" href="<?php echo e($routes['today_tasks']); ?>">
+                                <div class="qa-ic" style="background:#f2994a;"><i class="bi bi-list-check"></i></div>
+                                <div class="qa-txt">
+                                    <div class="qa-title">Today Tasks</div>
+                                    <div class="qa-sub"><?php echo (int)$myPending; ?> DPR pending</div>
+                                </div>
+                            </a>
+                            <a class="qa-btn" href="<?php echo e($routes['reports']); ?>">
+                                <div class="qa-ic" style="background:#10b981;"><i
+                                        class="bi bi-file-earmark-bar-graph"></i></div>
+                                <div class="qa-txt">
+                                    <div class="qa-title">Reports</div>
+                                    <div class="qa-sub">Open reports</div>
+                                </div>
+                            </a>
+                            <a class="qa-btn" href="<?php echo e($routes['projects']); ?>">
+                                <div class="qa-ic" style="background:#7c3aed;"><i class="bi bi-folder2-open"></i></div>
+                                <div class="qa-txt">
+                                    <div class="qa-title">Projects</div>
+                                    <div class="qa-sub"><?php echo (int)count($sites); ?> in scope</div>
+                                </div>
+                            </a>
+                            <a class="qa-btn" href="<?php echo e($routes['apply_leave']); ?>">
+                                <div class="qa-ic" style="background:#27ae60;"><i class="bi bi-calendar-plus"></i></div>
+                                <div class="qa-txt">
+                                    <div class="qa-title">Apply Leave</div>
+                                    <div class="qa-sub">Create request</div>
+                                </div>
+                            </a>
+                            <a class="qa-btn" href="<?php echo e($routes['attendance']); ?>">
+                                <div class="qa-ic" style="background:#6366f1;"><i class="bi bi-calendar-check"></i>
+                                </div>
+                                <div class="qa-txt">
+                                    <div class="qa-title">Attendance</div>
+                                    <div class="qa-sub">View history</div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <a class="stat-link" href="<?php echo e($routes['projects']); ?>">
+                                <div class="stat-card">
+                                    <div class="stat-ic blue"><i class="bi bi-folder2"></i></div>
+                                    <div>
+                                        <div class="stat-label">Active Projects</div>
+                                        <div class="stat-value"><?php echo (int)$activeProjects; ?></div>
+                                        <div class="stat-hint">Tap to view projects</div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <a class="stat-link" href="<?php echo e($routes['dpr_pending']); ?>">
+                                <div class="stat-card">
+                                    <div class="stat-ic orange"><i class="bi bi-clock-history"></i></div>
+                                    <div>
+                                        <div class="stat-label">Today DPR Pending</div>
+                                        <div class="stat-value"><?php echo (int)$myPending; ?></div>
+                                        <div class="stat-hint">Completed: <?php echo (int)$myCompleted; ?>
+                                            (<?php echo (int)$completionPct; ?>%)</div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <a class="stat-link" href="<?php echo e($routes['reports']); ?>">
+                                <div class="stat-card">
+                                    <div class="stat-ic green"><i class="bi bi-people-fill"></i></div>
+                                    <div>
+                                        <div class="stat-label">On-Site Workers</div>
+                                        <div class="stat-value"><?php echo (int)$onSiteWorkers; ?></div>
+                                        <div class="stat-hint">From latest DPR/site</div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <a class="stat-link" href="<?php echo e($routes['reports']); ?>">
+                                <div class="stat-card">
+                                    <div class="stat-ic red"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                                    <div>
+                                        <div class="stat-label">Alerts Today</div>
+                                        <div class="stat-value"><?php echo (int)$alerts; ?></div>
+                                        <div class="stat-hint">Open constraints from DPR</div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Middle row -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-xl-8">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <h3 class="panel-title">Ongoing Projects</h3>
+                                        <div class="panel-subtitle">Active projects under your scope</div>
+                                    </div>
+                                    <a class="muted-link" href="<?php echo e($routes['projects']); ?>">View all</a>
+                                </div>
+
+                                <div class="d-block d-md-none">
+                                    <?php if (empty($ongoingRows)): ?>
+                                    <div class="empty-state"><i class="bi bi-inbox"></i>No active projects found in your
+                                        scope.</div>
+                                    <?php else: ?>
+                                    <div class="d-grid gap-3">
+                                        <?php foreach ($ongoingRows as $p): ?>
+                                        <?php [$label, $cls, $icon] = projectHealthBadge($p['start_date'] ?? '', $p['expected_completion_date'] ?? ''); ?>
+                                        <div class="p-card">
+                                            <div class="p-top">
+                                                <div style="flex:1 1 auto;">
+                                                    <div class="p-title"><?php echo e($p['project_name'] ?? ''); ?>
+                                                    </div>
+                                                    <div class="p-sub"><i class="bi bi-geo-alt"></i>
+                                                        <?php echo e($p['project_location'] ?? ''); ?> &nbsp;•&nbsp; <i
+                                                            class="bi bi-person-badge"></i>
+                                                        <?php echo e($p['client_name'] ?? ''); ?></div>
+                                                </div>
+                                                <span class="badge-pill <?php echo e($cls); ?>"><span
+                                                        class="mini-dot"></span><?php echo e($label); ?></span>
+                                            </div>
+                                            <div class="p-kv">
+                                                <div class="p-row">
+                                                    <div class="p-key">Start</div>
+                                                    <div class="p-val"><?php echo e(fmtDate($p['start_date'] ?? '')); ?>
+                                                    </div>
+                                                </div>
+                                                <div class="p-row">
+                                                    <div class="p-key">End</div>
+                                                    <div class="p-val">
+                                                        <?php echo e(fmtDate($p['expected_completion_date'] ?? '')); ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <div class="d-none d-md-block">
+                                    <div class="compact-table-wrap">
+                                        <table class="table compact-table align-middle mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Project Name</th>
+                                                    <th>Status</th>
+                                                    <th>Start Date</th>
+                                                    <th>End Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php if (empty($ongoingRows)): ?>
+                                                <tr>
+                                                    <td colspan="4">
+                                                        <div class="empty-state"><i class="bi bi-inbox"></i>No active
+                                                            projects found in your scope.</div>
+                                                    </td>
+                                                </tr>
+                                                <?php else: ?>
+                                                <?php foreach ($ongoingRows as $p): ?>
+                                                <?php [$label, $cls, $icon] = projectHealthBadge($p['start_date'] ?? '', $p['expected_completion_date'] ?? ''); ?>
+                                                <tr>
+                                                    <td data-label="Project">
+                                                        <div class="table-primary-text">
+                                                            <?php echo e($p['project_name'] ?? ''); ?></div>
+                                                        <div class="table-secondary-text"><i class="bi bi-geo-alt"></i>
+                                                            <?php echo e($p['project_location'] ?? ''); ?> &nbsp;•&nbsp;
+                                                            <i class="bi bi-person-badge"></i>
+                                                            <?php echo e($p['client_name'] ?? ''); ?>
+                                                        </div>
+                                                    </td>
+                                                    <td data-label="Status"><span
+                                                            class="badge-pill <?php echo e($cls); ?>"><span
+                                                                class="mini-dot"></span><?php echo e($label); ?></span>
+                                                    </td>
+                                                    <td data-label="Start">
+                                                        <?php echo e(fmtDate($p['start_date'] ?? '')); ?></td>
+                                                    <td data-label="End">
+                                                        <?php echo e(fmtDate($p['expected_completion_date'] ?? '')); ?>
+                                                    </td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                                <?php endif; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-xl-4">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <h3 class="panel-title">DPR Overview</h3>
+                                        <div class="panel-subtitle">Last 7 days report count</div>
+                                    </div><button class="panel-menu" aria-label="More"><i
+                                            class="bi bi-three-dots"></i></button>
+                                </div>
+                                <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+                                <div class="stat-hint mt-2">Today total DPRs on your sites:
+                                    <?php echo (int)$teamDprToday; ?></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom row -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-xl-8">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <h3 class="panel-title">Recent Activity</h3>
+                                        <div class="panel-subtitle">Latest DPR submissions from your project scope</div>
+                                    </div><a class="muted-link" href="<?php echo e($routes['today_tasks']); ?>">Today
+                                        tasks</a>
+                                </div>
+                                <?php if (empty($recent)): ?>
+                                <div class="empty-state"><i class="bi bi-inbox"></i>No recent DPR activity found.</div>
+                                <?php else: ?>
+                                <?php foreach ($recent as $r): ?>
+                                <div class="activity-item">
+                                    <div class="activity-avatar">
+                                        <?php echo e(activityInitial($r['prepared_by'] ?? '')); ?></div>
+                                    <div class="flex-grow-1">
+                                        <p class="activity-title mb-0"><?php echo e($r['prepared_by'] ?? ''); ?> <span
+                                                class="text-muted" style="font-weight:800;">submitted</span>
+                                            <?php echo e($r['dpr_no'] ?? 'DPR'); ?> <span class="text-muted"
+                                                style="font-weight:800;">for</span>
+                                            <?php echo e($r['project_name'] ?? ''); ?></p>
+                                        <p class="activity-sub">DPR Date:
+                                            <?php echo e(fmtDate($r['dpr_date'] ?? '')); ?> &nbsp;•&nbsp; Created:
+                                            <?php echo e($r['created_at'] ? date('d M Y, h:i A', strtotime($r['created_at'])) : '—'); ?>
+                                        </p>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-xl-4">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <h3 class="panel-title">Today DPR Status</h3>
+                                        <div class="panel-subtitle">Your completed vs pending DPR</div>
+                                    </div><button class="panel-menu" aria-label="More"><i
+                                            class="bi bi-three-dots"></i></button>
+                                </div>
+                                <div class="donut-wrap"><canvas id="donutChart"></canvas></div>
+                                <div class="legend">
+                                    <div class="legend-item"><span class="legend-dot"
+                                            style="background:rgba(39,174,96,.95);"></span> Completed</div>
+                                    <div class="legend-item"><span class="legend-dot"
+                                            style="background:rgba(242,153,74,.95);"></span> Pending</div>
+                                </div>
+                                <div class="stat-hint mt-1">Latest my DPR time: <?php echo e($latestMyDprTime); ?></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
 
-            <div class="col-12 col-xl-4">
-              <div class="panel">
-                <div class="panel-header">
-                  <h3 class="panel-title">Today DPR Status (Me)</h3>
-                  <button class="panel-menu" aria-label="More"><i class="bi bi-three-dots"></i></button>
-                </div>
+            <?php include 'includes/footer.php'; ?>
+        </main>
+    </div>
 
-                <div class="donut-wrap">
-                  <canvas id="donutChart"></canvas>
-                </div>
-
-                <div class="legend">
-                  <div class="legend-item"><span class="legend-dot" style="background: rgba(39,174,96,.95);"></span> Completed</div>
-                  <div class="legend-item"><span class="legend-dot" style="background: rgba(242,153,74,.95);"></span> Pending</div>
-                </div>
-
-                <div style="margin-top:6px; font-size:12px; color:#6b7280; font-weight:800;">
-                  Latest my DPR time: <?php echo e($latestMyDprTime); ?>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <?php include 'includes/footer.php'; ?>
-
-    </main>
-  </div>
-
-  <!-- Bootstrap JS -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- TEK-C Custom JavaScript -->
-  <script src="assets/js/sidebar-toggle.js"></script>
-
-  <script>
-    // Dynamic chart data from PHP
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/sidebar-toggle.js"></script>
+    <script>
     const BAR_LABELS = <?php echo json_encode($barLabels, JSON_UNESCAPED_UNICODE); ?>;
     const BAR_VALUES = <?php echo json_encode($barValues, JSON_UNESCAPED_UNICODE); ?>;
-
     const DONUT_LABELS = <?php echo json_encode($donutLabels, JSON_UNESCAPED_UNICODE); ?>;
     const DONUT_VALUES = <?php echo json_encode($donutValues, JSON_UNESCAPED_UNICODE); ?>;
 
-    document.addEventListener('DOMContentLoaded', function () {
-      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
-      Chart.defaults.color = "#6b7280";
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.Chart) {
+            Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+            Chart.defaults.color = '#6b7280';
 
-      // Bar Chart: DPR count last 7 days (team scope)
-      const barCtx = document.getElementById("barChart");
-      if (barCtx) {
-        new Chart(barCtx, {
-          type: "bar",
-          data: {
-            labels: BAR_LABELS,
-            datasets: [{
-              label: "DPRs",
-              data: BAR_VALUES,
-              backgroundColor: "rgba(242,201,76,.95)",
-              borderRadius: 10,
-              barThickness: 18
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { grid: { display: false }, ticks: { font: { weight: 700 } } },
-              y: {
-                beginAtZero: true,
-                grid: { color: "rgba(233,236,239,1)" },
-                border: { display: false },
-                ticks: { stepSize: 1 }
-              }
+            const barCtx = document.getElementById('barChart');
+            if (barCtx) {
+                new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: BAR_LABELS,
+                        datasets: [{
+                            label: 'DPRs',
+                            data: BAR_VALUES,
+                            backgroundColor: 'rgba(242,201,76,.95)',
+                            borderRadius: 10,
+                            barThickness: 18
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                    font: {
+                                        weight: 700
+                                    }
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                grid: {
+                                    color: 'rgba(233,236,239,1)'
+                                },
+                                border: {
+                                    display: false
+                                },
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        }
+                    }
+                });
             }
-          }
-        });
-      }
 
-      // Donut Chart: My completed vs pending today
-      const donutCtx = document.getElementById("donutChart");
-      if (donutCtx) {
-        new Chart(donutCtx, {
-          type: "doughnut",
-          data: {
-            labels: DONUT_LABELS,
-            datasets: [{
-              data: DONUT_VALUES,
-              backgroundColor: [
-                "rgba(39,174,96,.95)",
-                "rgba(242,153,74,.95)"
-              ],
-              borderWidth: 0,
-              hoverOffset: 8
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: "68%",
-            plugins: { legend: { display: false } }
-          },
-          plugins: [{
-            id: "centerText",
-            afterDraw(chart){
-              const { ctx } = chart;
-              const meta = chart.getDatasetMeta(0);
-              if(!meta?.data?.length) return;
-              const x = meta.data[0].x;
-              const y = meta.data[0].y;
-
-              const total = DONUT_VALUES.reduce((a,b)=>a+b,0) || 0;
-              const pct = total ? Math.round((DONUT_VALUES[0] / total) * 100) : 0;
-
-              ctx.save();
-              ctx.fillStyle = "#374151";
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.font = "900 18px " + Chart.defaults.font.family;
-              ctx.fillText(pct + "%", x, y - 6);
-              ctx.font = "800 12px " + Chart.defaults.font.family;
-              ctx.fillText("Completed", x, y + 14);
-              ctx.restore();
+            const donutCtx = document.getElementById('donutChart');
+            if (donutCtx) {
+                new Chart(donutCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: DONUT_LABELS,
+                        datasets: [{
+                            data: DONUT_VALUES,
+                            backgroundColor: ['rgba(39,174,96,.95)', 'rgba(242,153,74,.95)'],
+                            borderWidth: 0,
+                            hoverOffset: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '68%',
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: [{
+                        id: 'centerText',
+                        afterDraw(chart) {
+                            const {
+                                ctx
+                            } = chart;
+                            const meta = chart.getDatasetMeta(0);
+                            if (!meta?.data?.length) return;
+                            const x = meta.data[0].x,
+                                y = meta.data[0].y;
+                            const total = DONUT_VALUES.reduce((a, b) => a + b, 0) || 0;
+                            const pct = total ? Math.round((DONUT_VALUES[0] / total) * 100) : 0;
+                            ctx.save();
+                            ctx.fillStyle = '#374151';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.font = '900 18px ' + Chart.defaults.font.family;
+                            ctx.fillText(pct + '%', x, y - 6);
+                            ctx.font = '800 12px ' + Chart.defaults.font.family;
+                            ctx.fillText('Completed', x, y + 14);
+                            ctx.restore();
+                        }
+                    }]
+                });
             }
-          }]
-        });
-      }
-
-      // OPTIONAL: auto-refresh every 60 seconds for "realtime" feel
-      // setTimeout(() => window.location.reload(), 60000);
+        }
     });
-  </script>
-
+    </script>
 </body>
+
 </html>
 <?php
 if (isset($conn)) { mysqli_close($conn); }
