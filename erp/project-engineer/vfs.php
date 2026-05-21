@@ -1,4 +1,4 @@
-    <?php
+<?php
     // vfs.php - Vendor Finalization Schedule (VFS) Submission Form
 
     session_start();
@@ -278,7 +278,7 @@
                 // Insert into main table
                 $insMain = mysqli_prepare($conn, "
                     INSERT INTO vfs_main 
-                    (vfs_no, site_id, client_id, project_name, client_name, architect, pmc, version, vfs_date, prepared_by, prepared_by_name, remarks)
+                    (vfs_no, site_id, client_id, project_name, client_name, architects, pmc, version, vfs_date, prepared_by, prepared_by_name, remarks)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 

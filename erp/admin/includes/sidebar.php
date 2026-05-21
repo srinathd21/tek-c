@@ -120,8 +120,8 @@
     </div>
 
     <!-- Reports -->
-    <a class="side-link" href="reports.php">
-      <i class="bi bi-file-earmark-bar-graph"></i><span class="label">Reports</span>
+    <a class="side-link" href="emp-reports.php">
+      <i class="bi bi-file-earmark-bar-graph"></i><span class="label">Reports Hub</span>
     </a>
 
     <!-- Settings -->

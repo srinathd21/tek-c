@@ -1040,9 +1040,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         --radius: 15px;
     }
 
-    body {
-        background: var(--page-bg);
-    }
+    body { background: var(--page-bg); }
 
     .content-scroll {
         flex: 1 1 auto;
@@ -1050,9 +1048,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         padding: 16px;
     }
 
-    .projects-wrapper {
-        width: 100%;
-    }
+    .projects-wrapper { width: 100%; }
 
     .page-heading {
         display: flex;
@@ -1067,9 +1063,6 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         font-weight: 900;
         color: var(--text);
         margin: 0;
-        display: flex;
-        align-items: center;
-        gap: 8px;
     }
 
     .page-heading p {
@@ -1096,10 +1089,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         white-space: nowrap;
     }
 
-    .primary-btn:hover {
-        background: #020617;
-        color: #fff;
-    }
+    .primary-btn:hover { background: #020617; color: #fff; }
 
     .secondary-btn {
         border: 1px solid var(--border) !important;
@@ -1190,13 +1180,10 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         color: #111827;
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 7px;
     }
 
-    .panel-title i {
-        color: #2563eb;
-        font-size: 14px;
-    }
+    .panel-title i { color: #2563eb; font-size: 14px; }
 
     .panel-subtitle {
         color: var(--muted);
@@ -1229,40 +1216,44 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         font-size: 13px;
     }
 
-    .search-box input,
+    .search-box input {
+        width: 100%;
+        height: 36px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: #fff;
+        padding: 0 12px 0 34px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text);
+        outline: none;
+    }
+
+    .search-box input:focus {
+        border-color: #bfdbfe;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+    }
+
     .filter-select,
     .filter-date {
         height: 36px;
         border: 1px solid var(--border);
         border-radius: 11px;
         background: #fff;
+        padding: 0 42px 0 12px;
         font-size: 12px;
         font-weight: 800;
+        min-width: 145px;
         color: var(--text);
-        outline: none;
     }
 
-    .search-box input {
-        width: 100%;
-        padding: 0 12px 0 34px;
-        font-weight: 700;
-    }
+    .filter-date { padding: 0 12px; }
 
-    .filter-select {
-        padding: 0 42px 0 12px;
-        min-width: 145px;
-    }
-
-    .filter-date {
-        padding: 0 12px;
-        min-width: 145px;
-    }
-
-    .search-box input:focus,
     .filter-select:focus,
     .filter-date:focus {
         border-color: #bfdbfe;
         box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+        outline: none;
     }
 
     .compact-table-wrap {
@@ -1299,9 +1290,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         font-size: 11.5px;
     }
 
-    .compact-table tbody tr:hover {
-        background: #fbfdff;
-    }
+    .compact-table tbody tr:hover { background: #fbfdff; }
 
     .table-title-cell {
         display: flex;
@@ -1334,7 +1323,8 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         margin-top: 1px;
     }
 
-    .badge-pill {
+    .badge-pill,
+    .status-badge {
         border-radius: 999px;
         padding: 5px 8px;
         font-weight: 900;
@@ -1347,50 +1337,17 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         text-decoration: none;
     }
 
-    .ontrack,
-    .status-green {
-        color: #15803d;
-        background: #dcfce7;
-        border-color: #bbf7d0;
-    }
+    .status-badge { text-transform: uppercase; }
 
-    .progressing {
-        color: #2563eb;
-        background: #dbeafe;
-        border-color: #bfdbfe;
-    }
+    .status-green,
+    .ontrack { color: #15803d; background: #dcfce7; border-color: #bbf7d0; }
 
-    .pending {
-        color: #6d28d9;
-        background: #ede9fe;
-        border-color: #ddd6fe;
-    }
+    .status-yellow,
+    .atrisk { color: #b45309; background: #ffedd5; border-color: #fed7aa; }
 
-    .atrisk,
-    .status-yellow {
-        color: #b45309;
-        background: #ffedd5;
-        border-color: #fed7aa;
-    }
-
-    .neutral {
-        color: #475569;
-        background: #f1f5f9;
-        border-color: #e2e8f0;
-    }
-
-    .status-badge {
-        border-radius: 999px;
-        padding: 5px 8px;
-        font-weight: 900;
-        font-size: 10px;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        border: 1px solid transparent;
-        white-space: nowrap;
-        text-transform: uppercase;
-    }
+    .progressing { color: #2563eb; background: #dbeafe; border-color: #bfdbfe; }
+    .pending { color: #6d28d9; background: #ede9fe; border-color: #ddd6fe; }
+    .neutral { color: #475569; background: #f1f5f9; border-color: #e2e8f0; }
 
     .action-group {
         display: flex;
@@ -1407,28 +1364,11 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         display: grid;
         place-items: center;
         text-decoration: none;
-        color: #475569;
     }
 
-    .view-btn {
-        color: #475569;
-        background: #f8fafc;
-    }
-
-    .file-btn {
-        color: #10b981;
-        background: #ecfdf5;
-    }
-
-    .report-btn {
-        color: #2563eb;
-        background: #eff6ff;
-    }
-
-    .action-btn:hover {
-        border-color: #cbd5e1;
-        background: #fff;
-    }
+    .view-btn { color: #475569; background: #f8fafc; }
+    .file-btn { color: #10b981; background: #ecfdf5; }
+    .report-btn { color: #2563eb; background: #eff6ff; }
 
     .team-text {
         font-size: 10px;
@@ -1437,20 +1377,9 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         font-weight: 750;
     }
 
-    .team-text b {
-        color: #111827;
-    }
+    .team-text b { color: #111827; }
 
-    .reason-cell {
-        max-width: 260px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .remark-column {
-        min-width: 220px;
-    }
+    .remark-column { min-width: 220px; }
 
     .remark-preview {
         max-width: 310px;
@@ -1466,16 +1395,9 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         margin-bottom: 7px;
     }
 
-    .remark-preview.empty {
-        color: #94a3b8;
-        font-style: italic;
-    }
+    .remark-preview.empty { color: #94a3b8; font-style: italic; }
 
-    .remark-buttons {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-    }
+    .remark-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
 
     .remark-btn {
         min-height: 29px;
@@ -1494,22 +1416,9 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         white-space: nowrap;
     }
 
-    .remark-btn:hover {
-        background: #dbeafe;
-        color: #1e40af;
-    }
-
-    .remark-btn.rtl {
-        border-color: #ede9fe;
-        background: #f5f3ff;
-        color: #6d28d9;
-    }
-
-    .remark-btn.rm {
-        border-color: #ffedd5;
-        background: #fff7ed;
-        color: #c2410c;
-    }
+    .remark-btn:hover { background: #dbeafe; color: #1e40af; }
+    .remark-btn.rtl { border-color: #ede9fe; background: #f5f3ff; color: #6d28d9; }
+    .remark-btn.rm { border-color: #ffedd5; background: #fff7ed; color: #c2410c; }
 
     .empty-state {
         text-align: center;
@@ -1555,15 +1464,9 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
     }
 
     .modal-header,
-    .modal-footer {
-        border-color: #eef2f7;
-    }
+    .modal-footer { border-color: #eef2f7; }
 
-    .modal-title {
-        font-size: 15px;
-        font-weight: 950;
-        color: #111827;
-    }
+    .modal-title { font-size: 15px; font-weight: 950; color: #111827; }
 
     .modal-info {
         background: #f8fafc;
@@ -1581,11 +1484,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         margin-bottom: 2px;
     }
 
-    .modal-info .value {
-        color: #111827;
-        font-size: 12px;
-        font-weight: 900;
-    }
+    .modal-info .value { color: #111827; font-size: 12px; font-weight: 900; }
 
     .remark-textarea {
         min-height: 90px;
@@ -1599,12 +1498,15 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         box-shadow: none !important;
     }
 
+    .reason-cell {
+        max-width: 260px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     @media(max-width:991.98px) {
-        .main {
-            margin-left: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-        }
+        .main { margin-left: 0 !important; width: 100% !important; max-width: 100% !important; }
 
         .sidebar {
             position: fixed !important;
@@ -1614,9 +1516,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
 
         .sidebar.open,
         .sidebar.active,
-        .sidebar.show {
-            transform: translateX(0) !important;
-        }
+        .sidebar.show { transform: translateX(0) !important; }
     }
 
     @media(max-width:1199px) {
@@ -1633,9 +1533,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
             margin: 0;
         }
 
-        .compact-table thead {
-            display: none;
-        }
+        .compact-table thead { display: none; }
 
         .compact-table,
         .compact-table tbody,
@@ -1655,9 +1553,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
             overflow: hidden;
         }
 
-        .compact-table tbody tr:hover {
-            background: #fff;
-        }
+        .compact-table tbody tr:hover { background: #fff; }
 
         .compact-table tbody td {
             border: 0 !important;
@@ -1688,6 +1584,15 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
             grid-column: 2;
             min-width: 0;
         }
+
+        .compact-table tbody td:first-child {
+            display: grid !important;
+            padding-top: 0 !important;
+        }
+
+        .compact-table tbody td:first-child::before { display: block; }
+
+        .compact-table tbody td:last-child { padding-bottom: 0 !important; }
 
         .table-title-cell {
             align-items: flex-start;
@@ -1747,25 +1652,21 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
             height: 32px;
             border-radius: 10px;
         }
+
+        .pagination-wrap { align-items: flex-start; }
     }
 
     @media(max-width:768px) {
-        .content-scroll {
-            padding: 12px 10px 12px !important;
-        }
+        .content-scroll { padding: 12px 10px 12px !important; }
 
         .page-heading {
             align-items: flex-start;
             flex-direction: column;
         }
 
-        .page-heading .d-flex {
-            width: 100%;
-        }
+        .page-heading .d-flex { width: 100%; }
 
-        .filter-bar {
-            align-items: stretch;
-        }
+        .filter-bar { align-items: stretch; }
 
         .search-box {
             max-width: none;
@@ -1792,6 +1693,8 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
             padding: 7px 0 !important;
         }
 
+        .compact-table tbody td::before { font-size: 9.8px; }
+
         .compact-table tbody tr {
             padding: 11px;
             border-radius: 13px;
@@ -1814,6 +1717,11 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
             column-gap: 8px;
         }
 
+        .table-primary-text { font-size: 11px; }
+
+        .table-secondary-text,
+        .team-text { font-size: 10px; }
+
         .action-btn {
             width: 31px;
             height: 31px;
@@ -1829,67 +1737,85 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
         <?php include 'includes/topbar.php'; ?>
 
         <div id="contentScroll" class="content-scroll">
-            <div class="container-fluid projects-wrapper px-0">
+                <div class="container-fluid projects-wrapper px-0">
 
-                <div class="page-heading">
-                    <div>
-                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
-                            <h1><i class="bi bi-file-earmark-check"></i> Employee Time Management Reports</h1>
-                            <span class="badge-pill">
-                                <i class="bi bi-calendar-event"></i>
-                                <?php echo e(date('d M Y', strtotime($todayYmd))); ?>
-                            </span>
-                            <span class="badge-pill">
-                                <i class="bi bi-person-badge"></i>
-                                <?php echo strtoupper(e($currentRole)); ?>
-                            </span>
+                    <div class="page-heading">
+                        <div>
+                            <h1>Employee Time Management Reports</h1>
+                            <p>Common report monitoring for TL, Manager and Admin</p>
                         </div>
-                        <p>Common monitoring page for TL, Manager, and Admin. Use the Remark buttons to notify the selected employee.</p>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a href="emp-reports.php" class="secondary-btn">
+                                <i class="bi bi-arrow-clockwise"></i>
+                                Refresh
+                            </a>
+                        </div>
                     </div>
 
-                    <div class="d-flex gap-2 flex-wrap">
-                        <span class="badge-pill"><i class="bi bi-person"></i> <?php echo e($loggedUserName); ?></span>
-                        <a class="secondary-btn" href="emp-reports.php" title="Refresh">
-                            <i class="bi bi-arrow-clockwise"></i>
-                            Refresh
-                        </a>
+                    <?php if ($message !== ''): ?>
+                    <div class="alert alert-<?php echo e($messageType); ?> alert-dismissible fade show" role="alert">
+                        <i class="bi bi-<?php echo $messageType === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'; ?> me-2"></i>
+                        <?php echo e($message); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
-                </div>
-                    </div>
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic green"><i class="bi bi-check2-circle"></i></div>
-                            <div>
-                                <div class="stat-label">Completed</div>
-                                <div class="stat-value"><?php echo (int)$completedCount; ?></div>
-                                <div class="small-muted">Selected Date</div>
+                    <?php endif; ?>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic blue"><i class="bi bi-files"></i></div>
+                                <div>
+                                    <div class="stat-label">Total Rows</div>
+                                    <div class="stat-value"><?php echo (int)$totalTasks; ?></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic green"><i class="bi bi-check2-circle"></i></div>
+                                <div>
+                                    <div class="stat-label">Completed</div>
+                                    <div class="stat-value"><?php echo (int)$completedCount; ?></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic orange"><i class="bi bi-hourglass-split"></i></div>
+                                <div>
+                                    <div class="stat-label">Incomplete</div>
+                                    <div class="stat-value"><?php echo (int)$incompleteCount; ?></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="stat-card">
+                                <div class="stat-ic gray"><i class="bi bi-clock-history"></i></div>
+                                <div>
+                                    <div class="stat-label">Latest Submit</div>
+                                    <div class="stat-value" style="font-size:17px;"><?php echo e(fmtTime($latestAnyCreatedAt)); ?></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic yellow"><i class="bi bi-hourglass-split"></i></div>
-                            <div>
-                                <div class="stat-label">Incomplete</div>
-                                <div class="stat-value"><?php echo (int)$incompleteCount; ?></div>
-                                <div class="small-muted">Selected Date</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-ic red"><i class="bi bi-clock-history"></i></div>
-                            <div>
-                                <div class="stat-label">Latest Submit</div>
-                                <div class="stat-value" style="font-size:22px;"><?php echo e($latestSubmitTime); ?></div>
-                                <div class="small-muted">Selected Date</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="panel">
-                    <form method="get" class="filter-bar">
+                    <div class="panel mb-4">
+                        <div class="panel-header">
+                            <div>
+                                <h3 class="panel-title">
+                                    <i class="bi bi-list-check"></i>
+                                    Employee Report Status
+                                </h3>
+                                <div class="panel-subtitle">
+                                    Showing <?php echo count($displayRows); ?> document row(s) based on selected filters
+                                </div>
+                            </div>
+                        </div>
+
+                        <form method="get" class="filter-bar">
                             <div class="search-box">
                                 <i class="bi bi-search"></i>
                                 <input
@@ -1938,107 +1864,91 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                             </a>
                         </form>
 
-                    <div class="panel-header">
-                            <div>
-                                <h3 class="panel-title">Employee Report Status</h3>
-                                <div class="panel-subtitle">Showing <?php echo count($displayRows); ?> document row(s) based on selected filters</div>
-                            </div>
-                        </div>
-                    <div class="small-muted">
-                        <?php if ($currentRole === 'admin'): ?>
-                            Admin view: all project employees with their manager and TL.
-                        <?php elseif ($currentRole === 'manager'): ?>
-                            Manager view: employees under your projects with their TL.
-                        <?php else: ?>
-                            Team Lead view: employees working under your sites.
-                        <?php endif; ?>
-                    </div>
-                    <hr style="border-color:#eef2f7;">
+                        <div class="compact-table-wrap">
+                            <table class="table compact-table align-middle" id="reportsTable">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Employee</th>
+                                        <th>Project</th>
+                                        <th>Report</th>
+                                        <th>Status</th>
+                                        <th>Doc / Time</th>
+                                        <th class="remark-column">Remark</th>
+                                        <th class="text-end">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($displayRows)): ?>
+                                    <tr>
+                                        <td colspan="8">
+                                            <div class="empty-state">
+                                                <i class="bi bi-inbox"></i>
+                                                No report records found.
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php else: ?>
+                                    <?php $i = 1; ?>
+                                    <?php foreach ($displayRows as $row): ?>
+                                    <tr>
+                                        <td data-label="#"><?php echo $i++; ?></td>
 
-                    <?php if (empty($displayRows)): ?>
-                        <div class="alert alert-warning mb-0" style="border-radius:16px; border:none; box-shadow:var(--shadow);">
-                            <i class="bi bi-info-circle me-2"></i> No employee report records found for the selected filter.
-                        </div>
-                    <?php else: ?>
-
-                        <!-- Mobile Cards -->
-                        <div class="d-block d-md-none">
-                            <div class="d-grid gap-3">
-                                <?php foreach ($displayRows as $row): ?>
-                                    <div class="task-card">
-                                        <div class="task-top">
-                                            <div style="flex:1 1 auto;">
-                                                <h3 class="task-title"><?php echo e($row['employee_name']); ?></h3>
-                                                <div class="task-sub">
-                                                    <?php echo e($row['employee_designation'] ?: 'Employee'); ?>
-                                                    <?php if (!empty($row['employee_code'])): ?>
-                                                        • <?php echo e($row['employee_code']); ?>
-                                                    <?php endif; ?>
+                                        <td data-label="Employee">
+                                            <div class="table-title-cell">
+                                                <div class="table-icon"><i class="bi bi-person"></i></div>
+                                                <div>
+                                                    <div class="table-primary-text"><?php echo e($row['employee_name']); ?></div>
+                                                    <div class="table-secondary-text">
+                                                        <?php echo e($row['employee_designation']); ?>
+                                                        <?php if (!empty($row['employee_code'])): ?>
+                                                            • <?php echo e($row['employee_code']); ?>
+                                                        <?php endif; ?>
+                                                    </div>
                                                 </div>
                                             </div>
+                                        </td>
+
+                                        <td data-label="Project">
+                                            <div class="table-primary-text"><?php echo e($row['project_name']); ?></div>
+                                            <div class="table-secondary-text">
+                                                <i class="bi bi-geo-alt"></i>
+                                                <?php echo e($row['project_location']); ?>
+                                            </div>
+                                        </td>
+
+                                        <td data-label="Report">
+                                            <div class="table-title-cell">
+                                                <div class="table-icon"><i class="bi <?php echo e($row['report_icon']); ?>"></i></div>
+                                                <div class="table-primary-text"><?php echo e($row['report_label']); ?></div>
+                                            </div>
+                                        </td>
+
+                                        <td data-label="Status">
                                             <?php if ($row['is_completed']): ?>
-                                                <span class="status-badge status-green"><i class="bi bi-check2-circle"></i> Completed</span>
+                                                <span class="status-badge status-green">
+                                                    <i class="bi bi-check2-circle"></i>
+                                                    Completed
+                                                </span>
                                             <?php else: ?>
-                                                <span class="status-badge status-yellow"><i class="bi bi-hourglass-split"></i> Incomplete</span>
+                                                <span class="status-badge status-yellow">
+                                                    <i class="bi bi-hourglass-split"></i>
+                                                    Incomplete
+                                                </span>
                                             <?php endif; ?>
-                                        </div>
+                                        </td>
 
-                                        <div class="task-kv">
-                                            <div class="task-row">
-                                                <div class="task-key">Project</div>
-                                                <div class="task-val"><?php echo e($row['project_name']); ?></div>
-                                            </div>
-                                            <div class="task-row">
-                                                <div class="task-key">Location</div>
-                                                <div class="task-val"><?php echo e($row['project_location']); ?></div>
-                                            </div>
-                                            <div class="task-row">
-                                                <div class="task-key">Report</div>
-                                                <div class="task-val"><i class="bi <?php echo e($row['report_icon']); ?> me-1"></i> <?php echo e($row['report_label']); ?></div>
-                                            </div>
-                                            <?php if ($currentRole === 'admin' || $currentRole === 'manager'): ?>
-                                                <div class="task-row">
-                                                    <div class="task-key">TL</div>
-                                                    <div class="task-val"><?php echo e($row['tl_name'] ?: '—'); ?></div>
-                                                </div>
+                                        <td data-label="Doc / Time">
+                                            <?php if ($row['is_completed']): ?>
+                                                <div class="table-primary-text"><?php echo e($row['doc_no'] ?: '—'); ?></div>
+                                                <div class="table-secondary-text"><?php echo e(fmtTime($row['created_at'])); ?></div>
+                                            <?php else: ?>
+                                                <div class="table-primary-text">—</div>
                                             <?php endif; ?>
-                                            <?php if ($currentRole === 'admin'): ?>
-                                                <div class="task-row">
-                                                    <div class="task-key">Manager</div>
-                                                    <div class="task-val"><?php echo e($row['manager_name'] ?: '—'); ?></div>
-                                                </div>
-                                            <?php endif; ?>
-                                            <div class="task-row">
-                                                <div class="task-key">Doc No</div>
-                                                <div class="task-val"><?php echo $row['is_completed'] ? e($row['doc_no']) : '—'; ?></div>
-                                            </div>
-                                            <div class="task-row">
-                                                <div class="task-key">Submit Time</div>
-                                                <div class="task-val"><?php echo $row['is_completed'] ? e(fmtTime($row['created_at'])) : '—'; ?></div>
-                                            </div>
-                                        </div>
+                                        </td>
 
-                                        <?php if ($row['is_completed']): ?>
-                                            <div class="task-actions">
-                                                
-                                                <a class="action-btn view-btn" href="<?php echo e($row['open_url']); ?>" title="Open">
-                                                    <i class="bi bi-box-arrow-up-right"></i>
-                                                </a>
-                                                <?php if (!empty($row['print_url'])): ?>
-                                                    <a class="action-btn view-btn" href="<?php echo e($row['print_url']); ?>" target="_blank" rel="noopener noreferrer" title="Print">
-                                                        <i class="bi bi-printer"></i>
-                                                    </a>
-                                                <?php endif; ?>
-                                                <?php if (!empty($row['download_url'])): ?>
-                                                    <a class="action-btn view-btn" href="<?php echo e($row['download_url']); ?>" rel="noopener noreferrer" title="Download">
-                                                        <i class="bi bi-download"></i>
-                                                    </a>
-                                                <?php endif; ?>
-                                            </div>
-                                        <?php endif; ?>
-
-                                        <div class="remark-box">
-<?php if (!empty($row['remark'])): ?>
+                                        <td data-label="Remark" class="remark-column">
+                                            <?php if (!empty($row['remark'])): ?>
                                                 <div class="remark-preview"><?php echo e($row['remark']); ?></div>
                                             <?php else: ?>
                                                 <div class="remark-preview empty">No remark sent yet.</div>
@@ -2093,178 +2003,53 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
                                                     </button>
                                                 <?php endif; ?>
                                             </div>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
+                                        </td>
 
-                        <!-- Desktop Table -->
-                        <div class="d-none d-md-block">
-                            <div class="table-responsive">
-                                <table class="table compact-table align-middle">
-                                    <thead>
-                                        <tr>
-                                            <th style="width:60px;">#</th>
-                                            <th>Employee</th>
-                                            <th>Project</th>
-                                            <th>Report</th>
-                                            <?php if ($currentRole === 'admin'): ?>
-                                                <th>Manager</th>
-                                                <th>TL</th>
-                                            <?php elseif ($currentRole === 'manager'): ?>
-                                                <th>TL</th>
-                                            <?php endif; ?>
-                                            <th>Status</th>
-                                            <th>Doc / Time</th>
-                                            <th style="min-width:280px;">Remark</th>
-                                            <th class="text-end">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php $i = 1; foreach ($displayRows as $row): ?>
-                                            <tr>
-                                                <td data-label="#" style="font-weight:1000;"><?php echo $i++; ?></td>
-                                                <td data-label="Employee">
-                                                    <div style="font-weight:1000; color:#111827;"><?php echo e($row['employee_name']); ?></div>
-                                                    <div class="small-muted">
-                                                        <?php echo e($row['employee_designation'] ?: 'Employee'); ?>
-                                                        <?php if (!empty($row['employee_code'])): ?>
-                                                            • <?php echo e($row['employee_code']); ?>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </td>
-                                                <td data-label="Project">
-                                                    <div class="table-primary-text"><?php echo e($row['project_name']); ?></div>
-                                                    <div class="table-secondary-text">
-                                                        <i class="bi bi-geo-alt"></i>
-                                                        <?php echo e($row['project_location']); ?>
-                                                    </div>
-                                                </td>
-                                                <td data-label="Report">
-                                                    <div class="table-title-cell">
-                                                        <div class="table-icon"><i class="bi <?php echo e($row['report_icon']); ?>"></i></div>
-                                                        <div class="table-primary-text"><?php echo e($row['report_label']); ?></div>
-                                                    </div>
-                                                </td>
+                                        <td data-label="Actions">
+                                            <div class="action-group">
+                                                <a class="action-btn view-btn" href="<?php echo e($row['open_url']); ?>" title="Open">
+                                                    <i class="bi bi-box-arrow-up-right"></i>
+                                                </a>
 
-                                                <?php if ($currentRole === 'admin'): ?>
-                                                    <td data-label="Manager"><?php echo e($row['manager_name'] ?: '—'); ?></td>
-                                                    <td data-label="TL"><?php echo e($row['tl_name'] ?: '—'); ?></td>
-                                                <?php elseif ($currentRole === 'manager'): ?>
-                                                    <td data-label="TL"><?php echo e($row['tl_name'] ?: '—'); ?></td>
+                                                <?php if (!empty($row['print_url'])): ?>
+                                                <a class="action-btn report-btn" href="<?php echo e($row['print_url']); ?>" target="_blank" rel="noopener" title="Print / View">
+                                                    <i class="bi bi-printer"></i>
+                                                </a>
                                                 <?php endif; ?>
 
-                                                <td data-label="Status">
-                                                    <?php if ($row['is_completed']): ?>
-                                                        <span class="status-badge status-green"><i class="bi bi-check2-circle"></i> Completed</span>
-                                                    <?php else: ?>
-                                                        <span class="status-badge status-yellow"><i class="bi bi-hourglass-split"></i> Incomplete</span>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td data-label="Doc / Time">
-                                                    <?php if ($row['is_completed']): ?>
-                                                        <div style="font-weight:1000;"><?php echo e($row['doc_no']); ?></div>
-                                                        <div class="small-muted"><?php echo e(fmtTime($row['created_at'])); ?></div>
-                                                    <?php else: ?>
-                                                        <span class="small-muted">—</span>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td data-label="Remark" class="remark-column">
-                                                    <?php if (!empty($row['remark'])): ?>
-                                                        <div class="remark-preview"><?php echo e($row['remark']); ?></div>
-                                                    <?php else: ?>
-                                                        <div class="remark-preview empty">No remark sent yet.</div>
-                                                    <?php endif; ?>
+                                                <?php if (!empty($row['download_url'])): ?>
+                                                <a class="action-btn file-btn" href="<?php echo e($row['download_url']); ?>" title="Download">
+                                                    <i class="bi bi-download"></i>
+                                                </a>
+                                                <?php endif; ?>
 
-                                                    <div class="remark-buttons">
-                                                        <?php if ($currentRole === 'tl' || $currentRole === 'manager' || $currentRole === 'admin'): ?>
-                                                            <button type="button" class="remark-btn open-remark-modal" data-bs-toggle="modal" data-bs-target="#remarkModal"
-                                                                data-recipient-id="<?php echo (int)$row['employee_id']; ?>"
-                                                                data-recipient-role="pe"
-                                                                data-recipient-label="Project Engineer"
-                                                                data-employee-id="<?php echo (int)$row['employee_id']; ?>"
-                                                                data-site-id="<?php echo (int)$row['site_id']; ?>"
-                                                                data-report-key="<?php echo e($row['report_key']); ?>"
-                                                                data-report-date="<?php echo e($todayYmd); ?>"
-                                                                data-employee-name="<?php echo e($row['employee_name']); ?>"
-                                                                data-project-name="<?php echo e($row['project_name']); ?>"
-                                                                data-report-label="<?php echo e($row['report_label']); ?>">
-                                                                <i class="bi bi-chat-left-text"></i> RPE
-                                                            </button>
-                                                        <?php endif; ?>
-
-                                                        <?php if (($currentRole === 'manager' || $currentRole === 'admin') && !empty($row['tl_id'])): ?>
-                                                            <button type="button" class="remark-btn rtl open-remark-modal" data-bs-toggle="modal" data-bs-target="#remarkModal"
-                                                                data-recipient-id="<?php echo (int)$row['tl_id']; ?>"
-                                                                data-recipient-role="tl"
-                                                                data-recipient-label="Team Lead"
-                                                                data-employee-id="<?php echo (int)$row['employee_id']; ?>"
-                                                                data-site-id="<?php echo (int)$row['site_id']; ?>"
-                                                                data-report-key="<?php echo e($row['report_key']); ?>"
-                                                                data-report-date="<?php echo e($todayYmd); ?>"
-                                                                data-employee-name="<?php echo e($row['employee_name']); ?>"
-                                                                data-project-name="<?php echo e($row['project_name']); ?>"
-                                                                data-report-label="<?php echo e($row['report_label']); ?>">
-                                                                <i class="bi bi-chat-left-text"></i> RTL
-                                                            </button>
-                                                        <?php endif; ?>
-
-                                                        <?php if ($currentRole === 'admin' && !empty($row['manager_id'])): ?>
-                                                            <button type="button" class="remark-btn rm open-remark-modal" data-bs-toggle="modal" data-bs-target="#remarkModal"
-                                                                data-recipient-id="<?php echo (int)$row['manager_id']; ?>"
-                                                                data-recipient-role="manager"
-                                                                data-recipient-label="Manager"
-                                                                data-employee-id="<?php echo (int)$row['employee_id']; ?>"
-                                                                data-site-id="<?php echo (int)$row['site_id']; ?>"
-                                                                data-report-key="<?php echo e($row['report_key']); ?>"
-                                                                data-report-date="<?php echo e($todayYmd); ?>"
-                                                                data-employee-name="<?php echo e($row['employee_name']); ?>"
-                                                                data-project-name="<?php echo e($row['project_name']); ?>"
-                                                                data-report-label="<?php echo e($row['report_label']); ?>">
-                                                                <i class="bi bi-chat-left-text"></i> RM
-                                                            </button>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </td>
-                                                <td data-label="Actions">
-                                                    <?php if ($row['is_completed']): ?>
-                                                        <div class="d-flex justify-content-end gap-2 flex-wrap">
-                                                            
-                                                            <a class="action-btn view-btn" href="<?php echo e($row['open_url']); ?>" title="Open">
-                                                                <i class="bi bi-box-arrow-up-right"></i>
-                                                            </a>
-                                                            <?php if (!empty($row['print_url'])): ?>
-                                                                <a class="action-btn view-btn" href="<?php echo e($row['print_url']); ?>" target="_blank" rel="noopener noreferrer" title="Print">
-                                                                    <i class="bi bi-printer"></i>
-                                                                </a>
-                                                            <?php endif; ?>
-                                                            <?php if (!empty($row['download_url'])): ?>
-                                                                <a class="action-btn view-btn" href="<?php echo e($row['download_url']); ?>" rel="noopener noreferrer" title="Download">
-                                                                    <i class="bi bi-download"></i>
-                                                                </a>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    <?php else: ?>
-                                                        <span class="small-muted">Not Submitted</span>
-                                                    <?php endif; ?>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div class="small-muted mt-2">
-                                Incomplete means that employee has not submitted that report today for that project.
-                            </div>
+                                                <?php if (!$row['is_completed']): ?>
+                                                    <span class="table-secondary-text">Not Submitted</span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
                         </div>
 
-                    <?php endif; ?>
-                </div>
+                        <div class="pagination-wrap">
+                            <div class="pagination-info">
+                                Showing <?php echo count($displayRows); ?> document row(s)
+                            </div>
+                            <div class="pagination-info">
+                                <i class="bi bi-info-circle"></i>
+                                RPE / RTL / RM buttons send remark notifications.
+                            </div>
+                        </div>
+                    </div>
 
+                </div>
             </div>
-        </div>
+
+            
 
         <?php include 'includes/footer.php'; ?>
     </main>
@@ -2366,9 +2151,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const textarea = document.getElementById('modal_remark');
         textarea.value = '';
-        setTimeout(function () {
-            textarea.focus();
-        }, 250);
+        setTimeout(function () { textarea.focus(); }, 250);
     });
 });
 </script>

@@ -1148,7 +1148,7 @@ $latestSubmitTime = fmtTime($latestAnyCreatedAt);
 
             <a
               class="secondary-btn"
-              href="employee-pending-tasks.php"
+              href="emp-reports.php"
               title="Reset Filters"
             >
               <i class="bi bi-arrow-counterclockwise"></i>

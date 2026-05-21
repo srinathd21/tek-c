@@ -55,9 +55,9 @@
     </div>
 
     <!-- Today's Reports -->
-    <a class="side-link" href="today-tasks.php">
+    <a class="side-link" href="emp-reports.php">
       <i class="bi bi-journal-text"></i>
-      <span class="label">Today's Reports</span>
+      <span class="label">Reports Hub</span>
     </a>
 
     <!-- Mail -->
@@ -211,12 +211,6 @@
         <span class="label">DPT</span>
       </a>
     </div>
-
-    <!-- Reports -->
-    <a class="side-link" href="report.php">
-      <i class="bi bi-file-earmark-text"></i>
-      <span class="label">Reports</span>
-    </a>
 
     <!-- HR -->
     <a class="side-link collapse-toggle"
